@@ -1,0 +1,6 @@
+# dsh-polymarket bundle 层：插入本插件行，激活 5 个只读行情工具。
+# 对齐 dsh-super-injector 先例（id = 插件实例名，name = 包名）。
+- insert:
+    - id: dsh-polymarket
+      name: '@dsh-external/dsh-polymarket'
+      config: {}

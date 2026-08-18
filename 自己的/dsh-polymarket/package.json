@@ -1,0 +1,42 @@
+{
+  "name": "@dsh-external/dsh-polymarket",
+  "version": "0.1.0",
+  "description": "Polymarket 预测市场只读行情工具包：搜索/详情/订单簿/价格/历史价格。DSH 生态首个 Polymarket 原生插件（宿主自包含打包，零外部依赖）。",
+  "private": true,
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "scripts/link-deps.mjs"
+  ],
+  "license": "BSD-3-Clause",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-tools": ">=0.0.1-rc <2",
+    "cordis": ">=4.0.0-rc <5",
+    "schemastery": "^3.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "tsdown": "^0.22.14",
+    "typescript": "^5.9.3"
+  },
+  "scripts": {
+    "link:deps": "node scripts/link-deps.mjs",
+    "build": "node scripts/link-deps.mjs && tsdown",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  }
+}

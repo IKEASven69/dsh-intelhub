@@ -1,0 +1,7 @@
+# AgentForge Brain bundle layer: insert its dual-face plugin row.
+# The row is a host plugin (empty node half) AND a dsh.client browser entry
+# (the `dsh.client` manifest in package.json makes the modules node half serve
+# client.js as /plugins/dsh-agentforge-brain/client.js).
+- insert:
+    - id: agentforge-brain
+      name: dsh-agentforge-brain

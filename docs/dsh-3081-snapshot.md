@@ -1,0 +1,58 @@
+- generic [ref=e4]:
+  - generic [ref=e7]:
+    - generic [ref=e8]:
+      - button "新建会话" [ref=e9] [cursor=pointer]
+      - button "收起侧边栏" [ref=e31] [cursor=pointer]
+    - button "新建会话" [ref=e34] [cursor=pointer]:
+      - generic [ref=e37]: 新会话
+    - generic [ref=e40]:
+      - generic [ref=e41]:
+        - generic [ref=e42]: 工作区
+        - generic [ref=e44]:
+          - button "搜索会话" [ref=e45] [cursor=pointer]
+          - textbox "搜索会话…"
+        - generic [ref=e49]:
+          - button "视图选项" [ref=e51] [cursor=pointer]
+          - button "添加工作区" [ref=e54] [cursor=pointer]
+      - tree "会话" [ref=e60]:
+        - generic [ref=e61]:
+          - treeitem "coding" [expanded] [ref=e63] [cursor=pointer]
+          - treeitem "新会话" [selected] [ref=e71] [cursor=pointer]
+          - treeitem "扫描插件清单并拟空白区域插件 1天" [ref=e75] [cursor=pointer]:
+            - generic [ref=e77]: 扫描插件清单并拟空白区域插件
+            - generic [ref=e78]: 1天
+          - treeitem "插件生态扫描及规划 1天" [ref=e80] [cursor=pointer]:
+            - generic [ref=e82]: 插件生态扫描及规划
+            - generic [ref=e83]: 1天
+          - treeitem "开发DeepSeek新插件 3天" [ref=e85] [cursor=pointer]:
+            - generic [ref=e87]: 开发DeepSeek新插件
+            - generic [ref=e88]: 3天
+          - treeitem "星之卡比复刻奶娃网页游戏 3天" [ref=e90] [cursor=pointer]:
+            - generic [ref=e92]: 星之卡比复刻奶娃网页游戏
+            - generic [ref=e93]: 3天
+    - button "设置" [ref=e97] [cursor=pointer]
+  - generic [ref=e111]:
+    - generic [ref=e114]:
+      - generic [ref=e118]: 探索未至之境
+      - generic [ref=e119]: 预览版
+    - generic [ref=e120]:
+      - button "选择工作区" [ref=e121] [cursor=pointer]:
+        - generic [ref=e125]: coding
+      - button "Router Standard (experimental)" [ref=e174] [cursor=pointer]
+    - generic [ref=e130]:
+      - textbox "描述你想要构建的内容" [active] [ref=e133]
+      - generic [ref=e134]:
+        - generic [ref=e135]:
+          - button "命令" [ref=e136] [cursor=pointer]
+          - button "访问模式，当前：Workspace Write" [ref=e141] [cursor=pointer]:
+            - generic [ref=e149]: Workspace Write
+        - generic [ref=e153]:
+          - button "选择模型，当前 DeepSeek-V4-Pro，推理等级 High" [ref=e156] [cursor=pointer]:
+            - generic [ref=e157]: DeepSeek-V4-Pro
+            - generic [ref=e158]: High
+          - button "发送消息" [disabled] [ref=e161]
+  - generic [ref=e165]:
+    - generic [ref=e166]:
+      - generic: 详情
+      - button "关闭详情" [ref=e167] [cursor=pointer]
+    - generic [ref=e170]: 点击消息流中的工具行查看详情

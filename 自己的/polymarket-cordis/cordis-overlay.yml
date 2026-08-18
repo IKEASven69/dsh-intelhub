@@ -1,0 +1,15 @@
+# Polymarket 只读面板验证 overlay。
+# 叠加在 web-app 默认 profile 之上（dsh web --patch）：
+#   * web-app 已含 cordis-host-runner / cordis-client-runner / ui-cordis，
+#     无需重复插入（重复会导致 duplicate loader entry）。
+#   * 仅补 tool-cordis（模型侧 cordis_define/run/inspect/stop/undefine 工具）。
+#   * 端口固定 3081，避开默认 3080。
+
+- id: webserver
+  config:
+    host: 127.0.0.1
+    port: 3081
+
+- insert:
+    - id: tool-cordis
+      name: '@deepseek-ai/dsh-tool-cordis'
