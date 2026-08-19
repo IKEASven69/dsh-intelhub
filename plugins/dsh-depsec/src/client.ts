@@ -129,14 +129,28 @@ function VulnView({ result, remote }: { result: DepsecResult; remote: DepsecRemo
   )
 }
 
-function FindingsView({ result, label, remote }: { result: DepsecResult; label: string; remote: DepsecRemote }) {
+function FindingsView({ result, label, remote, path }: { result: DepsecResult; label: string; remote: DepsecRemote; path: string }) {
   const [sev, setSev] = useState('all')
   const [newOnly, setNewOnly] = useState(false)
+  const [approving, setApproving] = useState(false)
+  const [approvalsMsg, setApprovalsMsg] = useState<string | null>(null)
   if (!result.ok) {
     return createElement('div', { className: 'da-box da-box-error' },
       createElement('div', { className: 'da-title' }, `${label}未完成`),
       createElement('div', null, result.message ?? result.error ?? '未知错误'),
     )
+  }
+
+  const doApprovals = async () => {
+    if (approving) return
+    setApproving(true)
+    const carried = await remote.writeApprovals({ path: path.trim() })
+    setApprovalsMsg(carried.ok
+      ? (carried.value.ok
+        ? `放行清单已更新：新增 ${carried.value.added?.length ?? 0} 项，共 ${carried.value.total ?? 0} 项。${carried.value.note ?? ''}`
+        : `写回失败：${carried.value.error ?? '未知'}`)
+      : `写回失败：${carried.error.message}`)
+    setApproving(false)
   }
   const all = result.findings ?? []
   let filtered = sev === 'all' ? all : all.filter((f) => f.severity === sev)
@@ -160,6 +174,13 @@ function FindingsView({ result, label, remote }: { result: DepsecResult; label: 
     createElement('div', { className: 'da-total' }, `共 ${s?.total ?? 0} 个告警，新增 ${s?.newCount ?? 0}${sev !== 'all' || newOnly ? `（筛选后 ${filtered.length}）` : ''}`),
     createElement(FilterBar, { value: sev, newOnly, chips: [['all', '全部'], ['high', '高危'], ['medium', '中危'], ['low', '低危'], ['info', '信息']], onChange: setSev, onNewOnly: setNewOnly }),
     createElement('div', { className: 'da-muted' }, (stats.filesScanned ? `已扫描 ${stats.filesScanned} 个文件` : '') + (stats.historyCommits ? `，${stats.historyCommits} 个历史提交` : '') + (stats.nodeModulesScanned ? `，已扫描 node_modules ${stats.nodeModulesScanned} 个包` : '') + '。'),
+    result.scope === 'supply-chain'
+      ? createElement('div', { className: 'da-muted' },
+          `install 脚本审查：${stats.scriptsPassed ?? 0} 通过 / ${stats.scriptsWarn ?? 0} 待查 / ${stats.scriptsBlocked ?? 0} 高危。`,
+          createElement('button', { className: 'da-fix', onClick: doApprovals, disabled: approving, style: { marginLeft: 8 } }, approving ? '写回中…' : '写回放行清单（仅全 PASS 包）'),
+        )
+      : null,
+    approvalsMsg ? createElement('div', { className: 'da-note' }, approvalsMsg) : null,
     rows.length > 0 ? createElement('div', { className: 'da-list' }, rows) : createElement('div', { className: 'da-muted' }, '无匹配告警。'),
   )
 }
@@ -168,6 +189,7 @@ interface DepsecRemote {
   audit: (req: { path?: string; scope?: string }) => Promise<{ ok: boolean; value: DepsecResult; error: { message: string } } | { ok: false; value?: never; error: { message: string } }>
   auditFix: (req: { path?: string }) => Promise<{ ok: boolean; value: { ok: boolean; command?: string; error?: string }; error: { message: string } }>
   exportSarif: (req: { path?: string; scope?: string }) => Promise<{ ok: boolean; value: { ok: boolean; path?: string; resultCount?: number; error?: string }; error: { message: string } }>
+  writeApprovals: (req: { path?: string }) => Promise<{ ok: boolean; value: { ok: boolean; added?: string[]; total?: number; error?: string; note?: string }; error: { message: string } }>
   monitorStatus: () => Promise<{ ok: boolean; value: { verdict?: string; total?: number } | null; error: { message: string } }>
   openFile: (req: { path: string; line?: number }) => Promise<{ ok: boolean; value: { ok: boolean; via?: string; error?: string }; error: { message: string } }>
 }
@@ -207,7 +229,7 @@ function Panel({ remote }: { remote: DepsecRemote }) {
   const tab = (val: string, label: string) => createElement('button', { className: `da-tab${mode === val ? ' da-tab-on' : ''}`, onClick: () => setMode(val) }, label)
   const hints: Record<string, string> = {
     vuln: '官方审计（npm/pnpm/yarn/pip/cargo/go），查已知 CVE/GHSA。',
-    'supply-chain': 'install 脚本 + typosquatting 近名 + npm registry 联网信誉。',
+    'supply-chain': 'install 脚本内容审查（证据分级 PASS/WARN/BLOCK）+ typosquatting 近名 + registry 联网信誉；可一键写回放行清单。',
     secrets: '密钥/令牌泄露，含 git 历史 + 熵检测 + .depsecignore 白名单。',
     sast: '危险代码模式扫描（eval/命令注入/XSS/弱哈希等）。',
   }
@@ -230,7 +252,7 @@ function Panel({ remote }: { remote: DepsecRemote }) {
     result !== null
       ? (result.scope === 'vuln'
         ? createElement(VulnView, { result, remote })
-        : createElement(FindingsView, { result, label: result.scope === 'supply-chain' ? '供应链/投毒扫描' : result.scope === 'secrets' ? '密钥扫描' : '代码扫描', remote }))
+        : createElement(FindingsView, { result, label: result.scope === 'supply-chain' ? '供应链/投毒扫描' : result.scope === 'secrets' ? '密钥扫描' : '代码扫描', remote, path }))
       : null,
   )
 }

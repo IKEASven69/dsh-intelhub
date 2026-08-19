@@ -55,6 +55,8 @@ export interface DepsecResult {
   summary?: DepsecSummary
   vulnerabilities?: DepsecVulnerability[]
   findings?: DepsecFinding[]
+  /** supply-chain：脚本全 PASS 且无其他中高危信号、可写回放行清单的依赖名。 */
+  approvals?: string[]
   project?: { name: string; version?: string; depCount: number }
   stats?: Record<string, number>
   command?: string
@@ -98,6 +100,25 @@ export interface SarifResult {
 export interface OpenFileRequest {
   path: string
   line?: number
+}
+
+/** write-approvals RPC 请求。 */
+export interface WriteApprovalsRequest {
+  path?: string
+  /** 指定包名列表；缺省时重新扫描，取「全部脚本 PASS 且无近名/信誉中高危」的依赖。 */
+  packages?: string[]
+  /** 只计算不写回。 */
+  dryRun?: boolean
+}
+
+/** write-approvals 结果。 */
+export interface WriteApprovalsResult {
+  ok: boolean
+  added?: string[]
+  existing?: string[]
+  total?: number
+  error?: string
+  note?: string
 }
 
 /** 监控状态。 */
