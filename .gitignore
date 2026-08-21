@@ -1,2 +1,9 @@
 node_modules/
 三方/
+# 构建产物(发布时构建,不入库)
+lib/
+dist/
+# 各插件目录的锁文件与本地构建临时产物
+package-lock.json
+tmp-client.cjs
+tmp-src/

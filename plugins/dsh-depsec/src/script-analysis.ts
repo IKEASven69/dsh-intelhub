@@ -28,11 +28,13 @@ const KNOWN_DOWNLOAD_HOSTS = new Set([
   'yarnpkg.com', 'registry.yarnpkg.com', 'pypi.org', 'files.pythonhosted.org',
   'crates.io', 'static.crates.io', 'golang.org', 'storage.googleapis.com',
   'dl.google.com', 'azureedge.net', 'npmcdn.com', 'unpkg.com',
+  'snapcraft.io', 'api.snapcraft.io',
 ])
 
-/** 敏感路径：install 脚本无论读还是传都视为红线。 */
+/** 敏感路径：install 脚本无论读还是传都视为红线。
+ * .env 用负向后行断言排除 process.env / import.meta.env 等属性访问(E2E 实测 esbuild 误报)。 */
 const SENSITIVE_PATH_RE =
-  /(\.ssh\/|id_rsa|id_ed25519|\.aws\/credentials|\.npmrc|\.gnupg|\/etc\/passwd|cookies\.sqlite|MetaMask|metamask|wallet\.dat|\.env\b)/i
+  /(\.ssh\/|id_rsa|id_ed25519|\.aws\/credentials|\.npmrc|\.gnupg|\/etc\/passwd|cookies\.sqlite|MetaMask|metamask|wallet\.dat|(?<![\w])\.env\b)/i
 
 const FETCHER_RE = /\b(curl|wget|fetch|Invoke-WebRequest|iwr|Invoke-RestMethod|irm)\b/i
 const INTERPRETER_AFTER_PIPE_RE = /\|\s*(\S*(?:ba|z|da|fi)?sh|node|python3?|powershell|pwsh|perl|ruby)\b/i
@@ -137,10 +139,23 @@ export function analyzeInstallScript(command: string, files: Record<string, stri
     if (/eval\s*\(|new\s+Function\s*\(/.test(content)) signals.push({ level: 'red', text: `${ref}：动态执行（eval/new Function）` })
     if (/['"][A-Za-z0-9+/]{160,}={0,2}['"]/.test(content)) signals.push({ level: 'red', text: `${ref}：内嵌超长 base64 串` })
     if (SENSITIVE_PATH_RE.test(content)) signals.push({ level: 'red', text: `${ref}：触达敏感路径` })
-    if (hasEnv && hasNet) signals.push({ level: 'red', text: `${ref}：读取环境变量并发起网络请求（外传特征）` })
-    if (hasChild && hasNet) signals.push({ level: 'yellow', text: `${ref}：子进程配合网络请求` })
-    if (hasEnv && !hasNet) signals.push({ level: 'yellow', text: `${ref}：读取环境变量` })
-    for (const dom of domainsOf(content)) {
+    const fileDomains = domainsOf(content)
+    const hasUnknownDomain = fileDomains.some((d) => !KNOWN_DOWNLOAD_HOSTS.has(d))
+    if (hasEnv && hasNet) {
+      // GET 下载器读 env(代理/架构)是常态;POST/上传语义 + env 才是外传特征
+      const hasPost = /method\s*[:=]\s*['"`]POST|\.post\s*\(|--data(?:-binary)?\b|FormData|\.send\s*\(/.test(content)
+      if (hasPost) signals.push({ level: 'red', text: `${ref}：环境变量数据经 POST/上传发往外部（外传特征）` })
+      else if (fileDomains.length === 0) signals.push({ level: 'red', text: `${ref}：发起网络请求但无可识别域名（疑似混淆）` })
+      else if (hasUnknownDomain) signals.push({ level: 'yellow', text: `${ref}：读取环境变量并外联非白名单域名（请人工确认）` })
+      else signals.push({ level: 'green', text: `${ref}：读取环境变量（配置用途）且仅外联已知分发域名` })
+    }
+    if (hasChild && hasNet) {
+      if (hasUnknownDomain) signals.push({ level: 'yellow', text: `${ref}：子进程配合陌生域名网络请求` })
+      else signals.push({ level: 'green', text: `${ref}：子进程仅配合已知分发域名（下载/校验链路）` })
+    }
+    if (hasEnv && !hasNet && !hasChild) signals.push({ level: 'green', text: `${ref}：仅读取环境变量（无网络/子进程行为）` })
+    else if (hasEnv && !hasNet && hasChild) signals.push({ level: 'yellow', text: `${ref}：读取环境变量并调用子进程` })
+    for (const dom of fileDomains) {
       if (KNOWN_DOWNLOAD_HOSTS.has(dom)) signals.push({ level: 'green', text: `${ref}：外联已知分发域名 ${dom}` })
       else signals.push({ level: 'yellow', text: `${ref}：外联非白名单域名 ${dom}` })
     }

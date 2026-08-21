@@ -6,10 +6,31 @@
 
 import { createElement, useEffect, useState } from 'react'
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
-import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import type { DepsecResult } from './types.ts'
 
-export const inject = ['slots', 'remote', 'remote.depsec']
+export const inject = ['slots']
+
+/** 直连宿主 /api HTTP 桥(Connection 信封)。本地验证构建不依赖 typert 生成的
+ * remote 契约;正式构建可用 dsh-api-remotes 的 ctx.remote.depsec 服务替换。 */
+async function rpc<T>(method: string, args: Record<string, unknown>): Promise<{ ok: boolean; value?: T; error: { message: string } }> {
+  try {
+    const res = await fetch(`/api/depsec/${method}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'client-request',
+        rpcId: (globalThis.crypto?.randomUUID?.() ?? String(Date.now() + Math.random())),
+        method: `depsec/${method}`,
+        payload: { args },
+      }),
+    })
+    const msg = await res.json() as { type: string; result?: { ok: boolean; value?: T; error?: { message?: string } } }
+    if (msg.result !== undefined && msg.result.ok) return { ok: true, value: msg.result.value }
+    return { ok: false, error: { message: msg.result?.error?.message ?? `HTTP ${res.status}` } }
+  } catch (e) {
+    return { ok: false, error: { message: e instanceof Error ? e.message : String(e) } }
+  }
+}
 
 const CSS = `
 .da-panel { display: flex; flex-direction: column; gap: 12px; padding: 4px 0; }
@@ -257,9 +278,18 @@ function Panel({ remote }: { remote: DepsecRemote }) {
   )
 }
 
+const remote: DepsecRemote = {
+  audit: (req) => rpc('audit', { request: req }),
+  auditFix: (req) => rpc('audit-fix', { request: req }),
+  exportSarif: (req) => rpc('export-sarif', { request: req }),
+  writeApprovals: (req) => rpc('write-approvals', { request: req }),
+  monitorStatus: () => rpc('monitor-status', {}),
+  openFile: (req) => rpc('open-file', { request: req }),
+}
+
 export function apply(ctx: ClientContext): void {
   ctx.slots.inject('settings.section', () => ctx.slots.register(
     { name: 'settings.section', id: 'dep-audit', order: 40, label: '依赖安全审计' },
-    () => createElement(Panel, { remote: ctx.remote.depsec }),
+    () => createElement(Panel, { remote }),
   ))
 }

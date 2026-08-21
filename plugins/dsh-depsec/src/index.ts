@@ -195,12 +195,12 @@ export class DepsecService extends TypertRemoteService {
   }
 
   @Remote('audit')
-  async audit(request: AuditRequest = {}): Promise<DepsecResult> {
+  async audit(request: AuditRequest): Promise<DepsecResult> {
     return await this.runAudit(request.path, request.scope ?? 'vuln')
   }
 
   @Remote('audit-fix')
-  async auditFix(request: FixRequest = {}): Promise<FixResult> {
+  async auditFix(request: FixRequest): Promise<FixResult> {
     const root = this.rootFor(request.path)
     if (root === undefined) return { ok: false, error: '无法确定工作区根目录' }
     const det = await this.detectManager(root)
@@ -212,7 +212,7 @@ export class DepsecService extends TypertRemoteService {
   }
 
   @Remote('export-sarif')
-  async exportSarif(request: AuditRequest = {}): Promise<SarifResult> {
+  async exportSarif(request: AuditRequest): Promise<SarifResult> {
     const root = this.rootFor(request.path)
     if (root === undefined) return { ok: false, error: '无法确定工作区根目录' }
     const result = await this.runScope(root, request.scope ?? 'vuln')
@@ -229,7 +229,7 @@ export class DepsecService extends TypertRemoteService {
   }
 
   @Remote('write-approvals')
-  async writeApprovals(request: WriteApprovalsRequest = {}): Promise<WriteApprovalsResult> {
+  async writeApprovals(request: WriteApprovalsRequest): Promise<WriteApprovalsResult> {
     const root = this.rootFor(request.path)
     if (root === undefined) return { ok: false, error: '无法确定工作区根目录' }
     let packages = request.packages
