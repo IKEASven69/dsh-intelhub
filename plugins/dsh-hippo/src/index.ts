@@ -7,13 +7,14 @@
  */
 
 import { existsSync } from 'node:fs'
-import type { ServerResponse } from 'node:http'
+import type { IncomingMessage, ServerResponse } from 'node:http'
 import { createRequire } from 'node:module'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 // Type-only: pulls the Context.webServer merge（宿主由 web bundle 提供，不打进产物）。
 import type {} from '@deepseek-ai/dsh-host-webserver'
+import { currentJob, inventory, startImport } from './import.ts'
 import type { DoctorReport } from './types.ts'
 
 export const name = 'dsh-hippo'
@@ -69,7 +70,9 @@ async function doctor(): Promise<DoctorReport> {
   if (engineErr === null && (sqliteErr !== null || vecErr !== null)) guidance.push(NATIVE_BLOCKED_HINT)
 
   const dataDir = process.env.HIPPO_DATA_DIR ?? join(homedir(), '.hippo')
-  const storePath = join(dataDir, 'memories.db')
+  // 引擎 v0.1.9 起 zvec 原生存储在 <dataDir>/memories/（proxima 向量索引 +
+  // rocksdb FTS）；根下的 memories.db 是旧版引擎遗留文件，不作判断依据。
+  const storePath = join(dataDir, 'memories')
   let storeExists: boolean | null = null
   try {
     storeExists = existsSync(storePath)
@@ -99,23 +102,108 @@ function sendJson(response: ServerResponse, code: number, body: unknown): void {
   response.end(JSON.stringify(body))
 }
 
+/** 同源守卫（dshmarket 先例）：带 Origin 的请求必须与 Host 一致，防跨站 POST。 */
+function sameOrigin(request: { headers: { origin?: string; host?: string } }): boolean {
+  const { origin, host } = request.headers
+  if (origin === undefined || host === undefined) return false
+  try {
+    return new URL(origin).host === host
+  } catch {
+    return false
+  }
+}
+
+/** 读取 JSON 请求体（上限 4 KiB，超限拒绝）。 */
+function readJsonBody(request: IncomingMessage): Promise<Record<string, unknown>> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = []
+    let size = 0
+    request.on('data', (chunk: Buffer) => {
+      size += chunk.length
+      if (size > 4096) {
+        reject(new Error('body too large'))
+        request.destroy()
+        return
+      }
+      chunks.push(chunk)
+    })
+    request.on('end', () => {
+      try {
+        const raw = Buffer.concat(chunks).toString('utf8').trim()
+        resolve(raw === '' ? {} : JSON.parse(raw) as Record<string, unknown>)
+      } catch {
+        reject(new Error('invalid JSON body'))
+      }
+    })
+    request.on('error', reject)
+  })
+}
+
+
 export function apply(ctx: Context): void {
-  ctx.logger.info('dsh-hippo: 记忆桥已加载（H0 骨架，doctor 可用）')
+  ctx.logger.info('dsh-hippo: 记忆桥已加载（H1：doctor + import）')
   ctx.inject(['webServer'], (host) => {
-    host.effect(() => host.webServer.register({
-      kind: 'exact',
-      path: '/dsh-hippo/doctor',
-      handler: (request, response) => {
-        if (request.method !== 'GET') {
-          response.writeHead(405, { allow: 'GET' })
-          response.end()
-          return
-        }
-        void doctor().then(
-          (report) => { sendJson(response, 200, report) },
-          (error: unknown) => { sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) }) },
-        )
-      },
-    }), 'dsh-hippo: http routes')
+    host.effect(() => {
+      const disposers = [
+        host.webServer.register({
+          kind: 'exact',
+          path: '/dsh-hippo/doctor',
+          handler: (request, response) => {
+            if (request.method !== 'GET') {
+              response.writeHead(405, { allow: 'GET' })
+              response.end()
+              return
+            }
+            void doctor().then(
+              (report) => { sendJson(response, 200, report) },
+              (error: unknown) => { sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) }) },
+            )
+          },
+        }),
+        host.webServer.register({
+          kind: 'exact',
+          path: '/dsh-hippo/inventory',
+          handler: (request, response) => {
+            if (request.method !== 'GET') {
+              response.writeHead(405, { allow: 'GET' })
+              response.end()
+              return
+            }
+            sendJson(response, 200, inventory())
+          },
+        }),
+        host.webServer.register({
+          kind: 'exact',
+          path: '/dsh-hippo/import',
+          handler: (request, response) => {
+            if (request.method === 'GET') {
+              sendJson(response, 200, currentJob())
+              return
+            }
+            if (request.method !== 'POST') {
+              response.writeHead(405, { allow: 'GET, POST' })
+              response.end()
+              return
+            }
+            if (!sameOrigin(request)) {
+              sendJson(response, 403, { error: '仅接受同源请求' })
+              return
+            }
+            void readJsonBody(request).then(
+              (body) => {
+                try {
+                  const job = startImport({ dryRun: body.dryRun === true })
+                  sendJson(response, 200, job)
+                } catch (e) {
+                  sendJson(response, 409, { error: e instanceof Error ? e.message : String(e) })
+                }
+              },
+              (error: unknown) => { sendJson(response, 400, { error: error instanceof Error ? error.message : String(error) }) },
+            )
+          },
+        }),
+      ]
+      return () => { for (const d of disposers) d() }
+    }, 'dsh-hippo: http routes')
   })
 }
