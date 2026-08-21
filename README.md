@@ -12,6 +12,7 @@ dsh-plugin/
 │   ├── dsh-dashboard/     # 活动仪表盘 & IM 桥接（设计蓝本仓库）
 │   ├── dsh-polymarket/    # Polymarket 插件
 │   ├── polymarket-cordis/ # cordis overlay 实验
+│   ├── dsh-hippo/         # 跨 agent 记忆桥（Claude Code/Codex → dsh；仅 PLAN，未开工）
 │   └── dsh-team-memory/   # 团队记忆蒸馏（agent-team 事件→共享分级记忆；仅 PLAN，未开工）
 ├── vendor/      # 别人开发的插件（clone 下来参考/使用；嵌套 git 仓库不入库，仅本机存在）
 └── docs/        # dsh 相关资料（awesome-dsh 中文版、UI 调试快照）
