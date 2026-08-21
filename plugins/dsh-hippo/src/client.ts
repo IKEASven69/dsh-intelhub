@@ -126,6 +126,21 @@ const CSS = `
   -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .hb-mem-meta { font-size: 10.5px; color: var(--hb-mut); display: flex; gap: 8px; flex-wrap: wrap; }
 .hb-mem-more { align-self: center; }
+.hb-mem-del { cursor: pointer; border: 1px solid transparent; background: transparent; color: var(--hb-mut);
+  border-radius: 6px; font-size: 13px; padding: 1px 7px; flex: none; transition: all .12s ease; }
+.hb-mem-del:hover { color: var(--hb-err); border-color: rgba(217,48,37,.4); }
+.hb-mem-del-confirm { color: #fff; background: var(--hb-err); border-color: transparent; }
+.hb-mem-edit { cursor: pointer; border: none; background: transparent; color: var(--hb-mut); font-size: 11px;
+  padding: 1px 6px; flex: none; }
+.hb-mem-edit:hover { color: var(--hb-a); }
+.hb-mem-editor { width: 100%; font: inherit; font-size: 12.5px; line-height: 1.55; border-radius: 8px;
+  border: 1px solid var(--hb-a); background: transparent; color: inherit; padding: 6px 9px; outline: none; resize: vertical; }
+.hb-mem-actions { display: flex; gap: 6px; }
+.hb-mini { cursor: pointer; border-radius: 7px; font-size: 11.5px; padding: 4px 12px; border: 1px solid var(--hb-line);
+  background: transparent; color: inherit; }
+.hb-mini-pri { background: var(--hb-a); border-color: transparent; color: #fff; }
+.hb-pre { white-space: pre-wrap; font-size: 11px; max-height: 220px; overflow: auto; background: rgba(0,0,0,.07);
+  padding: 10px; border-radius: 8px; line-height: 1.6; }
 
 @media (prefers-reduced-motion: reduce) {
   .hb-card, .hb-dot, .hb-bar-fill::after { animation: none !important; }
@@ -301,23 +316,50 @@ function fmtDate(ms: number): string {
   return `${d.getMonth() + 1}月${d.getDate()}日`
 }
 
-function MemRow({ m }: { m: MemoryItem }): ReturnType<typeof createElement> {
+function MemRow({ m, onDelete, onUpdate }: {
+  m: MemoryItem
+  onDelete: (id: string) => Promise<void>
+  onUpdate: (id: string, text: string) => Promise<void>
+}): ReturnType<typeof createElement> {
   const t = TYPE_META[m.type] ?? { label: m.type || '未分类', cls: 'hb-t-unknown' }
+  const [confirming, setConfirming] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(m.text)
+  const [saving, setSaving] = useState(false)
+
   return createElement('div', { className: 'hb-mem' },
     createElement('span', { className: `hb-mem-type ${t.cls}` }, t.label),
     createElement('span', { className: 'hb-mem-body' },
-      createElement('span', { className: 'hb-mem-text' }, m.text),
+      editing
+        ? createElement('span', { style: { display: 'flex', flexDirection: 'column', gap: 6 } },
+            createElement('textarea', { className: 'hb-mem-editor', rows: 3, value: draft,
+              onChange: (e: { target: { value: string } }) => { setDraft(e.target.value) } }),
+            createElement('span', { className: 'hb-mem-actions' },
+              createElement('button', { className: 'hb-mini hb-mini-pri', disabled: saving || draft.trim() === '',
+                onClick: async () => { setSaving(true); await onUpdate(m.id, draft.trim()); setSaving(false); setEditing(false) } }, saving ? '保存中…' : '保存'),
+              createElement('button', { className: 'hb-mini', onClick: () => { setDraft(m.text); setEditing(false) } }, '取消'),
+            ),
+          )
+        : createElement('span', { className: 'hb-mem-text' }, m.text),
       createElement('span', { className: 'hb-mem-meta' },
         createElement('span', null, m.project === 'global' ? '全局' : m.project),
         createElement('span', null, `来源 ${fmtAgent(m.agent)}`),
         m.createdAt > 0 ? createElement('span', null, fmtDate(m.createdAt)) : null,
         m.strength > 1 ? createElement('span', null, `强度 ${m.strength}`) : null,
+        createElement('button', { className: 'hb-mem-edit', onClick: () => { setEditing(true) } }, '编辑'),
+        createElement('button', {
+          className: `hb-mem-del${confirming ? ' hb-mem-del-confirm' : ''}`,
+          onClick: () => {
+            if (!confirming) { setConfirming(true); setTimeout(() => { setConfirming(false) }, 3000); return }
+            void onDelete(m.id)
+          },
+        }, confirming ? '确认删除' : '×'),
       ),
     ),
   )
 }
 
-function MemoriesCard({ page, loading, q, setQ, type, setType, onSearch, onMore }: {
+function MemoriesCard({ page, loading, q, setQ, type, setType, onSearch, onMore, onRefresh }: {
   page: MemoryPage | null
   loading: boolean
   q: string
@@ -326,17 +368,65 @@ function MemoriesCard({ page, loading, q, setQ, type, setType, onSearch, onMore 
   setType: (v: string) => void
   onSearch: () => void
   onMore: () => void
+  onRefresh: () => void
 }): ReturnType<typeof createElement> {
   const isSearch = q.trim() !== ''
   const shown = page?.items ?? []
   const hasMore = page !== null && !isSearch && page.offset + page.items.length < page.total
+
+  // H3 编译区
+  const [compileOpen, setCompileOpen] = useState(false)
+  const [compiling, setCompiling] = useState(false)
+  const [compileResult, setCompileResult] = useState<{ memoryCount: number; markdown: string; written?: string[] } | null>(null)
+  const [compProject, setCompProject] = useState('')
+  const [compPath, setCompPath] = useState('')
+  const [compMsg, setCompMsg] = useState<string | null>(null)
+
+  const doCompile = async (write: boolean) => {
+    if (compiling) return
+    setCompiling(true)
+    setCompMsg(null)
+    try {
+      const r = await postJson<{ memoryCount: number; markdown: string; written?: string[] }>('/dsh-hippo/memories/compile',
+        { project: compProject.trim() === '' ? undefined : compProject.trim(), write, outPath: compPath.trim() === '' ? undefined : compPath.trim() })
+      setCompileResult(r)
+      if (write && r.written) setCompMsg(`已写入：${r.written.join('、')}`)
+    } catch (e) {
+      setCompMsg(`编译失败：${e instanceof Error ? e.message : String(e)}`)
+    }
+    setCompiling(false)
+  }
+
   return createElement('div', { className: 'hb-card' },
     createElement('div', { className: 'hb-hero' },
       createElement('span', { style: { fontWeight: 700, fontSize: 13 } }, '记忆库'),
       createElement('span', { className: 'hb-sub' },
         page === null ? (loading ? '读取中…' : '') : isSearch ? `搜索到 ${page.total} 条` : `共 ${page.total} 条记忆`),
       createElement('span', { className: 'hb-spacer' }),
+      createElement('button', { className: 'hb-btn hb-btn-ghost', style: { padding: '4px 12px', fontSize: 12 },
+        onClick: () => { setCompileOpen(!compileOpen) } }, compileOpen ? '收起编译' : '编译 AGENTS.md'),
     ),
+    compileOpen
+      ? createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 8 } },
+          createElement('div', { className: 'hb-mem-tools' },
+            createElement('input', { className: 'hb-input', placeholder: '项目名（留空=全部项目）', value: compProject,
+              onChange: (e: { target: { value: string } }) => { setCompProject(e.target.value) } }),
+            createElement('input', { className: 'hb-input', placeholder: '写入路径（留空=预览不落盘；如 D:\\coding\\proj\\AGENTS.md）', value: compPath,
+              onChange: (e: { target: { value: string } }) => { setCompPath(e.target.value) } }),
+          ),
+          createElement('div', { className: 'hb-mem-actions' },
+            createElement('button', { className: 'hb-mini', disabled: compiling, onClick: () => { void doCompile(false) } }, compiling ? '编译中…' : '预览'),
+            createElement('button', { className: 'hb-mini hb-mini-pri', disabled: compiling || compPath.trim() === '', onClick: () => { void doCompile(true) } }, '写入文件'),
+          ),
+          compMsg !== null ? createElement('div', { className: 'hb-banner hb-banner-info' }, compMsg) : null,
+          compileResult !== null
+            ? createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 6 } },
+                createElement('div', { className: 'hb-muted' }, `入选记忆 ${compileResult.memoryCount} 条`),
+                createElement('pre', { className: 'hb-pre' }, compileResult.markdown.slice(0, 4000) || '（空）'),
+              )
+            : null,
+        )
+      : null,
     createElement('div', { className: 'hb-mem-tools' },
       createElement('input', {
         className: 'hb-input',
@@ -358,7 +448,22 @@ function MemoriesCard({ page, loading, q, setQ, type, setType, onSearch, onMore 
       ),
     ),
     shown.length > 0
-      ? createElement('div', { className: 'hb-mem-list' }, ...shown.map((m) => createElement(MemRow, { key: m.id, m })))
+      ? createElement('div', { className: 'hb-mem-list' },
+          ...shown.map((m) => createElement(MemRow, {
+            key: m.id, m,
+            onDelete: async (id: string) => {
+              try {
+                await postJson<{ ok: boolean }>('/dsh-hippo/memories/forget', { id })
+                onRefresh()
+              } catch (e) {
+                window.alert?.(`删除失败：${e instanceof Error ? e.message : String(e)}`)
+              }
+            },
+            onUpdate: async (id: string, text: string) => {
+              await postJson<{ status: string }>('/dsh-hippo/memories/update', { id, text })
+              onRefresh()
+            },
+          })))
       : !loading
         ? createElement('div', { className: 'hb-banner hb-banner-info' },
             isSearch ? '没有匹配的记忆，换个关键词试试。' : '记忆库还是空的——用上面的「开始迁移」把会话蒸馏进来。')
@@ -536,6 +641,10 @@ function Panel(): ReturnType<typeof createElement> {
       onMore: () => {
         memOffset.current += 30
         void fetchMem({ q: memQApplied, type: memType, offset: memOffset.current, append: true })
+      },
+      onRefresh: () => {
+        memOffset.current = 0
+        void fetchMem({ q: memQApplied, type: memType, offset: 0, append: false })
       },
     }),
   )

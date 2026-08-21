@@ -1,8 +1,10 @@
 # dsh-hippo bundle patch：把记忆桥插件插入 profile 合成。
-# host 半是 TypertRemoteService（Client→Host RPC：doctor；H1 起追加
-# stats / import，H2 起注册 memory_recall 模型工具与 systemPrompt 注入）。
+# host 半：webServer 路由（doctor/inventory/import/memories 系）+ memory_recall
+# 工具 + systemPrompt 注入；writeback=true 时追加 memory_remember 工具（H4 回写，默认关）。
 # 浏览器半由 package.json 的 dsh.client 声明 + exports["./client"] 提供。
 
 - insert:
     - id: hippo
       name: 'dsh-hippo'
+      config:
+        writeback: false

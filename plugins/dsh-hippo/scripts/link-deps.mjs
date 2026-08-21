@@ -20,7 +20,9 @@ if (!existsSync(join(CHECKOUT, 'packages'))) {
 // [本地 node_modules 相对路径, checkout 相对路径]——均为构建期供给：
 // cordis 族供 tsdown 打包类型解析；webserver / client-runtime /
 // ui-settings 仅供 tsc 类型检查（import type，编译后无运行时引用）。
-// 本插件 host 侧零包依赖（cordis ctx 由宿主注入），client 侧仅 react（宿主 require）。
+// tools/agent/sandbox-policy/system-prompt 供 H2 工具注册与提示注入
+// （defineTool 运行时进 bundle；Agent/策略/提示类型仅 type-only）。
+// 本插件 host 侧运行时零包依赖（cordis ctx 由宿主注入），client 侧仅 react（宿主 require）。
 const LINKS = [
   ['@deepseek-ai/cordis', 'vendor/cordis'],
   ['@deepseek-ai/cosmokit', 'vendor/cosmokit'],
@@ -28,6 +30,10 @@ const LINKS = [
   ['@deepseek-ai/dsh-host-webserver', 'packages/host/webserver'],
   ['@deepseek-ai/dsh-client-runtime', 'packages/client/runtime'],
   ['@deepseek-ai/dsh-client-ui-settings', 'packages/client/ui-settings'],
+  ['@deepseek-ai/dsh-tools', 'packages/core/tools'],
+  ['@deepseek-ai/dsh-agent', 'packages/core/agent'],
+  ['@deepseek-ai/dsh-sandbox-policy', 'packages/sandbox/sandbox-policy'],
+  ['@deepseek-ai/dsh-system-prompt', 'packages/core/system-prompt'],
   ['@types/node', 'node_modules/@types/node'],
 ]
 

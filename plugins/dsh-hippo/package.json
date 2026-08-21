@@ -46,8 +46,12 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "*",
+    "@deepseek-ai/dsh-agent": "*",
     "@deepseek-ai/dsh-client-runtime": "*",
     "@deepseek-ai/dsh-client-ui-settings": "*",
+    "@deepseek-ai/dsh-sandbox-policy": "*",
+    "@deepseek-ai/dsh-system-prompt": "*",
+    "@deepseek-ai/dsh-tools": "*",
     "react": "^18.2.0"
   },
   "devDependencies": {

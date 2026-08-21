@@ -15,8 +15,14 @@ import type { Context } from '@deepseek-ai/cordis'
 // Type-only: pulls the Context.webServer merge（宿主由 web bundle 提供，不打进产物）。
 import type {} from '@deepseek-ai/dsh-host-webserver'
 import { currentJob, inventory, startImport } from './import.ts'
-import { listMemories } from './memories.ts'
+import { compileMemories, forgetMemory, listMemories, updateMemory } from './memories.ts'
+import { registerPromptContext, registerRecallTool, registerRememberTool } from './tools.ts'
 import type { DoctorReport } from './types.ts'
+
+/** H4 回写开关：默认关，cordis.patch.yml / profile config 里 writeback: true 显式开启。 */
+export interface Config {
+  writeback: boolean
+}
 
 export const name = 'dsh-hippo'
 
@@ -141,8 +147,18 @@ function readJsonBody(request: IncomingMessage): Promise<Record<string, unknown>
 }
 
 
-export function apply(ctx: Context): void {
-  ctx.logger.info('dsh-hippo: 记忆桥已加载（H1：doctor + import）')
+export function apply(ctx: Context, config?: Config): void {
+  ctx.logger.info('dsh-hippo: 记忆桥已加载（H2 工具+提示注入 / H3 管理+编译 / H4 回写' + (config?.writeback === true ? '已开启' : '默认关') + '）')
+
+  // H2：memory_recall 工具 + systemPrompt 注入（服务缺席时降级跳过，不阻断插件）。
+  ctx.inject(['tools', 'agents', 'sandboxPolicy'], (tc) => {
+    registerRecallTool(tc)
+    if (config?.writeback === true) registerRememberTool(tc)
+  })
+  ctx.inject(['systemPrompt', 'agents', 'sandboxPolicy'], (pc) => {
+    registerPromptContext(pc)
+  })
+
   ctx.inject(['webServer'], (host) => {
     host.effect(() => {
       const disposers = [
@@ -192,6 +208,90 @@ export function apply(ctx: Context): void {
             }).then(
               (page) => { sendJson(response, 200, page) },
               (error: unknown) => { sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) }) },
+            )
+          },
+        }),
+        host.webServer.register({
+          kind: 'exact',
+          path: '/dsh-hippo/memories/forget',
+          handler: (request, response) => {
+            if (request.method !== 'POST') {
+              response.writeHead(405, { allow: 'POST' })
+              response.end()
+              return
+            }
+            if (!sameOrigin(request)) {
+              sendJson(response, 403, { error: '仅接受同源请求' })
+              return
+            }
+            void readJsonBody(request).then(
+              (body) => {
+                const id = typeof body.id === 'string' ? body.id : ''
+                void forgetMemory(id).then(
+                  (r) => { sendJson(response, 200, r) },
+                  (error: unknown) => { sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) }) },
+                )
+              },
+              (error: unknown) => { sendJson(response, 400, { error: error instanceof Error ? error.message : String(error) }) },
+            )
+          },
+        }),
+        host.webServer.register({
+          kind: 'exact',
+          path: '/dsh-hippo/memories/update',
+          handler: (request, response) => {
+            if (request.method !== 'POST') {
+              response.writeHead(405, { allow: 'POST' })
+              response.end()
+              return
+            }
+            if (!sameOrigin(request)) {
+              sendJson(response, 403, { error: '仅接受同源请求' })
+              return
+            }
+            void readJsonBody(request).then(
+              (body) => {
+                const id = typeof body.id === 'string' ? body.id : ''
+                const fields: { text?: string; type?: string; project?: string } = {}
+                if (typeof body.text === 'string') fields.text = body.text
+                if (typeof body.type === 'string') fields.type = body.type
+                if (typeof body.project === 'string') fields.project = body.project
+                void updateMemory(id, fields).then(
+                  (r) => { sendJson(response, 200, r) },
+                  (error: unknown) => { sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) }) },
+                )
+              },
+              (error: unknown) => { sendJson(response, 400, { error: error instanceof Error ? error.message : String(error) }) },
+            )
+          },
+        }),
+        host.webServer.register({
+          kind: 'exact',
+          path: '/dsh-hippo/memories/compile',
+          handler: (request, response) => {
+            if (request.method !== 'POST') {
+              response.writeHead(405, { allow: 'POST' })
+              response.end()
+              return
+            }
+            if (!sameOrigin(request)) {
+              sendJson(response, 403, { error: '仅接受同源请求' })
+              return
+            }
+            void readJsonBody(request).then(
+              (body) => {
+                try {
+                  const outcome = compileMemories({
+                    project: typeof body.project === 'string' && body.project.trim() !== '' ? body.project.trim() : undefined,
+                    write: body.write === true,
+                    outPath: typeof body.outPath === 'string' ? body.outPath : undefined,
+                  })
+                  sendJson(response, 200, outcome)
+                } catch (error) {
+                  sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) })
+                }
+              },
+              (error: unknown) => { sendJson(response, 400, { error: error instanceof Error ? error.message : String(error) }) },
             )
           },
         }),
