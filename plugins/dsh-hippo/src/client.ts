@@ -1,16 +1,18 @@
 /**
  * dsh-hippo 浏览器半：设置页「记忆桥」。
- * H0：doctor 自检结果 + 指引展示；H1 起追加 import 按钮与迁移统计，
- * H3 起追加搜索/列表/forget 与「编译 AGENTS.md」。
+ * 数据通路走同源 fetch 直连 host 路由（dshmarket 第三方先例，免去构建期
+ * 生成 typert 契约）。H0：doctor 自检结果 + 指引展示；H1 起追加 import
+ * 按钮与迁移统计，H3 起追加搜索/列表/forget 与「编译 AGENTS.md」。
  * @module dsh-hippo/client
  */
 
 import { createElement, useEffect, useState } from 'react'
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
-import type {} from '@deepseek-ai/dsh-api-remotes/client'
+// Type-only: pulls the settings shell's SlotMap merge (the 'settings.section' entry).
+import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { DoctorReport } from './types.ts'
 
-export const inject = ['slots', 'remote', 'remote.hippo']
+export const inject = ['slots']
 
 const CSS = `
 .hb-panel { display: flex; flex-direction: column; gap: 12px; padding: 4px 0; }
@@ -28,11 +30,16 @@ const CSS = `
 .hb-guide { font-size: 12px; color: #b45309; }
 `
 
-interface HippoRemote {
-  doctor: (req: Record<string, never>) => Promise<{ ok: boolean; value: DoctorReport; error: { message: string } } | { ok: false; value?: never; error: { message: string } }>
+async function fetchDoctor(): Promise<DoctorReport> {
+  const res = await fetch('/dsh-hippo/doctor', { cache: 'no-store' })
+  const body = await res.json() as DoctorReport | { error: string }
+  if (!res.ok || 'error' in body) {
+    throw new Error('error' in body ? body.error : `HTTP ${res.status}`)
+  }
+  return body
 }
 
-function Panel({ remote }: { remote: HippoRemote }) {
+function Panel(): ReturnType<typeof createElement> {
   const [report, setReport] = useState<DoctorReport | null>(null)
   const [running, setRunning] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -41,9 +48,11 @@ function Panel({ remote }: { remote: HippoRemote }) {
     if (running) return
     setRunning(true)
     setError(null)
-    const carried = await remote.doctor({})
-    if (carried.ok) setReport(carried.value)
-    else setError(carried.error.message)
+    try {
+      setReport(await fetchDoctor())
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
     setRunning(false)
   }
 
@@ -79,6 +88,6 @@ function Panel({ remote }: { remote: HippoRemote }) {
 export function apply(ctx: ClientContext): void {
   ctx.slots.inject('settings.section', () => ctx.slots.register(
     { name: 'settings.section', id: 'memory-bridge', order: 41, label: '记忆桥' },
-    () => createElement(Panel, { remote: ctx.remote.hippo }),
+    () => createElement(Panel),
   ))
 }
