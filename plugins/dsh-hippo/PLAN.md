@@ -95,7 +95,7 @@ L2(体验优化,引擎侧迭代):distill 质量提升、更多 agent 数据源�
 
 **落地依赖**:ctx.schedule(定时)、subagent/jobs(后台总结)、ctx.web.fetch(调研,depsec 已验证)、设置面板(审批门)。全部现成,无需新引擎——是"hippo 引擎 + 一个调度循环 + 四个 prompt 化步骤"。
 
-**与多 agent 的衔接**:见 `../dsh-team-memory/PLAN.md`——频道/消息适合短期协调,本记忆系统承担长期共享状态;mailbox/任务事件可蒸馏进同一套分级/退役模型,多 agent 共享一个可审计的记忆投影。
+**与多 agent 的衔接**:见 `../dsh-team-memory/PLAN.md`(2026-08-22 v2 两层模型)——频道/消息适合短期协调;成员私有记忆直接用本引擎(per-agent scope),共享团队记忆由 team-memory 做晋升+总结;mailbox/任务事件蒸馏进同一套分级/退役模型。家族总览与形态判定见 `../../docs/memory-architecture.md`。
 
 ---
 
