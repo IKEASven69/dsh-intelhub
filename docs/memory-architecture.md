@@ -8,7 +8,7 @@
 
 | 成员 | 形态 | 一句话职责 | 状态 |
 |---|---|---|---|
-| **hippo-skills** | npm 引擎包 | 唯一的蒸馏/存储/recall 引擎：三档去重（0.93/0.8）、top-N=20 截断、工具失败=lesson 信号、strength 强化、compile→AGENTS.md | TS 版 v0.1.0 已发布（npm） |
+| **hippo-skills** | npm 引擎包 | 唯一的蒸馏/存储/recall 引擎：三档去重（0.93/0.8）、top-N=20 截断、工具失败=lesson 信号、strength 强化、compile→AGENTS.md | TS 版 v0.1.0 本地就绪（`D:\coding\hippo-skills`，**未发布 npm**——dsh-hippo 暂以 `link:` 引用，发布前需先 `npm publish` 引擎） |
 | **dsh-hippo** | dsh 插件 | **个人记忆桥**：把 Claude Code/Codex/opencode 会话史蒸馏进 dsh；H4 起双向回写 | PLAN 定稿（P2 快赢线） |
 | **dsh-team-memory** | dsh 插件 | **团队认知层**：agent-team 事件 → 成员私有记忆 + 共享团队记忆（两层模型） | PLAN v2（P5，未开工） |
 | **dsh-depsec** | dsh 插件 | 依赖安全审计四合一（漏洞/投毒/密钥/SAST）；记忆体系的工程母机 + 互赖方 | E2E 完成 |
