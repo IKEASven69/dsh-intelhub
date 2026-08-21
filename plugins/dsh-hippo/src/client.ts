@@ -9,7 +9,7 @@ import { createElement, useEffect, useRef, useState } from 'react'
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 // Type-only: pulls the settings shell's SlotMap merge (the 'settings.section' entry).
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
-import type { AgentInventory, DoctorReport, ImportJob } from './types.ts'
+import type { AgentInventory, DoctorReport, ImportJob, MemoryItem, MemoryPage } from './types.ts'
 
 export const inject = ['slots']
 
@@ -106,6 +106,26 @@ const CSS = `
 .hb-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .hb-chip { font-size: 11px; border: 1px solid var(--hb-line); border-radius: 999px; padding: 2px 10px;
   color: var(--hb-mut); max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.hb-mem-tools { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.hb-input { flex: 1; min-width: 160px; font-size: 12px; padding: 6px 10px; border-radius: 8px;
+  border: 1px solid var(--hb-line); background: transparent; color: inherit; outline: none; transition: border-color .15s ease; }
+.hb-input:focus { border-color: var(--hb-a); }
+.hb-fchips { display: flex; flex-wrap: wrap; gap: 5px; }
+.hb-fchip { cursor: pointer; font-size: 11px; border-radius: 999px; padding: 2px 10px; border: 1px solid var(--hb-line);
+  background: transparent; color: var(--hb-mut); transition: all .12s ease; }
+.hb-fchip-on { background: var(--hb-a); border-color: transparent; color: #fff; }
+.hb-mem-list { display: flex; flex-direction: column; gap: 7px; max-height: 380px; overflow: auto; padding-right: 2px; }
+.hb-mem { display: flex; gap: 10px; align-items: flex-start; border: 1px solid var(--hb-line); border-radius: 9px;
+  padding: 8px 11px; animation: hbIn .28s ease both; }
+.hb-mem-type { font-size: 10px; font-weight: 700; border-radius: 5px; padding: 2px 7px; color: #fff; flex: none; margin-top: 1px; }
+.hb-t-preference { background: #7c3aed; } .hb-t-decision { background: var(--hb-a); }
+.hb-t-lesson { background: var(--hb-warn); } .hb-t-fact { background: #0e7490; } .hb-t-unknown { background: #6b7280; }
+.hb-mem-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+.hb-mem-text { font-size: 12.5px; line-height: 1.55; word-break: break-word; display: -webkit-box;
+  -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.hb-mem-meta { font-size: 10.5px; color: var(--hb-mut); display: flex; gap: 8px; flex-wrap: wrap; }
+.hb-mem-more { align-self: center; }
 
 @media (prefers-reduced-motion: reduce) {
   .hb-card, .hb-dot, .hb-bar-fill::after { animation: none !important; }
@@ -260,6 +280,96 @@ function StatsCard({ job }: { job: ImportJob }): ReturnType<typeof createElement
 }
 
 // ---------------------------------------------------------------------------
+// 记忆库浏览
+// ---------------------------------------------------------------------------
+
+const TYPE_META: Record<string, { label: string; cls: string }> = {
+  preference: { label: '偏好', cls: 'hb-t-preference' },
+  decision: { label: '决策', cls: 'hb-t-decision' },
+  lesson: { label: '教训', cls: 'hb-t-lesson' },
+  fact: { label: '事实', cls: 'hb-t-fact' },
+}
+
+function fmtAgent(agent: string): string {
+  const short = agent.replace(/^import:/, '')
+  return AGENT_META[short]?.label ?? (short === '' ? '手工' : short)
+}
+
+function fmtDate(ms: number): string {
+  if (ms <= 0) return ''
+  const d = new Date(ms)
+  return `${d.getMonth() + 1}月${d.getDate()}日`
+}
+
+function MemRow({ m }: { m: MemoryItem }): ReturnType<typeof createElement> {
+  const t = TYPE_META[m.type] ?? { label: m.type || '未分类', cls: 'hb-t-unknown' }
+  return createElement('div', { className: 'hb-mem' },
+    createElement('span', { className: `hb-mem-type ${t.cls}` }, t.label),
+    createElement('span', { className: 'hb-mem-body' },
+      createElement('span', { className: 'hb-mem-text' }, m.text),
+      createElement('span', { className: 'hb-mem-meta' },
+        createElement('span', null, m.project === 'global' ? '全局' : m.project),
+        createElement('span', null, `来源 ${fmtAgent(m.agent)}`),
+        m.createdAt > 0 ? createElement('span', null, fmtDate(m.createdAt)) : null,
+        m.strength > 1 ? createElement('span', null, `强度 ${m.strength}`) : null,
+      ),
+    ),
+  )
+}
+
+function MemoriesCard({ page, loading, q, setQ, type, setType, onSearch, onMore }: {
+  page: MemoryPage | null
+  loading: boolean
+  q: string
+  setQ: (v: string) => void
+  type: string
+  setType: (v: string) => void
+  onSearch: () => void
+  onMore: () => void
+}): ReturnType<typeof createElement> {
+  const isSearch = q.trim() !== ''
+  const shown = page?.items ?? []
+  const hasMore = page !== null && !isSearch && page.offset + page.items.length < page.total
+  return createElement('div', { className: 'hb-card' },
+    createElement('div', { className: 'hb-hero' },
+      createElement('span', { style: { fontWeight: 700, fontSize: 13 } }, '记忆库'),
+      createElement('span', { className: 'hb-sub' },
+        page === null ? (loading ? '读取中…' : '') : isSearch ? `搜索到 ${page.total} 条` : `共 ${page.total} 条记忆`),
+      createElement('span', { className: 'hb-spacer' }),
+    ),
+    createElement('div', { className: 'hb-mem-tools' },
+      createElement('input', {
+        className: 'hb-input',
+        placeholder: '语义搜索记忆…',
+        value: q,
+        onChange: (e: { target: { value: string } }) => { setQ(e.target.value) },
+        onKeyDown: (e: { key: string }) => { if (e.key === 'Enter') onSearch() },
+      }),
+      createElement('button', { className: 'hb-btn hb-btn-ghost', onClick: onSearch, disabled: loading },
+        loading && page !== null && isSearch ? '搜索中…' : '搜索'),
+    ),
+    createElement('div', { className: 'hb-fchips' },
+      ...[['', '全部'], ['preference', '偏好'], ['decision', '决策'], ['lesson', '教训'], ['fact', '事实']].map(([val, label]) =>
+        createElement('button', {
+          key: val,
+          className: `hb-fchip${type === val ? ' hb-fchip-on' : ''}`,
+          onClick: () => { setType(val) },
+        }, label),
+      ),
+    ),
+    shown.length > 0
+      ? createElement('div', { className: 'hb-mem-list' }, ...shown.map((m) => createElement(MemRow, { key: m.id, m })))
+      : !loading
+        ? createElement('div', { className: 'hb-banner hb-banner-info' },
+            isSearch ? '没有匹配的记忆，换个关键词试试。' : '记忆库还是空的——用上面的「开始迁移」把会话蒸馏进来。')
+        : null,
+    hasMore
+      ? createElement('button', { className: 'hb-btn hb-btn-ghost hb-mem-more', onClick: onMore, disabled: loading }, '加载更多')
+      : null,
+  )
+}
+
+// ---------------------------------------------------------------------------
 // 面板
 // ---------------------------------------------------------------------------
 
@@ -270,6 +380,28 @@ function Panel(): ReturnType<typeof createElement> {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState<'none' | 'doctor' | 'preview' | 'import'>('none')
   const timer = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // 记忆库浏览状态
+  const [mem, setMem] = useState<MemoryPage | null>(null)
+  const [memLoading, setMemLoading] = useState(false)
+  const [memQ, setMemQ] = useState('')
+  const [memQApplied, setMemQApplied] = useState('')
+  const [memType, setMemType] = useState('')
+  const memOffset = useRef(0)
+
+  const fetchMem = async (opts: { q: string; type: string; offset: number; append: boolean }) => {
+    setMemLoading(true)
+    try {
+      const params = new URLSearchParams({ limit: '30', offset: String(opts.offset) })
+      if (opts.q.trim() !== '') params.set('q', opts.q.trim())
+      if (opts.type !== '') params.set('type', opts.type)
+      const page = await getJson<MemoryPage>(`/dsh-hippo/memories?${params.toString()}`)
+      setMem((prev) => (opts.append && prev !== null ? { ...page, items: [...prev.items, ...page.items] } : page))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
+    setMemLoading(false)
+  }
 
   const poll = (running: boolean) => {
     if (timer.current !== null) { clearInterval(timer.current); timer.current = null }
@@ -283,6 +415,10 @@ function Panel(): ReturnType<typeof createElement> {
             poll(false)
             setBusy('none')
             void getJson<AgentInventory[]>('/dsh-hippo/inventory').then(setInv).catch(() => {})
+            if (!j.stats.dryRun) {
+              memOffset.current = 0
+              void fetchMem({ q: '', type: memType, offset: 0, append: false })
+            }
           }
         },
         () => {},
@@ -327,8 +463,16 @@ function Panel(): ReturnType<typeof createElement> {
     void getJob().then((j) => {
       if (j !== null && j.state === 'running') { setJob(j); poll(true) }
     }).catch(() => {})
+    void fetchMem({ q: '', type: '', offset: 0, append: false })
     return () => { if (timer.current !== null) clearInterval(timer.current) }
   }, [])
+
+  // 类型筛选变化时重查（搜索词保持已应用值）
+  useEffect(() => {
+    if (report === null) return
+    memOffset.current = 0
+    void fetchMem({ q: memQApplied, type: memType, offset: 0, append: false })
+  }, [memType])
 
   const ready = report !== null && report.ok
   const hasSessions = (inv ?? []).some((a) => a.sessions > 0)
@@ -376,6 +520,24 @@ function Panel(): ReturnType<typeof createElement> {
     job !== null && job.state === 'error'
       ? createElement('div', { className: 'hb-card' }, createElement('div', { className: 'hb-banner hb-banner-err' }, `迁移失败：${job.error ?? '未知错误'}`))
       : null,
+
+    createElement(MemoriesCard, {
+      page: mem,
+      loading: memLoading,
+      q: memQ,
+      setQ: setMemQ,
+      type: memType,
+      setType: setMemType,
+      onSearch: () => {
+        memOffset.current = 0
+        setMemQApplied(memQ)
+        void fetchMem({ q: memQ, type: memType, offset: 0, append: false })
+      },
+      onMore: () => {
+        memOffset.current += 30
+        void fetchMem({ q: memQApplied, type: memType, offset: memOffset.current, append: true })
+      },
+    }),
   )
 }
 

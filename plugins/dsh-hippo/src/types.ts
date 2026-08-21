@@ -59,3 +59,21 @@ export interface ImportJob {
   stats: ImportStats
   error?: string
 }
+
+/** 记忆库条目（浏览/搜索）。 */
+export interface MemoryItem {
+  id: string
+  text: string
+  type: string
+  project: string
+  agent: string
+  createdAt: number
+  strength: number
+}
+
+export interface MemoryPage {
+  total: number
+  offset: number
+  limit: number
+  items: MemoryItem[]
+}

@@ -15,6 +15,7 @@ import type { Context } from '@deepseek-ai/cordis'
 // Type-only: pulls the Context.webServer merge（宿主由 web bundle 提供，不打进产物）。
 import type {} from '@deepseek-ai/dsh-host-webserver'
 import { currentJob, inventory, startImport } from './import.ts'
+import { listMemories } from './memories.ts'
 import type { DoctorReport } from './types.ts'
 
 export const name = 'dsh-hippo'
@@ -170,6 +171,28 @@ export function apply(ctx: Context): void {
               return
             }
             sendJson(response, 200, inventory())
+          },
+        }),
+        host.webServer.register({
+          kind: 'exact',
+          path: '/dsh-hippo/memories',
+          handler: (request, response) => {
+            if (request.method !== 'GET') {
+              response.writeHead(405, { allow: 'GET' })
+              response.end()
+              return
+            }
+            const url = new URL(request.url ?? '/dsh-hippo/memories', 'http://localhost')
+            void listMemories({
+              q: url.searchParams.get('q') ?? undefined,
+              type: url.searchParams.get('type') ?? undefined,
+              project: url.searchParams.get('project') ?? undefined,
+              offset: Number(url.searchParams.get('offset') ?? '0') || 0,
+              limit: Number(url.searchParams.get('limit') ?? '30') || 30,
+            }).then(
+              (page) => { sendJson(response, 200, page) },
+              (error: unknown) => { sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) }) },
+            )
           },
         }),
         host.webServer.register({
