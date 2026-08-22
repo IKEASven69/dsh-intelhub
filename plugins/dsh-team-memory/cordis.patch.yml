@@ -1,7 +1,0 @@
-# dsh-team-memory bundle patch：把团队记忆插件插入 profile 合成。
-# host 半：webServer 路由（dump/scan/entries；T2 起补面板）。
-# 无浏览器半（T2 前无 UI）。
-
-- insert:
-    - id: team-memory
-      name: 'dsh-team-memory'

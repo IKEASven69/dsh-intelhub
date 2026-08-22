@@ -15,6 +15,7 @@ import type { Context } from '@deepseek-ai/cordis'
 // Type-only: pulls the Context.webServer merge（宿主由 web bundle 提供，不打进产物）。
 import type {} from '@deepseek-ai/dsh-host-webserver'
 import { currentJob, inventory, startImport } from './import.ts'
+import { readTeamEvents, distillTeamEvents, foldLedger, triage } from 'hippo-skills'
 import { compileMemories, forgetMemory, listMemories, updateMemory } from './memories.ts'
 import { registerPromptContext, registerRecallTool, registerRememberTool } from './tools.ts'
 import type { DoctorReport } from './types.ts'
@@ -165,6 +166,66 @@ export function apply(ctx: Context, config?: Config): void {
   ctx.inject(['webServer'], (host) => {
     host.effect(() => {
       const disposers = [
+        // T0：dump 本机全部团队事件（rc.8 起有真实数据；rc.7 返回 0 条属预期）
+        host.webServer.register({
+          kind: 'exact',
+          path: '/dsh-team-memory/dump',
+          handler: (_request, response) => {
+            sendJson(response, 200, readTeamEvents())
+          },
+        }),
+        // T1：扫描蒸馏（events → L1 私有 + L2 晋升 → 账本）
+        host.webServer.register({
+          kind: 'exact',
+          path: '/dsh-team-memory/scan',
+          handler: (request, response) => {
+            if (request.method !== 'POST') {
+              response.writeHead(405, { allow: 'POST' })
+              response.end()
+              return
+            }
+            if (!sameOrigin(request)) {
+              sendJson(response, 403, { error: '仅接受同源请求' })
+              return
+            }
+            void readJsonBody(request).then(
+              async (body) => {
+                try {
+                  const dump = readTeamEvents()
+                  if (dump.events.length === 0) {
+                    sendJson(response, 200, { note: '本机无团队事件（需 harness rc.8+ 并跑过 agent team）；fixture 驱动的管线验证见测试', report: null })
+                    return
+                  }
+                  void body
+                  const byTeam = new Map<string, typeof dump.events>()
+                  for (const ev of dump.events) {
+                    const list = byTeam.get(ev.teamId) ?? []
+                    list.push(ev)
+                    byTeam.set(ev.teamId, list)
+                  }
+                  const reports = []
+                  for (const [teamId, events] of byTeam) {
+                    reports.push(await distillTeamEvents(events, { apply: true }))
+                    void teamId
+                  }
+                  sendJson(response, 200, { teams: byTeam.size, reports })
+                } catch (error) {
+                  sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) })
+                }
+              },
+              (error: unknown) => { sendJson(response, 400, { error: error instanceof Error ? error.message : String(error) }) },
+            )
+          },
+        }),
+        // 账本当前视图 + 审计退役记录
+        host.webServer.register({
+          kind: 'exact',
+          path: '/dsh-team-memory/entries',
+          handler: (_request, response) => {
+            sendJson(response, 200, foldLedger())
+          },
+        }),
+
         host.webServer.register({
           kind: 'exact',
           path: '/dsh-hippo/doctor',
