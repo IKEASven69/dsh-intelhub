@@ -129,6 +129,8 @@ L2(体验优化,引擎侧迭代):distill 质量提升、更多 agent 数据源�
 | | kimi code | `~/.kimi/`(本机实测为空,2026-03 建目录未使用;Wake 有 kimi 适配器可抄路径) | 无数据,待装机后验证 |
 | | copilot / kiro / grok | 各家目录(Wake 路径可抄) | 本机无数据,路径待验证 |
 
+**2026-08-22 G3 侦察改判**(详见 hippo-skills/docs/GUI-PLAN.md):pi 已实现(五家);antigravity 会话为 protobuf 私有格式挂 backlog;trae 聊天体在 Chromium LevelDB 挂 backlog;gemini 本机无会话数据待使用后再接。
+
 技术注记:
 - VSCode 系(antigravity/trae/cursor/kiro/windsurf)聊天记录在 `state.vscdb` 的 JSON blob 里,键名各家不同——better-sqlite3 **readonly** 打开(引擎已依赖,零新增),逐家摸键;zcode 同为 SQLite 三层表(session/message/part),结构比 vscdb 干净,适配成本最低;
 - **发现(inventory)先于解析**:目录存在但适配器未写时,面板如实标"未适配"(诚实统计原则,防止"装了就有"的错觉);
