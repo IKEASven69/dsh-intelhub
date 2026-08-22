@@ -20,7 +20,7 @@ import { makeResolver, renderText } from './tools.ts'
 const memoryScope = (name: string): string => `life:${name}`
 
 /** K2：召回与当前话题相关的居民记忆（Top-3，注入系统提示）。 */
-async function recallMemories(name: string, query: string): Promise<string> {
+export async function recallMemories(name: string, query: string): Promise<string> {
   try {
     return await withEngine(async ({ engine }) => {
       const hits = await engine.recall(query, { project: memoryScope(name), limit: 3 })

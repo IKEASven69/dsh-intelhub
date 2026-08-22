@@ -19,6 +19,7 @@ import { readTeamEvents, distillTeamEvents, foldLedger, triage } from 'hippo-ski
 import { compileMemories, forgetMemory, listMemories, updateMemory } from './memories.ts'
 import { registerPromptContext, registerRecallTool, registerRememberTool } from './tools.ts'
 import { registerLifeTools } from './life-tools.ts'
+import { startAutonomyLoop } from './life-autonomy.ts'
 import type { DoctorReport } from './types.ts'
 
 /** H4 回写开关：默认关，cordis.patch.yml / profile config 里 writeback: true 显式开启。 */
@@ -162,6 +163,10 @@ export function apply(ctx: Context, config?: Config): void {
   })
   ctx.inject(['tools', 'agents', 'sandboxPolicy'], (tc) => {
     registerLifeTools(tc)
+  })
+  // K3：主动行为循环（dsh web 常驻时活跃——chattiness 参数控频）
+  ctx.inject(['llm'], (lc) => {
+    return startAutonomyLoop(lc as never)
   })
   ctx.inject(['systemPrompt', 'agents', 'sandboxPolicy'], (pc) => {
     registerPromptContext(pc)
