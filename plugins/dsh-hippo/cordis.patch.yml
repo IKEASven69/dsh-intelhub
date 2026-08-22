@@ -7,4 +7,4 @@
     - id: hippo
       name: 'dsh-hippo'
       config:
-        writeback: false
+        writeback: true
