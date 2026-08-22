@@ -120,19 +120,21 @@ L2(体验优化,引擎侧迭代):distill 质量提升、更多 agent 数据源�
 
 | 优先级 | agent | 会话存储 | 形态 |
 |---|---|---|---|
-| **P0(本机有真数据)** | gemini | `~/.gemini/`(267MB,含 antigravity brain 子树) | JSON,需定位会话主体 |
+| **P0(本机有真数据)** | zcode | `~/.zcode/cli/db/db.sqlite` 的 session/message/part 三层表(2026-08-22 实测 145 会话/28768 消息/99228 part,同 opencode 三层模式但存 SQLite;cwd 取 session.path/directory) | sqlite_ro,**库为活库必须 readonly** |
+| | gemini | `~/.gemini/`(267MB,含 antigravity brain 子树) | JSON,需定位会话主体 |
 | | antigravity | `~/AppData/Roaming/Antigravity/User/workspaceStorage/*/state.vscdb` | VSCode 系 SQLite(Wake 的 sqlite_ro 模式) |
 | | trae | `~/AppData/Roaming/Trae/User/{globalStorage,workspaceStorage}` | 同上;**Wake 未支持,我们抢先** |
 | | pi | `~/.pi/agent/`(4.2MB) | 需定位会话文件 |
 | P1(生态常见,本机无数据) | cursor | `~/AppData/Roaming/Cursor/User/workspaceStorage/*/state.vscdb` | sqlite_ro |
-| | copilot / kimi / kiro / grok | 各家目录(Wake 路径可抄) | 本机无数据,路径待验证 |
+| | kimi code | `~/.kimi/`(本机实测为空,2026-03 建目录未使用;Wake 有 kimi 适配器可抄路径) | 无数据,待装机后验证 |
+| | copilot / kiro / grok | 各家目录(Wake 路径可抄) | 本机无数据,路径待验证 |
 
 技术注记:
-- VSCode 系(antigravity/trae/cursor/kiro/windsurf)聊天记录在 `state.vscdb` 的 JSON blob 里,键名各家不同——better-sqlite3 **readonly** 打开(引擎已依赖,零新增),逐家摸键;
+- VSCode 系(antigravity/trae/cursor/kiro/windsurf)聊天记录在 `state.vscdb` 的 JSON blob 里,键名各家不同——better-sqlite3 **readonly** 打开(引擎已依赖,零新增),逐家摸键;zcode 同为 SQLite 三层表(session/message/part),结构比 vscdb 干净,适配成本最低;
 - **发现(inventory)先于解析**:目录存在但适配器未写时,面板如实标"未适配"(诚实统计原则,防止"装了就有"的错觉);
-- 每个适配器 = `import.ts` 一个 `parse<Agent>(file) → Turn[]` + AGENTS 表一行,模式已由 codex/opencode 两个先例验证。
+- 每个适配器 = `import.ts` 一个 `parse<Agent>(file) → Turn[]` + AGENTS 表一行,模式已由 codex/opencode 两个先例验证;SQLite 系适配器把"file"换成"db 连接+session id",增量状态(H1.5)对 SQLite 记 rowid/time_updated 而非 mtime。
 
-| 验收 | 本机存在会话数据的 agent(gemini/antigravity/trae/pi)全部可发现并导入;inventory 面板显示各 agent 会话数与适配状态 |
+| 验收 | 本机存在会话数据的 agent(zcode/gemini/antigravity/trae/pi)全部可发现并导入;inventory 面板显示各 agent 会话数与适配状态 |
 |---|---|
 
 ### v0.2 backlog:FTS 子串搜索(trigram 启发)
