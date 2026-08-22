@@ -1,0 +1,40 @@
+{
+  "name": "dsh-team-memory",
+  "description": "团队记忆蒸馏：agent-team 事件 → 成员私有记忆 + 团队共享记忆（两层模型，引擎 hippo-skills beta）",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": "./lib/index.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "cordis.patch.yml",
+    "scripts",
+    "tsconfig.build.json",
+    "tsdown.config.ts"
+  ],
+  "license": "MIT",
+  "scripts": {
+    "build": "node scripts/link-deps.mjs && tsc -p tsconfig.build.json && tsdown && echo '(无 client 半)'"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "dependencies": {
+    "hippo-skills": "link:D:/coding/hippo-skills"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsdown": "^0.22.14",
+    "typescript": "^5.6.0"
+  }
+}
