@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "mimosa-hook-status/v1",
+  "recordedAt": "2026-08-21T17:11:38.533Z",
+  "sessionId": "sess_c3c2d32a-38cd-4f0d-b45e-f7f821c93e2e",
+  "event": "PostToolUse",
+  "toolName": "Write",
+  "file": "plugins/dsh-hippo/src/client.ts",
+  "outcome": "clear",
+  "coverage": "complete",
+  "findingCount": 0,
+  "durationMs": 14,
+  "hostState": "hook_complete",
+  "reportHint": ".mimosa/reports/"
+}

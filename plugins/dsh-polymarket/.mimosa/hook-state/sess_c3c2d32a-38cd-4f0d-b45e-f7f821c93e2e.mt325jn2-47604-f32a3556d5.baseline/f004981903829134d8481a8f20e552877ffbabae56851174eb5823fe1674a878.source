@@ -1,8 +1,8 @@
 /**
  * dsh-polymarket — 浏览器半（cordis_define 的 code.client）。
  *
- * 形态：本文件内容就是 cordis 插件「函数体」字符串——宿主以注入符号表为形参、
- *   把整段代码包成一个返回异步 IIFE 的动态函数后执行（Function 构造器方式，由宿主完成，非本文件行为）。
+ * 形态：本文件内容就是 cordis 插件「函数体」字符串——宿主把它包进
+ *   new Function(...symbols, `return (async () => {\n${code}\n})()`)
  * 因此：无 import / 无 JSX / 顶层必须 `return` 插件对象；`React`/`console`/`styles`/`host`/`harness`
  * 都是注入的符号面（symbol surface），`setTimeout`/`fetch`/`require` 等被宿主陷阱遮蔽。
  *

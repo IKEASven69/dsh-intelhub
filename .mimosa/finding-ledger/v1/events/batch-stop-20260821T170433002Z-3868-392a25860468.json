@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "mimosa-finding-ledger-batch/v1",
+  "batchId": "stop-20260821T170433002Z-3868-392a25860468",
+  "runId": "20260821T170433002Z-3868-392a25860468",
+  "runStatus": "completed",
+  "coverage": {
+    "status": "complete",
+    "reasons": []
+  },
+  "source": {
+    "component": "zcode-hook",
+    "operationId": "Stop"
+  },
+  "revision": "e7e92c06c9a430bebf8980c57e35843f55eaec89",
+  "diffHash": "7af9de8dcc1fe1e40e627fb3c2f6056551ca7905804b04032a19f6c6caf9721b",
+  "rulesVersion": "unavailable",
+  "sessionHash": "34e92868954448c5da1f58fe0b0fbcbbe1f28102ca68989e9e7c2ac30c11dd02",
+  "reportRef": ".mimosa/reports/task-review-sess_c3c2d32a-38cd-4f0d-b45e-f7f821c93e2e-20260821T170433002Z-3868-392a25860468.json",
+  "events": [],
+  "observedFindingIds": [],
+  "verifiedFiles": [
+    {
+      "file": "plugins/dsh-polymarket/src/client-half.js",
+      "direct": "complete",
+      "projectContext": "partial"
+    }
+  ],
+  "recordedAt": "2026-08-21T17:04:33.311Z"
+}

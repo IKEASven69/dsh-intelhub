@@ -1,0 +1,1027 @@
+{
+  "schemaVersion": "mimosa-finding-ledger-batch/v1",
+  "batchId": "stop-20260821T123909172Z-64656-be6fa3389f4d",
+  "runId": "20260821T123909172Z-64656-be6fa3389f4d",
+  "runStatus": "inconclusive",
+  "coverage": {
+    "status": "partial",
+    "reasons": [
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "plugins/dsh-polymarket/package.json",
+        "detail": "file is missing from task baseline",
+        "affectsCompletion": true
+      },
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "plugins/dsh-polymarket/tsdown.config.ts",
+        "detail": "file is missing from task baseline",
+        "affectsCompletion": true
+      },
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "plugins/dsh-polymarket/src/client-half.js",
+        "detail": "file is missing from task baseline",
+        "affectsCompletion": true
+      },
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "plugins/dsh-polymarket/src/host-half.js",
+        "detail": "file is missing from task baseline",
+        "affectsCompletion": true
+      },
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "plugins/dsh-polymarket/src/index.ts",
+        "detail": "file is missing from task baseline",
+        "affectsCompletion": true
+      },
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "plugins/dsh-polymarket/lib/index.js",
+        "detail": "file is missing from task baseline",
+        "affectsCompletion": true
+      },
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "plugins/dsh-depsec/package.json",
+        "detail": "file is missing from task baseline",
+        "affectsCompletion": true
+      },
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "plugins/dsh-depsec/tsdown.config.ts",
+        "detail": "file is missing from task baseline",
+        "affectsCompletion": true
+      },
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "plugins/dsh-depsec/src/client.ts",
+        "detail": "file is missing from task baseline",
+        "affectsCompletion": true
+      },
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "plugins/dsh-depsec/src/index.ts",
+        "detail": "file is missing from task baseline",
+        "affectsCompletion": true
+      },
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "plugins/dsh-depsec/src/types.ts",
+        "detail": "file is missing from task baseline",
+        "affectsCompletion": true
+      },
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "plugins/agentforge-brain/index.js",
+        "detail": "file is missing from task baseline",
+        "affectsCompletion": true
+      },
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "plugins/agentforge-brain/package.json",
+        "detail": "file is missing from task baseline",
+        "affectsCompletion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "plugins/dsh-polymarket/package.json",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affectsCompletion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "plugins/dsh-polymarket/tsdown.config.ts",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affectsCompletion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "plugins/dsh-polymarket/src/client-half.js",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affectsCompletion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "plugins/dsh-polymarket/src/host-half.js",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affectsCompletion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "plugins/dsh-polymarket/src/index.ts",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affectsCompletion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "plugins/dsh-polymarket/lib/index.js",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affectsCompletion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "plugins/dsh-depsec/package.json",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affectsCompletion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "plugins/dsh-depsec/tsdown.config.ts",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affectsCompletion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "plugins/dsh-depsec/src/client.ts",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affectsCompletion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "plugins/dsh-depsec/src/index.ts",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affectsCompletion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "plugins/dsh-depsec/src/types.ts",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affectsCompletion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "plugins/agentforge-brain/index.js",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affectsCompletion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "plugins/agentforge-brain/package.json",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affectsCompletion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "supply-chain-check",
+        "target": ".",
+        "detail": "spawnSync C:\\Users\\20369\\.version-fox\\sdks\\nodejs\\node.exe ETIMEDOUT",
+        "affectsCompletion": true
+      }
+    ]
+  },
+  "source": {
+    "component": "zcode-hook",
+    "operationId": "Stop"
+  },
+  "revision": "fd46dbbbfa0713cdce179714e0656ae1d8e91933",
+  "diffHash": "77c15572c20e23d6cb21b10329160f6fbc2c6a820c1d825b66fd76047d20563b",
+  "rulesVersion": "unavailable",
+  "sessionHash": "34e92868954448c5da1f58fe0b0fbcbbe1f28102ca68989e9e7c2ac30c11dd02",
+  "reportRef": ".mimosa/reports/task-review-sess_c3c2d32a-38cd-4f0d-b45e-f7f821c93e2e-20260821T123909172Z-64656-be6fa3389f4d.json",
+  "events": [
+    {
+      "eventId": "hook-fc6e95a836c9c7352998d55811004e15",
+      "findingId": "mimosa-14064c1f13013cba90c1ffba",
+      "type": "finding_observed",
+      "at": "2026-08-21T12:30:37.065Z",
+      "identity": {
+        "projectRelativeFile": "plugins/agentforge-brain/client.js",
+        "ruleId": "security",
+        "codeEvidenceHash": "3be5a65e4499c7bdb3bb18fe605dc0f4ae705dfbb07ad3b771f7f4f53d492aa3",
+        "confidence": "stable"
+      },
+      "scope": "direct",
+      "line": 61,
+      "endLine": 61,
+      "reasonCode": "advisory",
+      "reportedToAgent": true,
+      "evidence": {
+        "kind": "source",
+        "boundary": "candidate",
+        "producer": "deterministic",
+        "evidenceHash": "3be5a65e4499c7bdb3bb18fe605dc0f4ae705dfbb07ad3b771f7f4f53d492aa3"
+      },
+      "sequence": 0
+    },
+    {
+      "eventId": "hook-85472757e1573db688965473b35ffe5f",
+      "findingId": "mimosa-d7ddbed6ffe8e0aafb855fc6",
+      "type": "finding_observed",
+      "at": "2026-08-21T12:30:37.065Z",
+      "identity": {
+        "projectRelativeFile": "plugins/agentforge-brain/client.js",
+        "ruleId": "security",
+        "codeEvidenceHash": "8dd23240ba31aa981d1c23d579b6747f90352663c35239f74ec0657338ee4a3d",
+        "confidence": "stable"
+      },
+      "scope": "direct",
+      "line": 62,
+      "endLine": 62,
+      "reasonCode": "advisory",
+      "reportedToAgent": true,
+      "evidence": {
+        "kind": "source",
+        "boundary": "candidate",
+        "producer": "deterministic",
+        "evidenceHash": "8dd23240ba31aa981d1c23d579b6747f90352663c35239f74ec0657338ee4a3d"
+      },
+      "sequence": 1
+    },
+    {
+      "eventId": "hook-13ba0a1adee8ca357b63745f31a6a9f4",
+      "findingId": "mimosa-e7d58426ec2ce32c87ab7311",
+      "type": "finding_observed",
+      "at": "2026-08-21T12:30:37.065Z",
+      "identity": {
+        "projectRelativeFile": "plugins/agentforge-brain/client.js",
+        "ruleId": "security",
+        "codeEvidenceHash": "19d287a4b155e8ffc66ec777ac33a656342abac50aece8945ea2f1244ee4f108",
+        "confidence": "stable"
+      },
+      "scope": "direct",
+      "line": 63,
+      "endLine": 63,
+      "reasonCode": "advisory",
+      "reportedToAgent": true,
+      "evidence": {
+        "kind": "source",
+        "boundary": "candidate",
+        "producer": "deterministic",
+        "evidenceHash": "19d287a4b155e8ffc66ec777ac33a656342abac50aece8945ea2f1244ee4f108"
+      },
+      "sequence": 2
+    },
+    {
+      "eventId": "hook-1896256453683c0deec0dff5649a6b8c",
+      "findingId": "mimosa-544b96740872b90b87abe573",
+      "type": "finding_observed",
+      "at": "2026-08-21T12:30:37.065Z",
+      "identity": {
+        "projectRelativeFile": "plugins/agentforge-brain/client.js",
+        "ruleId": "security",
+        "codeEvidenceHash": "8ad32db758b31f1f46e10d3af5879a0c68ab34998359afa0788c5ba0ac28f54d",
+        "confidence": "stable"
+      },
+      "scope": "direct",
+      "line": 68,
+      "endLine": 68,
+      "reasonCode": "advisory",
+      "reportedToAgent": true,
+      "evidence": {
+        "kind": "source",
+        "boundary": "candidate",
+        "producer": "deterministic",
+        "evidenceHash": "8ad32db758b31f1f46e10d3af5879a0c68ab34998359afa0788c5ba0ac28f54d"
+      },
+      "sequence": 3
+    },
+    {
+      "eventId": "hook-a64520b8697bdff5d2d1b16f9a9f07a0",
+      "findingId": "mimosa-8eedf2c84527fd762172a47f",
+      "type": "finding_observed",
+      "at": "2026-08-21T12:30:37.066Z",
+      "identity": {
+        "projectRelativeFile": "plugins/agentforge-brain/client.js",
+        "ruleId": "security",
+        "codeEvidenceHash": "4086d82e9179321a2643dea134e5eb14731f7266fc35570314ae2391fd7fc0d6",
+        "confidence": "stable"
+      },
+      "scope": "direct",
+      "line": 69,
+      "endLine": 69,
+      "reasonCode": "advisory",
+      "reportedToAgent": true,
+      "evidence": {
+        "kind": "source",
+        "boundary": "candidate",
+        "producer": "deterministic",
+        "evidenceHash": "4086d82e9179321a2643dea134e5eb14731f7266fc35570314ae2391fd7fc0d6"
+      },
+      "sequence": 4
+    },
+    {
+      "eventId": "hook-341378d4c65da28c7b79228660f68b38",
+      "findingId": "mimosa-ca3d5f4c031f86ff5503a273",
+      "type": "finding_observed",
+      "at": "2026-08-21T12:30:37.066Z",
+      "identity": {
+        "projectRelativeFile": "plugins/agentforge-brain/client.js",
+        "ruleId": "security",
+        "codeEvidenceHash": "65f81e3a3b17df3b933e1b23d5861d43b6e084368a7e76fd5dba8afa80454672",
+        "confidence": "stable"
+      },
+      "scope": "direct",
+      "line": 70,
+      "endLine": 70,
+      "reasonCode": "advisory",
+      "reportedToAgent": true,
+      "evidence": {
+        "kind": "source",
+        "boundary": "candidate",
+        "producer": "deterministic",
+        "evidenceHash": "65f81e3a3b17df3b933e1b23d5861d43b6e084368a7e76fd5dba8afa80454672"
+      },
+      "sequence": 5
+    },
+    {
+      "eventId": "hook-0c500d8956cec0c05c1bc7b3e1bf2487",
+      "findingId": "mimosa-483e638595b4702fa6c0b8b4",
+      "type": "finding_observed",
+      "at": "2026-08-21T12:30:37.066Z",
+      "identity": {
+        "projectRelativeFile": "plugins/agentforge-brain/client.js",
+        "ruleId": "security",
+        "codeEvidenceHash": "fd4844b7da7a8cf1ec20be3623445ea7f58f6420d94df49968fdfd75f4b44639",
+        "confidence": "stable"
+      },
+      "scope": "direct",
+      "line": 71,
+      "endLine": 71,
+      "reasonCode": "advisory",
+      "reportedToAgent": true,
+      "evidence": {
+        "kind": "source",
+        "boundary": "candidate",
+        "producer": "deterministic",
+        "evidenceHash": "fd4844b7da7a8cf1ec20be3623445ea7f58f6420d94df49968fdfd75f4b44639"
+      },
+      "sequence": 6
+    },
+    {
+      "eventId": "hook-d96b0a5183ee32e422e05cd20e62e6e9",
+      "findingId": "mimosa-e19ae0f36251544a63d76f85",
+      "type": "finding_observed",
+      "at": "2026-08-21T12:30:37.066Z",
+      "identity": {
+        "projectRelativeFile": "plugins/agentforge-brain/client.js",
+        "ruleId": "security",
+        "codeEvidenceHash": "89827cf2f9d6d191b822bf7359a4ceb947eddb134f92090d261a67f238ba468e",
+        "confidence": "stable"
+      },
+      "scope": "direct",
+      "line": 72,
+      "endLine": 72,
+      "reasonCode": "advisory",
+      "reportedToAgent": true,
+      "evidence": {
+        "kind": "source",
+        "boundary": "candidate",
+        "producer": "deterministic",
+        "evidenceHash": "89827cf2f9d6d191b822bf7359a4ceb947eddb134f92090d261a67f238ba468e"
+      },
+      "sequence": 7
+    },
+    {
+      "eventId": "hook-c6565ee8217107e5851a5db71f890e57",
+      "findingId": "mimosa-2ea6af6f39fd053b184a9743",
+      "type": "finding_observed",
+      "at": "2026-08-21T12:30:37.066Z",
+      "identity": {
+        "projectRelativeFile": "plugins/agentforge-brain/client.js",
+        "ruleId": "security",
+        "codeEvidenceHash": "ccfa2023926dd38d591fa0d46ea67686f2e9f3b6dd216b5ae4241ed076086e18",
+        "confidence": "stable"
+      },
+      "scope": "direct",
+      "line": 471,
+      "endLine": 471,
+      "reasonCode": "advisory",
+      "reportedToAgent": true,
+      "evidence": {
+        "kind": "source",
+        "boundary": "candidate",
+        "producer": "deterministic",
+        "evidenceHash": "ccfa2023926dd38d591fa0d46ea67686f2e9f3b6dd216b5ae4241ed076086e18"
+      },
+      "sequence": 8
+    },
+    {
+      "eventId": "hook-17c5737a440facb8d8618f6f74647f6e",
+      "findingId": "mimosa-14064c1f13013cba90c1ffba",
+      "type": "finding_observed",
+      "at": "2026-08-21T12:31:57.782Z",
+      "identity": {
+        "projectRelativeFile": "plugins/agentforge-brain/client.js",
+        "ruleId": "security",
+        "codeEvidenceHash": "3be5a65e4499c7bdb3bb18fe605dc0f4ae705dfbb07ad3b771f7f4f53d492aa3",
+        "confidence": "stable"
+      },
+      "scope": "direct",
+      "line": 61,
+      "endLine": 61,
+      "reasonCode": "advisory",
+      "reportedToAgent": true,
+      "evidence": {
+        "kind": "source",
+        "boundary": "candidate",
+        "producer": "deterministic",
+        "evidenceHash": "3be5a65e4499c7bdb3bb18fe605dc0f4ae705dfbb07ad3b771f7f4f53d492aa3"
+      },
+      "sequence": 9
+    },
+    {
+      "eventId": "hook-b217df9156e9408859c4764e3ab1e911",
+      "findingId": "mimosa-d7ddbed6ffe8e0aafb855fc6",
+      "type": "finding_observed",
+      "at": "2026-08-21T12:31:57.782Z",
+      "identity": {
+        "projectRelativeFile": "plugins/agentforge-brain/client.js",
+        "ruleId": "security",
+        "codeEvidenceHash": "8dd23240ba31aa981d1c23d579b6747f90352663c35239f74ec0657338ee4a3d",
+        "confidence": "stable"
+      },
+      "scope": "direct",
+      "line": 62,
+      "endLine": 62,
+      "reasonCode": "advisory",
+      "reportedToAgent": true,
+      "evidence": {
+        "kind": "source",
+        "boundary": "candidate",
+        "producer": "deterministic",
+        "evidenceHash": "8dd23240ba31aa981d1c23d579b6747f90352663c35239f74ec0657338ee4a3d"
+      },
+      "sequence": 10
+    },
+    {
+      "eventId": "hook-e039f7f5bb479061e293d64542530820",
+      "findingId": "mimosa-e7d58426ec2ce32c87ab7311",
+      "type": "finding_observed",
+      "at": "2026-08-21T12:31:57.783Z",
+      "identity": {
+        "projectRelativeFile": "plugins/agentforge-brain/client.js",
+        "ruleId": "security",
+        "codeEvidenceHash": "19d287a4b155e8ffc66ec777ac33a656342abac50aece8945ea2f1244ee4f108",
+        "confidence": "stable"
+      },
+      "scope": "direct",
+      "line": 63,
+      "endLine": 63,
+      "reasonCode": "advisory",
+      "reportedToAgent": true,
+      "evidence": {
+        "kind": "source",
+        "boundary": "candidate",
+        "producer": "deterministic",
+        "evidenceHash": "19d287a4b155e8ffc66ec777ac33a656342abac50aece8945ea2f1244ee4f108"
+      },
+      "sequence": 11
+    },
+    {
+      "eventId": "hook-1d4003141e69ee8847224dda56839970",
+      "findingId": "mimosa-544b96740872b90b87abe573",
+      "type": "finding_observed",
+      "at": "2026-08-21T12:31:57.783Z",
+      "identity": {
+        "projectRelativeFile": "plugins/agentforge-brain/client.js",
+        "ruleId": "security",
+        "codeEvidenceHash": "8ad32db758b31f1f46e10d3af5879a0c68ab34998359afa0788c5ba0ac28f54d",
+        "confidence": "stable"
+      },
+      "scope": "direct",
+      "line": 68,
+      "endLine": 68,
+      "reasonCode": "advisory",
+      "reportedToAgent": true,
+      "evidence": {
+        "kind": "source",
+        "boundary": "candidate",
+        "producer": "deterministic",
+        "evidenceHash": "8ad32db758b31f1f46e10d3af5879a0c68ab34998359afa0788c5ba0ac28f54d"
+      },
+      "sequence": 12
+    },
+    {
+      "eventId": "hook-5492b4d9fb789602f86a773f588ed058",
+      "findingId": "mimosa-8eedf2c84527fd762172a47f",
+      "type": "finding_observed",
+      "at": "2026-08-21T12:31:57.783Z",
+      "identity": {
+        "projectRelativeFile": "plugins/agentforge-brain/client.js",
+        "ruleId": "security",
+        "codeEvidenceHash": "4086d82e9179321a2643dea134e5eb14731f7266fc35570314ae2391fd7fc0d6",
+        "confidence": "stable"
+      },
+      "scope": "direct",
+      "line": 69,
+      "endLine": 69,
+      "reasonCode": "advisory",
+      "reportedToAgent": true,
+      "evidence": {
+        "kind": "source",
+        "boundary": "candidate",
+        "producer": "deterministic",
+        "evidenceHash": "4086d82e9179321a2643dea134e5eb14731f7266fc35570314ae2391fd7fc0d6"
+      },
+      "sequence": 13
+    },
+    {
+      "eventId": "hook-c48a6582250dd4be4573ec1f68cc4bde",
+      "findingId": "mimosa-ca3d5f4c031f86ff5503a273",
+      "type": "finding_observed",
+      "at": "2026-08-21T12:31:57.783Z",
+      "identity": {
+        "projectRelativeFile": "plugins/agentforge-brain/client.js",
+        "ruleId": "security",
+        "codeEvidenceHash": "65f81e3a3b17df3b933e1b23d5861d43b6e084368a7e76fd5dba8afa80454672",
+        "confidence": "stable"
+      },
+      "scope": "direct",
+      "line": 70,
+      "endLine": 70,
+      "reasonCode": "advisory",
+      "reportedToAgent": true,
+      "evidence": {
+        "kind": "source",
+        "boundary": "candidate",
+        "producer": "deterministic",
+        "evidenceHash": "65f81e3a3b17df3b933e1b23d5861d43b6e084368a7e76fd5dba8afa80454672"
+      },
+      "sequence": 14
+    },
+    {
+      "eventId": "hook-43a1b19c5dd0970e7b5656438a1c3f95",
+      "findingId": "mimosa-483e638595b4702fa6c0b8b4",
+      "type": "finding_observed",
+      "at": "2026-08-21T12:31:57.783Z",
+      "identity": {
+        "projectRelativeFile": "plugins/agentforge-brain/client.js",
+        "ruleId": "security",
+        "codeEvidenceHash": "fd4844b7da7a8cf1ec20be3623445ea7f58f6420d94df49968fdfd75f4b44639",
+        "confidence": "stable"
+      },
+      "scope": "direct",
+      "line": 71,
+      "endLine": 71,
+      "reasonCode": "advisory",
+      "reportedToAgent": true,
+      "evidence": {
+        "kind": "source",
+        "boundary": "candidate",
+        "producer": "deterministic",
+        "evidenceHash": "fd4844b7da7a8cf1ec20be3623445ea7f58f6420d94df49968fdfd75f4b44639"
+      },
+      "sequence": 15
+    },
+    {
+      "eventId": "hook-b3934f18a8d1eef175435bad9f982ed7",
+      "findingId": "mimosa-e19ae0f36251544a63d76f85",
+      "type": "finding_observed",
+      "at": "2026-08-21T12:31:57.783Z",
+      "identity": {
+        "projectRelativeFile": "plugins/agentforge-brain/client.js",
+        "ruleId": "security",
+        "codeEvidenceHash": "89827cf2f9d6d191b822bf7359a4ceb947eddb134f92090d261a67f238ba468e",
+        "confidence": "stable"
+      },
+      "scope": "direct",
+      "line": 72,
+      "endLine": 72,
+      "reasonCode": "advisory",
+      "reportedToAgent": true,
+      "evidence": {
+        "kind": "source",
+        "boundary": "candidate",
+        "producer": "deterministic",
+        "evidenceHash": "89827cf2f9d6d191b822bf7359a4ceb947eddb134f92090d261a67f238ba468e"
+      },
+      "sequence": 16
+    },
+    {
+      "eventId": "hook-945c46490e44f6910bb5bd57077697d7",
+      "findingId": "mimosa-2ea6af6f39fd053b184a9743",
+      "type": "finding_observed",
+      "at": "2026-08-21T12:31:57.783Z",
+      "identity": {
+        "projectRelativeFile": "plugins/agentforge-brain/client.js",
+        "ruleId": "security",
+        "codeEvidenceHash": "ccfa2023926dd38d591fa0d46ea67686f2e9f3b6dd216b5ae4241ed076086e18",
+        "confidence": "stable"
+      },
+      "scope": "direct",
+      "line": 471,
+      "endLine": 471,
+      "reasonCode": "advisory",
+      "reportedToAgent": true,
+      "evidence": {
+        "kind": "source",
+        "boundary": "candidate",
+        "producer": "deterministic",
+        "evidenceHash": "ccfa2023926dd38d591fa0d46ea67686f2e9f3b6dd216b5ae4241ed076086e18"
+      },
+      "sequence": 17
+    },
+    {
+      "eventId": "hook-2f48829c5b978495fed8d7a2f5583685",
+      "findingId": "mimosa-14064c1f13013cba90c1ffba",
+      "type": "finding_observed",
+      "at": "2026-08-21T12:35:54.901Z",
+      "identity": {
+        "projectRelativeFile": "plugins/agentforge-brain/client.js",
+        "ruleId": "security",
+        "codeEvidenceHash": "3be5a65e4499c7bdb3bb18fe605dc0f4ae705dfbb07ad3b771f7f4f53d492aa3",
+        "confidence": "stable"
+      },
+      "scope": "direct",
+      "line": 61,
+      "endLine": 61,
+      "reasonCode": "advisory",
+      "reportedToAgent": true,
+      "evidence": {
+        "kind": "source",
+        "boundary": "candidate",
+        "producer": "deterministic",
+        "evidenceHash": "3be5a65e4499c7bdb3bb18fe605dc0f4ae705dfbb07ad3b771f7f4f53d492aa3"
+      },
+      "sequence": 18
+    },
+    {
+      "eventId": "hook-3a81ebaf14442adbe717f41a09b473fb",
+      "findingId": "mimosa-d7ddbed6ffe8e0aafb855fc6",
+      "type": "finding_observed",
+      "at": "2026-08-21T12:35:54.901Z",
+      "identity": {
+        "projectRelativeFile": "plugins/agentforge-brain/client.js",
+        "ruleId": "security",
+        "codeEvidenceHash": "8dd23240ba31aa981d1c23d579b6747f90352663c35239f74ec0657338ee4a3d",
+        "confidence": "stable"
+      },
+      "scope": "direct",
+      "line": 62,
+      "endLine": 62,
+      "reasonCode": "advisory",
+      "reportedToAgent": true,
+      "evidence": {
+        "kind": "source",
+        "boundary": "candidate",
+        "producer": "deterministic",
+        "evidenceHash": "8dd23240ba31aa981d1c23d579b6747f90352663c35239f74ec0657338ee4a3d"
+      },
+      "sequence": 19
+    },
+    {
+      "eventId": "hook-6f1fee0265b9fae3617d1d673630c8f0",
+      "findingId": "mimosa-e7d58426ec2ce32c87ab7311",
+      "type": "finding_observed",
+      "at": "2026-08-21T12:35:54.901Z",
+      "identity": {
+        "projectRelativeFile": "plugins/agentforge-brain/client.js",
+        "ruleId": "security",
+        "codeEvidenceHash": "19d287a4b155e8ffc66ec777ac33a656342abac50aece8945ea2f1244ee4f108",
+        "confidence": "stable"
+      },
+      "scope": "direct",
+      "line": 63,
+      "endLine": 63,
+      "reasonCode": "advisory",
+      "reportedToAgent": true,
+      "evidence": {
+        "kind": "source",
+        "boundary": "candidate",
+        "producer": "deterministic",
+        "evidenceHash": "19d287a4b155e8ffc66ec777ac33a656342abac50aece8945ea2f1244ee4f108"
+      },
+      "sequence": 20
+    },
+    {
+      "eventId": "hook-4944784e5a27912d2348f94871470ad2",
+      "findingId": "mimosa-544b96740872b90b87abe573",
+      "type": "finding_observed",
+      "at": "2026-08-21T12:35:54.901Z",
+      "identity": {
+        "projectRelativeFile": "plugins/agentforge-brain/client.js",
+        "ruleId": "security",
+        "codeEvidenceHash": "8ad32db758b31f1f46e10d3af5879a0c68ab34998359afa0788c5ba0ac28f54d",
+        "confidence": "stable"
+      },
+      "scope": "direct",
+      "line": 68,
+      "endLine": 68,
+      "reasonCode": "advisory",
+      "reportedToAgent": true,
+      "evidence": {
+        "kind": "source",
+        "boundary": "candidate",
+        "producer": "deterministic",
+        "evidenceHash": "8ad32db758b31f1f46e10d3af5879a0c68ab34998359afa0788c5ba0ac28f54d"
+      },
+      "sequence": 21
+    },
+    {
+      "eventId": "hook-9aa9ea513d0da996735e786d8dd754cf",
+      "findingId": "mimosa-8eedf2c84527fd762172a47f",
+      "type": "finding_observed",
+      "at": "2026-08-21T12:35:54.901Z",
+      "identity": {
+        "projectRelativeFile": "plugins/agentforge-brain/client.js",
+        "ruleId": "security",
+        "codeEvidenceHash": "4086d82e9179321a2643dea134e5eb14731f7266fc35570314ae2391fd7fc0d6",
+        "confidence": "stable"
+      },
+      "scope": "direct",
+      "line": 69,
+      "endLine": 69,
+      "reasonCode": "advisory",
+      "reportedToAgent": true,
+      "evidence": {
+        "kind": "source",
+        "boundary": "candidate",
+        "producer": "deterministic",
+        "evidenceHash": "4086d82e9179321a2643dea134e5eb14731f7266fc35570314ae2391fd7fc0d6"
+      },
+      "sequence": 22
+    },
+    {
+      "eventId": "hook-e01c9f83a99ba1cb2dda685513ea8232",
+      "findingId": "mimosa-ca3d5f4c031f86ff5503a273",
+      "type": "finding_observed",
+      "at": "2026-08-21T12:35:54.901Z",
+      "identity": {
+        "projectRelativeFile": "plugins/agentforge-brain/client.js",
+        "ruleId": "security",
+        "codeEvidenceHash": "65f81e3a3b17df3b933e1b23d5861d43b6e084368a7e76fd5dba8afa80454672",
+        "confidence": "stable"
+      },
+      "scope": "direct",
+      "line": 70,
+      "endLine": 70,
+      "reasonCode": "advisory",
+      "reportedToAgent": true,
+      "evidence": {
+        "kind": "source",
+        "boundary": "candidate",
+        "producer": "deterministic",
+        "evidenceHash": "65f81e3a3b17df3b933e1b23d5861d43b6e084368a7e76fd5dba8afa80454672"
+      },
+      "sequence": 23
+    },
+    {
+      "eventId": "hook-f8de975681ee2b8570bd68993b26ad01",
+      "findingId": "mimosa-483e638595b4702fa6c0b8b4",
+      "type": "finding_observed",
+      "at": "2026-08-21T12:35:54.901Z",
+      "identity": {
+        "projectRelativeFile": "plugins/agentforge-brain/client.js",
+        "ruleId": "security",
+        "codeEvidenceHash": "fd4844b7da7a8cf1ec20be3623445ea7f58f6420d94df49968fdfd75f4b44639",
+        "confidence": "stable"
+      },
+      "scope": "direct",
+      "line": 71,
+      "endLine": 71,
+      "reasonCode": "advisory",
+      "reportedToAgent": true,
+      "evidence": {
+        "kind": "source",
+        "boundary": "candidate",
+        "producer": "deterministic",
+        "evidenceHash": "fd4844b7da7a8cf1ec20be3623445ea7f58f6420d94df49968fdfd75f4b44639"
+      },
+      "sequence": 24
+    },
+    {
+      "eventId": "hook-9919c71cf4eeea522200441fbcdb1f6d",
+      "findingId": "mimosa-e19ae0f36251544a63d76f85",
+      "type": "finding_observed",
+      "at": "2026-08-21T12:35:54.901Z",
+      "identity": {
+        "projectRelativeFile": "plugins/agentforge-brain/client.js",
+        "ruleId": "security",
+        "codeEvidenceHash": "89827cf2f9d6d191b822bf7359a4ceb947eddb134f92090d261a67f238ba468e",
+        "confidence": "stable"
+      },
+      "scope": "direct",
+      "line": 72,
+      "endLine": 72,
+      "reasonCode": "advisory",
+      "reportedToAgent": true,
+      "evidence": {
+        "kind": "source",
+        "boundary": "candidate",
+        "producer": "deterministic",
+        "evidenceHash": "89827cf2f9d6d191b822bf7359a4ceb947eddb134f92090d261a67f238ba468e"
+      },
+      "sequence": 25
+    },
+    {
+      "eventId": "hook-6be1a21745ad5948c54531ed9bc0fd64",
+      "findingId": "mimosa-2ea6af6f39fd053b184a9743",
+      "type": "finding_observed",
+      "at": "2026-08-21T12:35:54.901Z",
+      "identity": {
+        "projectRelativeFile": "plugins/agentforge-brain/client.js",
+        "ruleId": "security",
+        "codeEvidenceHash": "ccfa2023926dd38d591fa0d46ea67686f2e9f3b6dd216b5ae4241ed076086e18",
+        "confidence": "stable"
+      },
+      "scope": "direct",
+      "line": 447,
+      "endLine": 447,
+      "reasonCode": "advisory",
+      "reportedToAgent": true,
+      "evidence": {
+        "kind": "source",
+        "boundary": "candidate",
+        "producer": "deterministic",
+        "evidenceHash": "ccfa2023926dd38d591fa0d46ea67686f2e9f3b6dd216b5ae4241ed076086e18"
+      },
+      "sequence": 26
+    },
+    {
+      "eventId": "hook-212eec9cba41b1c91e64e5a38336ad40",
+      "findingId": "mimosa-2ea6af6f39fd053b184a9743",
+      "type": "finding_observed",
+      "at": "2026-08-21T12:39:09.172Z",
+      "identity": {
+        "projectRelativeFile": "plugins/agentforge-brain/client.js",
+        "ruleId": "security",
+        "codeEvidenceHash": "ccfa2023926dd38d591fa0d46ea67686f2e9f3b6dd216b5ae4241ed076086e18",
+        "confidence": "stable"
+      },
+      "scope": "direct",
+      "line": 447,
+      "endLine": 447,
+      "reasonCode": "observe",
+      "reportedToAgent": false,
+      "evidence": {
+        "kind": "source",
+        "boundary": "candidate",
+        "producer": "deterministic",
+        "evidenceHash": "ccfa2023926dd38d591fa0d46ea67686f2e9f3b6dd216b5ae4241ed076086e18"
+      },
+      "sequence": 27
+    },
+    {
+      "eventId": "hook-ce1a3440460712dd32ddd67a1f27778a",
+      "findingId": "mimosa-c7f04146bee64e5099aaab14",
+      "type": "finding_observed",
+      "at": "2026-08-21T12:39:09.172Z",
+      "identity": {
+        "projectRelativeFile": "plugins/dsh-polymarket/src/client-half.js",
+        "ruleId": "security",
+        "codeEvidenceHash": "e0f2ba4913c42007608d30c2c9465512212d9fcc88d64d91f32d42aa5adb0bf5",
+        "confidence": "stable"
+      },
+      "scope": "direct",
+      "line": 5,
+      "endLine": 5,
+      "reasonCode": "observe",
+      "reportedToAgent": false,
+      "evidence": {
+        "kind": "source",
+        "boundary": "candidate",
+        "producer": "deterministic",
+        "evidenceHash": "e0f2ba4913c42007608d30c2c9465512212d9fcc88d64d91f32d42aa5adb0bf5"
+      },
+      "sequence": 28
+    },
+    {
+      "eventId": "hook-a2c4289411bd1e3bb46083341b7d6c09",
+      "findingId": "mimosa-a17efcb87b54d57208c59d68",
+      "type": "finding_observed",
+      "at": "2026-08-21T12:39:09.172Z",
+      "identity": {
+        "projectRelativeFile": "plugins/dsh-polymarket/lib/index.js",
+        "ruleId": "security",
+        "codeEvidenceHash": "ff71ff7caed1373daca379669f81944e1bee95933bf6851b553f3d3a45e2776e",
+        "confidence": "stable"
+      },
+      "scope": "direct",
+      "line": 2089,
+      "endLine": 2089,
+      "reasonCode": "observe",
+      "reportedToAgent": false,
+      "evidence": {
+        "kind": "source",
+        "boundary": "candidate",
+        "producer": "deterministic",
+        "evidenceHash": "ff71ff7caed1373daca379669f81944e1bee95933bf6851b553f3d3a45e2776e"
+      },
+      "sequence": 29
+    },
+    {
+      "eventId": "hook-a7ffb65bffaed86784aea629dbf31baa",
+      "findingId": "mimosa-e5d915673fc8325ad1d17394",
+      "type": "finding_observed",
+      "at": "2026-08-21T12:39:09.172Z",
+      "identity": {
+        "projectRelativeFile": "plugins/dsh-polymarket/lib/index.js",
+        "ruleId": "security",
+        "codeEvidenceHash": "445033abcd92d4803711ae21c5b9fcc4e9903f09c240f5c3c023e10a8b825d86",
+        "confidence": "stable"
+      },
+      "scope": "direct",
+      "line": 6331,
+      "endLine": 6331,
+      "reasonCode": "observe",
+      "reportedToAgent": false,
+      "evidence": {
+        "kind": "source",
+        "boundary": "candidate",
+        "producer": "deterministic",
+        "evidenceHash": "445033abcd92d4803711ae21c5b9fcc4e9903f09c240f5c3c023e10a8b825d86"
+      },
+      "sequence": 30
+    }
+  ],
+  "observedFindingIds": [
+    "mimosa-14064c1f13013cba90c1ffba",
+    "mimosa-d7ddbed6ffe8e0aafb855fc6",
+    "mimosa-e7d58426ec2ce32c87ab7311",
+    "mimosa-544b96740872b90b87abe573",
+    "mimosa-8eedf2c84527fd762172a47f",
+    "mimosa-ca3d5f4c031f86ff5503a273",
+    "mimosa-483e638595b4702fa6c0b8b4",
+    "mimosa-e19ae0f36251544a63d76f85",
+    "mimosa-2ea6af6f39fd053b184a9743",
+    "mimosa-c7f04146bee64e5099aaab14",
+    "mimosa-a17efcb87b54d57208c59d68",
+    "mimosa-e5d915673fc8325ad1d17394"
+  ],
+  "verifiedFiles": [
+    {
+      "file": "plugins/agentforge-brain/client.js",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "plugins/dsh-polymarket/tsdown.config.ts",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "plugins/dsh-polymarket/src/client-half.js",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "plugins/dsh-polymarket/src/host-half.js",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "plugins/dsh-polymarket/src/index.ts",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "plugins/dsh-polymarket/lib/index.js",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "plugins/dsh-depsec/tsdown.config.ts",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "plugins/dsh-depsec/src/client.ts",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "plugins/dsh-depsec/src/index.ts",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "plugins/dsh-depsec/src/types.ts",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "plugins/agentforge-brain/index.js",
+      "direct": "complete",
+      "projectContext": "partial"
+    }
+  ],
+  "recordedAt": "2026-08-21T12:39:09.600Z"
+}

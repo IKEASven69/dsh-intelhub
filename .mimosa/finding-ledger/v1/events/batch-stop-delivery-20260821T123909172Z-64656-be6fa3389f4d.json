@@ -1,0 +1,96 @@
+{
+  "schemaVersion": "mimosa-finding-ledger-batch/v1",
+  "batchId": "stop-delivery-20260821T123909172Z-64656-be6fa3389f4d",
+  "runId": "20260821T123909172Z-64656-be6fa3389f4d",
+  "runStatus": "completed",
+  "coverage": {
+    "status": "complete",
+    "reasons": []
+  },
+  "source": {
+    "component": "zcode-hook",
+    "operationId": "StopDelivery"
+  },
+  "revision": "fd46dbbbfa0713cdce179714e0656ae1d8e91933",
+  "diffHash": "77c15572c20e23d6cb21b10329160f6fbc2c6a820c1d825b66fd76047d20563b",
+  "rulesVersion": "unavailable",
+  "sessionHash": "34e92868954448c5da1f58fe0b0fbcbbe1f28102ca68989e9e7c2ac30c11dd02",
+  "reportRef": ".mimosa/reports/task-review-sess_c3c2d32a-38cd-4f0d-b45e-f7f821c93e2e-20260821T123909172Z-64656-be6fa3389f4d.json",
+  "events": [
+    {
+      "eventId": "hook-4f06293c0a4d71122c6e6daf6e74f58f",
+      "findingId": "mimosa-c7f04146bee64e5099aaab14",
+      "type": "finding_blocked",
+      "at": "2026-08-21T12:39:09.638Z",
+      "identity": {
+        "projectRelativeFile": "plugins/dsh-polymarket/src/client-half.js",
+        "ruleId": "security",
+        "codeEvidenceHash": "e0f2ba4913c42007608d30c2c9465512212d9fcc88d64d91f32d42aa5adb0bf5",
+        "confidence": "stable"
+      },
+      "scope": "direct",
+      "line": 5,
+      "endLine": 5,
+      "reasonCode": "stop_rewake",
+      "reportedToAgent": true,
+      "evidence": {
+        "kind": "source",
+        "boundary": "candidate",
+        "producer": "deterministic",
+        "evidenceHash": "e0f2ba4913c42007608d30c2c9465512212d9fcc88d64d91f32d42aa5adb0bf5"
+      },
+      "sequence": 0
+    },
+    {
+      "eventId": "hook-29695522083405738a810c1255ac8615",
+      "findingId": "mimosa-a17efcb87b54d57208c59d68",
+      "type": "finding_blocked",
+      "at": "2026-08-21T12:39:09.638Z",
+      "identity": {
+        "projectRelativeFile": "plugins/dsh-polymarket/lib/index.js",
+        "ruleId": "security",
+        "codeEvidenceHash": "ff71ff7caed1373daca379669f81944e1bee95933bf6851b553f3d3a45e2776e",
+        "confidence": "stable"
+      },
+      "scope": "direct",
+      "line": 2089,
+      "endLine": 2089,
+      "reasonCode": "stop_rewake",
+      "reportedToAgent": true,
+      "evidence": {
+        "kind": "source",
+        "boundary": "candidate",
+        "producer": "deterministic",
+        "evidenceHash": "ff71ff7caed1373daca379669f81944e1bee95933bf6851b553f3d3a45e2776e"
+      },
+      "sequence": 1
+    },
+    {
+      "eventId": "hook-b5df0128764519cc42ab17d5f0e36034",
+      "findingId": "mimosa-e5d915673fc8325ad1d17394",
+      "type": "finding_blocked",
+      "at": "2026-08-21T12:39:09.638Z",
+      "identity": {
+        "projectRelativeFile": "plugins/dsh-polymarket/lib/index.js",
+        "ruleId": "security",
+        "codeEvidenceHash": "445033abcd92d4803711ae21c5b9fcc4e9903f09c240f5c3c023e10a8b825d86",
+        "confidence": "stable"
+      },
+      "scope": "direct",
+      "line": 6331,
+      "endLine": 6331,
+      "reasonCode": "stop_rewake",
+      "reportedToAgent": true,
+      "evidence": {
+        "kind": "source",
+        "boundary": "candidate",
+        "producer": "deterministic",
+        "evidenceHash": "445033abcd92d4803711ae21c5b9fcc4e9903f09c240f5c3c023e10a8b825d86"
+      },
+      "sequence": 2
+    }
+  ],
+  "observedFindingIds": [],
+  "verifiedFiles": [],
+  "recordedAt": "2026-08-21T12:39:10.103Z"
+}

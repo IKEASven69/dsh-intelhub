@@ -1,0 +1,57 @@
+{
+  "schemaVersion": "mimosa-finding-history/v1",
+  "runId": "20260821T123909172Z-64656-be6fa3389f4d",
+  "runStatus": "inconclusive",
+  "errors": [
+    "baseline-read:plugins/dsh-polymarket/package.json: baseline_snapshot_unreadable: file is missing from task baseline",
+    "baseline-read:plugins/dsh-polymarket/tsdown.config.ts: baseline_snapshot_unreadable: file is missing from task baseline",
+    "baseline-read:plugins/dsh-polymarket/src/client-half.js: baseline_snapshot_unreadable: file is missing from task baseline",
+    "baseline-read:plugins/dsh-polymarket/src/host-half.js: baseline_snapshot_unreadable: file is missing from task baseline",
+    "baseline-read:plugins/dsh-polymarket/src/index.ts: baseline_snapshot_unreadable: file is missing from task baseline",
+    "baseline-read:plugins/dsh-polymarket/lib/index.js: baseline_snapshot_unreadable: file is missing from task baseline",
+    "baseline-read:plugins/dsh-depsec/package.json: baseline_snapshot_unreadable: file is missing from task baseline",
+    "baseline-read:plugins/dsh-depsec/tsdown.config.ts: baseline_snapshot_unreadable: file is missing from task baseline",
+    "baseline-read:plugins/dsh-depsec/src/client.ts: baseline_snapshot_unreadable: file is missing from task baseline",
+    "baseline-read:plugins/dsh-depsec/src/index.ts: baseline_snapshot_unreadable: file is missing from task baseline",
+    "baseline-read:plugins/dsh-depsec/src/types.ts: baseline_snapshot_unreadable: file is missing from task baseline",
+    "baseline-read:plugins/agentforge-brain/index.js: baseline_snapshot_unreadable: file is missing from task baseline",
+    "baseline-read:plugins/agentforge-brain/package.json: baseline_snapshot_unreadable: file is missing from task baseline",
+    "supply-chain-check:.: spawnSync C:\\Users\\20369\\.version-fox\\sdks\\nodejs\\node.exe ETIMEDOUT"
+  ],
+  "target": ".",
+  "revision": "fd46dbbbfa0713cdce179714e0656ae1d8e91933",
+  "diffHash": "77c15572c20e23d6cb21b10329160f6fbc2c6a820c1d825b66fd76047d20563b",
+  "rulesVersion": "unavailable",
+  "recordedAt": "2026-08-21T12:39:09.172Z",
+  "timing": {
+    "startedAt": "2026-08-21T12:39:06.621Z",
+    "completedAt": "2026-08-21T12:39:09.172Z",
+    "durationMs": 2551
+  },
+  "tokens": {
+    "input": 0,
+    "output": 0,
+    "total": 0,
+    "modelCalls": 0,
+    "measurement": "known-zero"
+  },
+  "findings": {
+    "total": 12,
+    "bySeverity": {
+      "high": 12
+    },
+    "byStatus": {
+      "candidate": 9,
+      "blocked": 3
+    }
+  },
+  "coverage": {
+    "status": "partial",
+    "reasonCounts": {
+      "baseline_snapshot_unreadable": 13,
+      "project_check_failed": 14
+    }
+  },
+  "evidenceBoundary": "static_only",
+  "immutableReport": ".mimosa/reports/task-review-sess_c3c2d32a-38cd-4f0d-b45e-f7f821c93e2e-20260821T123909172Z-64656-be6fa3389f4d.json"
+}
