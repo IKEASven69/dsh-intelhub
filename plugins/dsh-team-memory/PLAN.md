@@ -72,7 +72,7 @@
 |---|---|---|
 | **T0** | 骨架 + agent-team 事件读取:拉取一支团队的 mailbox/任务事件流 dump 成 JSON | ✅ 2026-08-22:adapter.ts 扫 ~/.dsh/sessions 的 session.jsonl.zstd(node 原生 zstd 解压)过滤 team/* 事件;schema 照抄 rc.8 fold.ts(四种事件);rc.7 本机 dump=0 条属预期(无该特性),fixture 驱动替代验收 |
 | **T1** | 蒸馏管线:reply 消息与任务完成事件 → distill → 记忆事件(带类型/来源链) | ✅ 2026-08-22:scripts/acceptance.mjs 三人团队 fixture——L1 每成员私有入引擎(team:<id>:<member> scope)+账本;L2 跨成员互证晋升 team scope(promotedFrom 带源链);append-only 账本+fold 视图;闲聊不入库;maybe 档不自动合并(两成员同坑不同表述→各升一条,合并留给 T2 审批) |
-| **T2** | 面板:团队记忆列表/搜索/类型与强度/退役审批 | 面板能审批一条退役并看到理由链 |
+| **T2** | 面板:团队记忆列表/搜索/类型与强度/退役审批 | ✅ 2026-08-22:GUI /team 页(照效果图)——晋升队列(互证证据链/编辑合并文本/三动作)+退役三级分流(闲聊 auto/决策老化 approval/白名单 keep)+两层混合列表(团队/私有 scope 徽标+promotedFrom 源链);核心下沉引擎 src/team/(000f8fa),插件瘦身为路由桥;实测:队列→批准(编辑生效+源链)→白名单 |
 | **T3** | 频道式 MD 投影导出 | 导出的 MD 打开即完整可读的团队协作记录 |
 | **T4** | 团队自我进化循环(总结/调研/预测/自退役) | 跑通一个完整周期 |
 | **T5** | 发布(MIT → awesome-dsh-plugin 收录 → dsh-market) | 收录通过 |
