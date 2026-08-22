@@ -282,18 +282,14 @@ export function apply(ctx: Context, config?: Config): void {
               return
             }
             void readJsonBody(request).then(
-              (body) => {
-                try {
-                  const outcome = compileMemories({
-                    project: typeof body.project === 'string' && body.project.trim() !== '' ? body.project.trim() : undefined,
-                    write: body.write === true,
-                    outPath: typeof body.outPath === 'string' ? body.outPath : undefined,
-                  })
-                  sendJson(response, 200, outcome)
-                } catch (error) {
-                  sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) })
-                }
-              },
+              (body) => compileMemories({
+                project: typeof body.project === 'string' && body.project.trim() !== '' ? body.project.trim() : undefined,
+                write: body.write === true,
+                outPath: typeof body.outPath === 'string' ? body.outPath : undefined,
+              }).then(
+                (outcome) => { sendJson(response, 200, outcome) },
+                (error: unknown) => { sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) }) },
+              ),
               (error: unknown) => { sendJson(response, 400, { error: error instanceof Error ? error.message : String(error) }) },
             )
           },

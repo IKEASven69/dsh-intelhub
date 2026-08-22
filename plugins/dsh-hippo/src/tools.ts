@@ -13,7 +13,7 @@ import type { Context } from '@deepseek-ai/cordis'
 // Type-only: pulls the Context merges（tools/agents/sandboxPolicy/systemPrompt 服务声明）。
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
 import type {} from '@deepseek-ai/dsh-system-prompt'
-import { cwdToProject, openEngine } from 'hippo-skills'
+import { cwdToProject, openEngine, withEngine } from 'hippo-skills'
 
 /** 渲染：execute 返回字符串，render 包成 text block（dsh-polymarket 先例）。 */
 function renderText(_args: unknown, value: unknown): Array<{ type: 'text'; text: string }> {
@@ -75,10 +75,9 @@ export function registerRecallTool(ctx: Context): void {
         ? args.project.trim()
         : root !== undefined ? cwdToProject(root) : 'global'
 
-      const opened = openEngine()
-      try {
-        const vec = await opened.engine.embedder(q)
-        const hits = await opened.store.hybridSearch(q, vec, [project, 'global'], limit)
+      return withEngine(async ({ engine, store }) => {
+        const vec = await engine.embedder(q)
+        const hits = await store.hybridSearch(q, vec, [project, 'global'], limit)
         if (hits.length === 0) return `memory_recall: 项目「${project}」没有匹配的记忆（可换关键词，或该记忆尚未迁移——设置页「记忆桥」可导入会话史）。`
         const lines = hits.map(([r, sim]) => {
           const rec = r as { text: string; type: string; agent: string; created_at: number; source_id: string; project: string }
@@ -86,9 +85,7 @@ export function registerRecallTool(ctx: Context): void {
           return `- [${rec.type}]（相关度 ${(sim * 100).toFixed(0)}%，来源 ${src}，${fmtDate(rec.created_at ?? 0)}）${rec.text}`
         })
         return `项目「${project}」的记忆命中 ${hits.length} 条：\n${lines.join('\n')}`
-      } finally {
-        opened.close()
-      }
+      })
     },
   })), 'dsh-hippo: memory_recall')
 }
@@ -111,15 +108,12 @@ export function registerRememberTool(ctx: Context): void {
       const root = resolver.rootOfAgent(exec?.agent)
       const project = root !== undefined ? cwdToProject(root) : 'global'
 
-      const opened = openEngine()
-      try {
-        const r = await opened.engine.remember(text, { type, project, agent: 'dsh:session' })
+      return withEngine(async ({ engine }) => {
+        const r = await engine.remember(text, { type, project, agent: 'dsh:session' })
         return r.status === 'created'
           ? `已记住（${type} · 项目 ${project}）：${text}`
           : `与已有记忆重复（${r.status}），已强化而非新建：${text}`
-      } finally {
-        opened.close()
-      }
+      })
     },
   })), 'dsh-hippo: memory_remember')
 }
