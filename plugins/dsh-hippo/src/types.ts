@@ -39,6 +39,10 @@ export interface ImportStats {
   sessionsFound: number
   sessionsScanned: number
   sessionsWithCandidates: number
+  /** 增量跳过：指纹未变的会话。 */
+  sessionsSkippedUnchanged: number
+  /** .hippoignore 排除的会话。 */
+  sessionsExcluded: number
   candidatesExtracted: number
   parseErrors: number
   created: number

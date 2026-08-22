@@ -289,7 +289,10 @@ function StatsCard({ job }: { job: ImportJob }): ReturnType<typeof createElement
       : null,
     secs !== null
       ? createElement('div', { className: 'hb-banner hb-banner-info' },
-          `耗时 ${secs >= 60 ? `${Math.floor(secs / 60)} 分 ${secs % 60} 秒` : `${secs} 秒`} · 候选 ${s.candidatesExtracted} 条 · 有产出的会话 ${s.sessionsWithCandidates} 个${s.parseErrors > 0 ? ` · ${s.parseErrors} 个文件解析失败（已跳过）` : ''}`)
+          `耗时 ${secs >= 60 ? `${Math.floor(secs / 60)} 分 ${secs % 60} 秒` : `${secs} 秒`} · 候选 ${s.candidatesExtracted} 条 · 有产出的会话 ${s.sessionsWithCandidates} 个`
+          + `${s.sessionsSkippedUnchanged > 0 ? ` · 增量跳过 ${s.sessionsSkippedUnchanged} 个未变更` : ''}`
+          + `${s.sessionsExcluded > 0 ? ` · 排除 ${s.sessionsExcluded} 个（.hippoignore）` : ''}`
+          + `${s.parseErrors > 0 ? ` · ${s.parseErrors} 个文件解析失败（已跳过）` : ''}`)
       : null,
   )
 }
