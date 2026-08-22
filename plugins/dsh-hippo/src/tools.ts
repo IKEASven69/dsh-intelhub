@@ -16,7 +16,7 @@ import type {} from '@deepseek-ai/dsh-system-prompt'
 import { cwdToProject, openEngine, withEngine } from 'hippo-skills'
 
 /** 渲染：execute 返回字符串，render 包成 text block（dsh-polymarket 先例）。 */
-function renderText(_args: unknown, value: unknown): Array<{ type: 'text'; text: string }> {
+export function renderText(_args: unknown, value: unknown): Array<{ type: 'text'; text: string }> {
   return [{ type: 'text', text: String(value) }]
 }
 
@@ -26,7 +26,7 @@ interface WorkspaceResolver {
 }
 
 /** depsec 模式：agent.session → sandboxPolicy.resolve；无会话回退全局根。 */
-function makeResolver(ctx: Context): WorkspaceResolver {
+export function makeResolver(ctx: Context): WorkspaceResolver {
   return {
     currentRoot(): string | undefined {
       try {

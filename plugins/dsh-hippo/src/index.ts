@@ -18,6 +18,7 @@ import { currentJob, inventory, startImport } from './import.ts'
 import { readTeamEvents, distillTeamEvents, foldLedger, triage } from 'hippo-skills'
 import { compileMemories, forgetMemory, listMemories, updateMemory } from './memories.ts'
 import { registerPromptContext, registerRecallTool, registerRememberTool } from './tools.ts'
+import { registerLifeTools } from './life-tools.ts'
 import type { DoctorReport } from './types.ts'
 
 /** H4 回写开关：默认关，cordis.patch.yml / profile config 里 writeback: true 显式开启。 */
@@ -158,6 +159,9 @@ export function apply(ctx: Context, config?: Config): void {
   ctx.inject(['tools', 'agents', 'sandboxPolicy'], (tc) => {
     registerRecallTool(tc)
     if (config?.writeback === true) registerRememberTool(tc)
+  })
+  ctx.inject(['tools', 'agents', 'sandboxPolicy'], (tc) => {
+    registerLifeTools(tc)
   })
   ctx.inject(['systemPrompt', 'agents', 'sandboxPolicy'], (pc) => {
     registerPromptContext(pc)
