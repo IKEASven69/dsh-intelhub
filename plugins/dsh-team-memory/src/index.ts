@@ -7,9 +7,7 @@ import type { Context } from '@deepseek-ai/cordis'
 // Type-only: pulls the Context.webServer merge（宿主由 web bundle 提供，不打进产物）。
 import type {} from '@deepseek-ai/dsh-host-webserver'
 import type { ServerResponse, IncomingMessage } from 'node:http'
-import { readTeamEvents } from './adapter.ts'
-import { foldLedger } from './ledger.ts'
-import { distillTeamEvents } from './distill.ts'
+import { readTeamEvents, distillTeamEvents, foldLedger, triage } from 'hippo-skills'
 
 export const name = 'dsh-team-memory'
 
