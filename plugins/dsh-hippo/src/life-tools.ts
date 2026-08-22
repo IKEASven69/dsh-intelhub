@@ -12,8 +12,48 @@ import type { Context } from '@deepseek-ai/cordis'
 import {
   getResident, listResidents, createResident, createChannel,
   appendMessage, readMessages, readBookmark, writeBookmark,
+  withEngine, makeTurn, extractCandidates,
 } from 'hippo-skills'
 import { makeResolver, renderText } from './tools.ts'
+
+/** 居民记忆 scope（引擎 project 机制）。 */
+const memoryScope = (name: string): string => `life:${name}`
+
+/** K2：召回与当前话题相关的居民记忆（Top-3，注入系统提示）。 */
+async function recallMemories(name: string, query: string): Promise<string> {
+  try {
+    return await withEngine(async ({ engine }) => {
+      const hits = await engine.recall(query, { project: memoryScope(name), limit: 3 })
+      if (hits.length === 0) return ''
+      return '\n\n--- 你的相关记忆（之前对话沉淀的）---\n' + hits.map((h) => `· ${h.text.slice(0, 120)}`).join('\n')
+    }, 5000) // 记忆召回失败不阻塞对话
+  } catch {
+    return ''
+  }
+}
+
+/** K2：对话后蒸馏入引擎（居民记住这次聊了什么）。 */
+async function distillExchange(name: string, userText: string, reply: string): Promise<void> {
+  try {
+    await withEngine(async ({ engine }) => {
+      const turns = [
+        makeTurn({ role: 'user', text: userText }),
+        makeTurn({ role: 'assistant', text: `[${name}] ${reply}` }),
+      ]
+      const candidates = extractCandidates(turns).slice(0, 5)
+      for (const c of candidates) {
+        if (c.duplicate === 'reinforce' || c.duplicate === 'maybe') continue
+        await engine.remember(c.text, {
+          type: c.type === 'preference' ? 'decision' : c.type,
+          project: memoryScope(name),
+          agent: 'life',
+        })
+      }
+    }, 5000)
+  } catch {
+    // 蒸馏失败不阻塞对话——下次对话时重新蒸馏由频道账本兜底
+  }
+}
 
 /** 组装居民的系统提示：persona + 身份 + 行为约束。 */
 function residentSystemPrompt(name: string, persona: string): string {
@@ -44,6 +84,9 @@ export async function summonResident(
     }
   }
 
+  // K2：记忆召回（与当前话题相关的之前对话）
+  const memoryContext = await recallMemories(name, userText)
+
   // LLM 生成回复
   const llm = (ctx as Context & { llm?: { generate: (opts: Record<string, unknown>) => Promise<{ text?: string }> } }).llm
   if (llm === undefined || typeof llm.generate !== 'function') {
@@ -53,7 +96,7 @@ export async function summonResident(
   try {
     const result = await llm.generate({
       messages: [
-        { role: 'system', content: residentSystemPrompt(name, resident.persona) + channelContext },
+        { role: 'system', content: residentSystemPrompt(name, resident.persona) + channelContext + memoryContext },
         { role: 'user', content: userText },
       ],
     })
@@ -63,6 +106,8 @@ export async function summonResident(
       appendMessage(channelId, { kind: 'resident', name }, `[被召唤] ${reply}`)
       writeBookmark(channelId, name, readMessages(channelId, 0, 1)[0]?.seq ?? 0)
     }
+    // K2：蒸馏入引擎（异步不阻塞——居民记住这次聊了什么）
+    void distillExchange(name, userText, reply)
     return `[${name}] ${reply}`
   } catch (e) {
     return `[${name}] （生成失败：${e instanceof Error ? e.message : String(e)}）`
