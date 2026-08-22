@@ -99,6 +99,48 @@ L2(体验优化,引擎侧迭代):distill 质量提升、更多 agent 数据源�
 
 ---
 
+## 四·三、Wake 对照与 v0.1.x 补强(2026-08-22 增补)
+
+> 参照系:[iAmCorey/Wake](https://github.com/iAmCorey/Wake)(macOS 原生会话聚合器,Rust+GPUI,11 个 agent 适配器,SQLite+FTS5 trigram)。定位一句话:**Wake 管翻旧账(索引/搜索/恢复会话原文),hippo 管记住教训(蒸馏/去重/召回/注入模型)**——互补不竞争。可借鉴三点:mtime 增量扫描、适配器覆盖面、FTS5 trigram 子串搜索。
+>
+> 进度快照(2026-08-22):H0–H4 已完成并实测——148 会话(claude/codex/opencode)→ 248 条记忆;memory_recall 工具+systemPrompt 注入+面板管理+编译 AGENTS.md+回写工具全部落地。以下补强项排在 H5 发布前。
+
+### H1.5 增量导入(Wake scanner 启发)
+
+**现状**:每次 import 全量重扫+重嵌入全部会话(148 个 ≈35s;去重机制保证质量无害,但重复计算纯浪费)。
+
+**改法**:`~/.hippo/import-state.json` 记录 `{文件路径 → mtime+size}`;import 时跳过未变更文件,只蒸馏新增/变更会话;统计区分 新增/跳过。状态与记忆库解耦(forget 不回收状态;删状态文件即强制全量)。
+
+| 验收 | 第二次运行只处理增量(<5s);面板统计如实显示"跳过 N 个未变更会话";删状态文件可强制全量 |
+|---|---|
+
+### H1.6 适配器扩充(对标 Wake 的 11 个)
+
+本机探测(2026-08-22)分级:
+
+| 优先级 | agent | 会话存储 | 形态 |
+|---|---|---|---|
+| **P0(本机有真数据)** | gemini | `~/.gemini/`(267MB,含 antigravity brain 子树) | JSON,需定位会话主体 |
+| | antigravity | `~/AppData/Roaming/Antigravity/User/workspaceStorage/*/state.vscdb` | VSCode 系 SQLite(Wake 的 sqlite_ro 模式) |
+| | trae | `~/AppData/Roaming/Trae/User/{globalStorage,workspaceStorage}` | 同上;**Wake 未支持,我们抢先** |
+| | pi | `~/.pi/agent/`(4.2MB) | 需定位会话文件 |
+| P1(生态常见,本机无数据) | cursor | `~/AppData/Roaming/Cursor/User/workspaceStorage/*/state.vscdb` | sqlite_ro |
+| | copilot / kimi / kiro / grok | 各家目录(Wake 路径可抄) | 本机无数据,路径待验证 |
+
+技术注记:
+- VSCode 系(antigravity/trae/cursor/kiro/windsurf)聊天记录在 `state.vscdb` 的 JSON blob 里,键名各家不同——better-sqlite3 **readonly** 打开(引擎已依赖,零新增),逐家摸键;
+- **发现(inventory)先于解析**:目录存在但适配器未写时,面板如实标"未适配"(诚实统计原则,防止"装了就有"的错觉);
+- 每个适配器 = `import.ts` 一个 `parse<Agent>(file) → Turn[]` + AGENTS 表一行,模式已由 codex/opencode 两个先例验证。
+
+| 验收 | 本机存在会话数据的 agent(gemini/antigravity/trae/pi)全部可发现并导入;inventory 面板显示各 agent 会话数与适配状态 |
+|---|---|
+
+### v0.2 backlog:FTS 子串搜索(trigram 启发)
+
+zvec 的 matchString(BM25)对**中文分词与代码子串**(函数名、报错片段)的召回有边界;Wake 用 FTS5 trigram 一并解决两者。当前不急(zvec 向量×FTS 混合检索够用)。**触发条件**:用户反馈"明明有这条记忆却搜不到"且查询是子串型 → 引擎侧评估 trigram 前处理或 FTS5 双轨。不排期,挂 backlog。
+
+---
+
 ## 五、关键挂载点(沿用 depsec 验证过的 Cordis API)
 
 - `ctx.commands.register` → `/memory import`、`/memory compile`、`/memory doctor`
