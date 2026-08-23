@@ -5,13 +5,41 @@
  * @module dsh-hippo/client
  */
 
-import { createElement, useEffect, useRef, useState } from 'react'
+import { createElement, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 // Type-only: pulls the settings shell's SlotMap merge (the 'settings.section' entry).
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { AgentInventory, DoctorReport, ImportJob, MemoryItem, MemoryPage } from './types.ts'
 
 export const inject = ['slots']
+
+// ---------------------------------------------------------------------------
+// 独立记忆面板：sidebar.footer.action 入口图标 + shell.overlay 浮层（模块级开关态，
+// 同插件的两个注册共享；不进设置模态，不与其他插件挤 settings 区）
+// ---------------------------------------------------------------------------
+
+type AutoStatus = {
+  settings: { mode: 'off' | 'review' | 'auto'; threshold: number; intervalMin: number; lastRun?: { scanned: number; created: number; shelved: number } | null }
+  shelvedCount: number
+}
+type ShelvedItem = { index: number; reason: string; project: string; type: string; confidence: number; text: string }
+
+const overlayStore = {
+  open: false,
+  listeners: new Set<() => void>(),
+  toggle(): void {
+    overlayStore.open = !overlayStore.open
+    for (const l of overlayStore.listeners) l()
+  },
+  close(): void {
+    overlayStore.open = false
+    for (const l of overlayStore.listeners) l()
+  },
+  subscribe(fn: () => void): () => void {
+    overlayStore.listeners.add(fn)
+    return () => { overlayStore.listeners.delete(fn) }
+  },
+}
 
 // ---------------------------------------------------------------------------
 // 样式：渐变主视觉 + 卡片体系 + 微动效；颜色尽量继承宿主令牌（--accent/--border/--muted），
@@ -653,9 +681,164 @@ function Panel(): ReturnType<typeof createElement> {
   )
 }
 
+/** 自动蒸馏状态卡：模式 + 立即扫描 + 待复核队列（设置页与浮层共用）。 */
+function AutoCard(): ReturnType<typeof createElement> {
+  const [st, setSt] = useState<AutoStatus | null>(null)
+  const [queue, setQueue] = useState<ShelvedItem[]>([])
+  const [picked, setPicked] = useState<Set<number>>(new Set())
+  const [busy, setBusy] = useState(false)
+  const [toast, setToast] = useState('')
+
+  const reload = (): void => {
+    void getJson<AutoStatus>('/dsh-hippo/auto').then(setSt).catch(() => {})
+    void getJson<ShelvedItem[]>('/dsh-hippo/shelved').then(setQueue).catch(() => { setQueue([]) })
+  }
+  useEffect(reload, [])
+  useEffect(() => {
+    if (toast === '') return
+    const t = setTimeout(() => { setToast('') }, 3000)
+    return () => { clearTimeout(t) }
+  }, [toast])
+
+  const save = (patch: Record<string, unknown>): void => {
+    setBusy(true)
+    void postJson<AutoStatus>('/dsh-hippo/auto', { settings: patch })
+      .then(() => { setToast('已保存，下一轮扫描生效'); reload() })
+      .catch((e: unknown) => { setToast(e instanceof Error ? e.message : String(e)) })
+      .finally(() => { setBusy(false) })
+  }
+  const runNow = (): void => {
+    setBusy(true)
+    void postJson<{ scanned: number; created: number; reinforced: number; shelved: number }>('/dsh-hippo/auto/run', {})
+      .then((r) => { setToast(`扫描 ${r.scanned} · 新增 ${r.created} · 强化 ${r.reinforced} · 待审 +${r.shelved}`); reload() })
+      .catch((e: unknown) => { setToast(e instanceof Error ? e.message : String(e)) })
+      .finally(() => { setBusy(false) })
+  }
+  const queueAct = (action: 'apply' | 'discard', indices: number[]): void => {
+    if (indices.length === 0) return
+    setBusy(true)
+    void postJson<Record<string, number>>('/dsh-hippo/shelved', { action, indices })
+      .then((r) => {
+        setToast(action === 'apply' ? `入库：新建 ${r.created ?? 0} · 强化 ${r.reinforced ?? 0}` : `丢弃 ${indices.length} 条`)
+        setPicked(new Set()); reload()
+      })
+      .catch((e: unknown) => { setToast(e instanceof Error ? e.message : String(e)) })
+      .finally(() => { setBusy(false) })
+  }
+
+  const modeLabel: Record<string, string> = { off: '关闭', review: '全进待审', auto: '自动入库' }
+  return createElement('div', { className: 'hb-card' },
+    createElement('div', { className: 'hb-title' }, '自动蒸馏',
+      createElement('span', { className: 'hb-beta' }, st !== null ? modeLabel[st.settings.mode] : '…'),
+      createElement('span', { className: 'hb-spacer' }),
+      createElement('button', { className: 'hb-btn hb-btn-ghost', disabled: busy, onClick: runNow }, busy ? '…' : '立即扫描')),
+    st !== null && createElement('div', { className: 'hb-banner hb-banner-info' },
+      `置信度 ≥ ${st.settings.threshold.toFixed(2)} · 间隔 ${st.settings.intervalMin} 分钟` +
+      (st.settings.lastRun != null ? ` · 上轮：扫 ${st.settings.lastRun.scanned}、入库 ${st.settings.lastRun.created}、待审 +${st.settings.lastRun.shelved}` : '')),
+    createElement('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap' } },
+      ...(['off', 'review', 'auto'] as const).map((m) =>
+        createElement('button', {
+          key: m, className: 'hb-btn hb-btn-ghost', disabled: busy,
+          style: st?.settings.mode === m ? { borderColor: 'var(--hb-a)', color: 'var(--hb-a)' } : undefined,
+          onClick: () => { save({ mode: m }) },
+        }, modeLabel[m]))),
+    toast !== '' && createElement('div', { className: 'hb-banner hb-banner-ok' }, toast),
+    createElement('div', { className: 'hb-title', style: { fontSize: 13 } }, '待复核队列',
+      createElement('span', { className: 'hb-beta' }, String(queue.length)),
+      createElement('span', { className: 'hb-spacer' }),
+      createElement('button', { className: 'hb-btn hb-btn-ghost', disabled: busy || picked.size === 0, onClick: () => { queueAct('apply', [...picked]) } }, `入库所选（${picked.size}）`),
+      createElement('button', { className: 'hb-btn hb-btn-ghost', disabled: busy || queue.length === 0, onClick: () => { queueAct('discard', queue.map((q) => q.index)) } }, '清空')),
+    queue.length === 0
+      ? createElement('div', { className: 'hb-banner hb-banner-info' }, '队列为空——maybe 带与低置信候选会出现在这里，不会丢失。')
+      : createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 220, overflowY: 'auto' } },
+          ...queue.map((item) => createElement('label', {
+            key: item.index,
+            style: { display: 'flex', gap: 8, alignItems: 'center', fontSize: 12.5, padding: '4px 6px', borderRadius: 8, border: '1px solid var(--hb-line)', cursor: 'pointer' },
+          },
+            createElement('input', {
+              type: 'checkbox', checked: picked.has(item.index),
+              onChange: () => {
+                setPicked((prev) => {
+                  const next = new Set(prev)
+                  if (next.has(item.index)) next.delete(item.index); else next.add(item.index)
+                  return next
+                })
+              },
+            }),
+            createElement('span', { style: { flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, item.text),
+            createElement('span', { style: { fontSize: 11, color: 'var(--hb-mut)', flex: 'none' } }, `${item.reason} · ${item.confidence.toFixed(2)}`),
+            createElement('button', {
+              className: 'hb-btn hb-btn-ghost', style: { padding: '2px 8px', fontSize: 11 }, disabled: busy,
+              onClick: (e: Event) => { e.preventDefault(); e.stopPropagation(); queueAct('discard', [item.index]) },
+            }, '✕')))),
+  )
+}
+
+/** 侧栏脚部入口：设置旁的河马图标（wide=带文字行，rail=纯图标）。 */
+function FooterMemoryButton({ wide }: { wide: boolean }): ReturnType<typeof createElement> {
+  return createElement('button', {
+    title: '记忆面板（hippo）', onClick: overlayStore.toggle,
+    style: {
+      display: 'flex', alignItems: 'center', gap: wide ? 8 : 0, justifyContent: 'center',
+      cursor: 'pointer', border: 'none', background: 'transparent', color: 'inherit',
+      padding: wide ? '6px 10px' : '8px', borderRadius: 8, fontSize: 12, width: '100%',
+    },
+  },
+    createElement('span', { style: { fontSize: 16, lineHeight: 1 } }, '🦛'),
+    wide && createElement('span', null, '记忆'),
+  )
+}
+
+/** shell.overlay 条目：独立浮层（Esc / 点背景关闭；内容=AutoCard + 设置页同一 Panel）。 */
+function MemoryOverlay(): ReturnType<typeof createElement> {
+  const open = useSyncExternalStore(overlayStore.subscribe, () => overlayStore.open)
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent): void => { if (e.key === 'Escape') overlayStore.close() }
+    window.addEventListener('keydown', onKey)
+    return () => { window.removeEventListener('keydown', onKey) }
+  }, [open])
+  if (!open) return null
+  return createElement('div', {
+    style: {
+      position: 'fixed', inset: 0, zIndex: 90, pointerEvents: 'auto',
+      background: 'rgba(0,0,0,.45)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: 24,
+    },
+    onPointerDown: (e: React.PointerEvent) => { if (e.target === e.currentTarget) overlayStore.close() },
+  },
+    createElement('div', {
+      style: {
+        width: 'min(920px, 100%)', maxHeight: '86vh', overflowY: 'auto',
+        background: 'var(--bg, #fff)', borderRadius: 16, padding: 20,
+        boxShadow: '0 24px 64px rgba(0,0,0,.35)',
+      },
+      onPointerDown: (e: React.PointerEvent) => { e.stopPropagation() },
+    },
+      createElement('div', { className: 'hb-panel' },
+        createElement('div', { className: 'hb-hero' },
+          createElement('div', { className: 'hb-logo' }, 'H'),
+          createElement('div', { className: 'hb-hero-txt' },
+            createElement('div', { className: 'hb-title' }, '记忆面板 🦛'),
+            createElement('div', { className: 'hb-sub' }, 'hippo · 本地优先 · 独立浮层')),
+          createElement('span', { className: 'hb-spacer' }),
+          createElement('button', { className: 'hb-btn hb-btn-ghost', onClick: overlayStore.close }, '关闭 ✕')),
+        createElement(AutoCard, null),
+        createElement(Panel, null))))
+}
+
 export function apply(ctx: ClientContext): void {
+  // 设置页保留（轻入口）；主入口=侧栏脚部河马图标 → 独立浮层（不与其他插件挤位）
   ctx.slots.inject('settings.section', () => ctx.slots.register(
     { name: 'settings.section', id: 'memory-bridge', order: 41, label: '记忆桥' },
     () => createElement(Panel),
+  ))
+  ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register(
+    { name: 'sidebar.footer.action', id: 'hippo-memory', order: 10 },
+    ({ wide }: { wide: boolean }) => createElement(FooterMemoryButton, { wide }),
+  ))
+  ctx.slots.inject('shell.overlay', () => ctx.slots.register(
+    { name: 'shell.overlay', id: 'hippo-memory-overlay', order: 50 },
+    () => createElement(MemoryOverlay),
   ))
 }

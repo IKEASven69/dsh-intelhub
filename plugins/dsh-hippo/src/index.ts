@@ -16,6 +16,10 @@ import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-host-webserver'
 import { currentJob, inventory, startImport } from './import.ts'
 import { readTeamEvents, distillTeamEvents, foldLedger, triage } from 'hippo-mind'
+import {
+  loadAutoSettings, saveAutoSettings, listShelved, takeShelved,
+  runAutoDistillOnce, withEngine, type AutoDistillSettings,
+} from 'hippo-mind'
 import { compileMemories, forgetMemory, listMemories, updateMemory } from './memories.ts'
 import { registerPromptContext, registerRecallTool, registerRememberTool } from './tools.ts'
 import { registerLifeTools } from './life-tools.ts'
@@ -360,6 +364,106 @@ export function apply(ctx: Context, config?: Config): void {
                 (outcome) => { sendJson(response, 200, outcome) },
                 (error: unknown) => { sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) }) },
               ),
+              (error: unknown) => { sendJson(response, 400, { error: error instanceof Error ? error.message : String(error) }) },
+            )
+          },
+        }),
+        host.webServer.register({
+          kind: 'exact',
+          path: '/dsh-hippo/auto',
+          handler: (request, response) => {
+            if (!sameOrigin(request)) {
+              sendJson(response, 403, { error: '仅接受同源请求' })
+              return
+            }
+            if (request.method === 'GET') {
+              try {
+                sendJson(response, 200, { settings: loadAutoSettings(), shelvedCount: listShelved().length })
+              } catch (e) {
+                sendJson(response, 500, { error: e instanceof Error ? e.message : String(e) })
+              }
+              return
+            }
+            if (request.method !== 'POST') {
+              response.writeHead(405, { allow: 'GET, POST' })
+              response.end()
+              return
+            }
+            void readJsonBody(request).then(
+              (body) => {
+                try {
+                  const merged: AutoDistillSettings = { ...loadAutoSettings(), ...(body.settings as object ?? {}) }
+                  saveAutoSettings(merged)
+                  sendJson(response, 200, { settings: merged })
+                } catch (e) {
+                  sendJson(response, 500, { error: e instanceof Error ? e.message : String(e) })
+                }
+              },
+              (error: unknown) => { sendJson(response, 400, { error: error instanceof Error ? error.message : String(error) }) },
+            )
+          },
+        }),
+        host.webServer.register({
+          kind: 'exact',
+          path: '/dsh-hippo/auto/run',
+          handler: (request, response) => {
+            if (request.method !== 'POST') {
+              response.writeHead(405, { allow: 'POST' })
+              response.end()
+              return
+            }
+            if (!sameOrigin(request)) {
+              sendJson(response, 403, { error: '仅接受同源请求' })
+              return
+            }
+            void runAutoDistillOnce().then(
+              (stats) => sendJson(response, 200, stats),
+              (error: unknown) => { sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) }) },
+            )
+          },
+        }),
+        host.webServer.register({
+          kind: 'exact',
+          path: '/dsh-hippo/shelved',
+          handler: (request, response) => {
+            if (!sameOrigin(request)) {
+              sendJson(response, 403, { error: '仅接受同源请求' })
+              return
+            }
+            if (request.method === 'GET') {
+              try {
+                sendJson(response, 200, listShelved().map((x, i) => ({ index: i, reason: x.reason, project: x.candidate.project, type: x.candidate.type, confidence: x.candidate.confidence, text: x.candidate.text })))
+              } catch (e) {
+                sendJson(response, 500, { error: e instanceof Error ? e.message : String(e) })
+              }
+              return
+            }
+            if (request.method !== 'POST') {
+              response.writeHead(405, { allow: 'GET, POST' })
+              response.end()
+              return
+            }
+            void readJsonBody(request).then(
+              (body) => {
+                const indices = Array.isArray(body.indices) ? body.indices.map(Number).filter(Number.isInteger) : []
+                if (body.action === 'discard') {
+                  takeShelved(indices)
+                  sendJson(response, 200, { remaining: listShelved().length })
+                  return
+                }
+                // apply：引擎短持走 withEngine + distill（与 GUI 同一管线）
+                void withEngine(async (held) => {
+                  const all = listShelved()
+                  const cands = indices.filter((i) => all[i] !== undefined).map((i) => ({ ...all[i].candidate }))
+                  if (cands.length === 0) { sendJson(response, 404, { error: 'no such items' }); return }
+                  const { distill } = await import('hippo-mind')
+                  const r = await distill(held.engine, cands, { apply: true, agent: 'dsh:review' })
+                  takeShelved(indices)
+                  sendJson(response, 200, { created: r.created, reinforced: r.reinforced, skipped: r.skipped, maybe: r.maybe })
+                }).catch((error: unknown) => {
+                  sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) })
+                })
+              },
               (error: unknown) => { sendJson(response, 400, { error: error instanceof Error ? error.message : String(error) }) },
             )
           },

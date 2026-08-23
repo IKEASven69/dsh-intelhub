@@ -8,11 +8,11 @@
  * 数据通道：浏览器直连 Polymarket Gamma（搜索/元数据）与 CLOB（价格/订单簿/
  * 历史）——两 API 均已验证 Access-Control-Allow-Origin: *。
  *
- * 落点：shell.overlay。右侧全高 360px 面板，默认收起为边缘浮动按钮，
- * 点开即「并排查看」：默认热门榜（24h 成交量排序的活跃事件，打开即见），
- * 可搜索任意主题收窄；点市场 → 详情（中间价 / 买卖盘 / 最近一天价格走势，
- * interval=1d&fidelity=60 ≈ 25 点，与宿主工具同语义）。
- * 开合状态与上次搜索词存 localStorage。
+ * 落点：shell.overlay。右侧全高可拖宽面板，默认收起为边缘浮动按钮，
+ * 点开即「并排查看」：默认热门榜（24h 成交量排序的活跃事件），可搜索收窄；
+ * 点市场 → 详情（中间价 / 买卖盘 / 可切窗口的价格走势 + hover 十字线）。
+ * 🎯 跟随会话：agent 调用本插件工具时，侧栏自动切到该查询/市场。
+ * 开合/搜索词/自选/宽度/跟随开关均存 localStorage。
  */
 window.__ModuleLoader__.load({
   id: 'dsh-polymarket',
@@ -27,6 +27,8 @@ window.__ModuleLoader__.load({
     const LS_OPEN = 'dsh-poly-open'
     const LS_QUERY = 'dsh-poly-query'
     const LS_WATCH = 'dsh-poly-watch'
+    const LS_WIDTH = 'dsh-poly-width'
+    const LS_FOLLOW = 'dsh-poly-follow'
     const LIST_POLL_MS = 30000
     const DETAIL_POLL_MS = 15000
     const TREND_LIMIT = 10
@@ -105,28 +107,113 @@ window.__ModuleLoader__.load({
       )
     }
 
-    // ── Sparkline：纯 SVG 折线，首末点决定涨跌色 ─────────────────────────
+    // ── 跟随会话：从当前会话快照提取最近一次 polymarket 工具调用 ─────────
+    // 数据通路：ctx.sessions.currentProvideInfo（HostObservable）→ hooks.session
+    // （会话快照 HostObservable，nodes[].blocks[] 里 kind='tool-call' 带
+    // name/argsRaw）。去重靠 key，快照每次事件推送都会重发。
+    const followState = { key: null, value: null, listeners: new Set() }
 
-    function Sparkline({ points, width = 320, height = 56 }) {
-      const pts = (points || []).map((x) => Number(x)).filter((x) => Number.isFinite(x))
+    function emitFollow(v) {
+      for (const fn of followState.listeners) {
+        try { fn(v) } catch { /* 单个订阅者异常不阻断 others */ }
+      }
+    }
+
+    function extractFollow(snapshot) {
+      const nodes = snapshot && Array.isArray(snapshot.nodes) ? snapshot.nodes : []
+      let found = null
+      for (const node of nodes) {
+        if (!node || node.kind !== 'assistant') continue
+        for (const b of node.blocks || []) {
+          if (!b || b.kind !== 'tool-call' || typeof b.name !== 'string' || b.name.indexOf('polymarket_') !== 0) continue
+          const raw = typeof b.argsRaw === 'string' ? b.argsRaw : ''
+          let q = ''
+          let cid = ''
+          try {
+            const a = JSON.parse(raw)
+            q = a && a.q ? String(a.q) : ''
+            cid = a && a.condition_id ? String(a.condition_id) : ''
+          } catch {
+            const mq = raw.match(/"q"\s*:\s*"([^"]+)"/); if (mq) q = mq[1]
+            const mc = raw.match(/"condition_id"\s*:\s*"([^"]+)"/); if (mc) cid = mc[1]
+          }
+          found = { tool: b.name, q, cid }
+        }
+      }
+      return found
+    }
+
+    function wireFollow(ctx) {
+      const info$ = ctx.sessions && ctx.sessions.currentProvideInfo
+      if (!info$ || typeof info$.subscribe !== 'function') return () => {}
+      let unsubSession = () => {}
+      const observeInfo = () => {
+        if (typeof unsubSession === 'function') unsubSession()
+        unsubSession = () => {}
+        const info = info$.getSnapshot()
+        const obs = info && info.hooks && info.hooks.session
+        if (!obs || typeof obs.getSnapshot !== 'function') return
+        const handle = () => {
+          const found = extractFollow(obs.getSnapshot())
+          if (!found) return
+          const key = found.tool + '|' + found.q + found.cid
+          if (key === followState.key) return
+          followState.key = key
+          followState.value = found
+          emitFollow(found)
+        }
+        handle()
+        if (typeof obs.subscribe === 'function') unsubSession = obs.subscribe(handle)
+      }
+      const unsubInfo = info$.subscribe(observeInfo)
+      observeInfo()
+      return () => { if (typeof unsubInfo === 'function') unsubInfo(); unsubSession() }
+    }
+
+    // ── Sparkline：纯 SVG 折线 + hover 十字线（价格/时间随动）─────────────
+
+    function Sparkline({ series, width = 320, height = 56 }) {
+      const [hover, setHover] = useState(null)
+      const pts = (series || []).map((x) => ({ t: Number(x.t), p: Number(x.p) })).filter((x) => Number.isFinite(x.p))
       if (pts.length < 2) return h('div', { className: 'dsh-poly-note' }, '历史点数不足')
-      const min = Math.min(...pts)
-      const max = Math.max(...pts)
+      const min = Math.min(...pts.map((x) => x.p))
+      const max = Math.max(...pts.map((x) => x.p))
       const span = max - min || 1
       const stepX = width / (pts.length - 1)
-      // Y 上下留 4px，最小/最大标注
       const y = (v) => 4 + (height - 8) * (1 - (v - min) / span)
-      const path = pts.map((v, i) => `${(i * stepX).toFixed(1)},${y(v).toFixed(1)}`).join(' ')
-      const up = pts[pts.length - 1] >= pts[0]
+      const path = pts.map((x, i) => `${(i * stepX).toFixed(1)},${y(x.p).toFixed(1)}`).join(' ')
+      const up = pts[pts.length - 1].p >= pts[0].p
       const color = up ? 'var(--dsh-poly-up, #34d399)' : 'var(--dsh-poly-down, #f87171)'
+      const onMove = (e) => {
+        const rect = e.currentTarget.getBoundingClientRect()
+        if (!rect.width) return
+        const x = ((e.clientX - rect.left) / rect.width) * width
+        setHover(Math.max(0, Math.min(pts.length - 1, Math.round(x / stepX))))
+      }
+      const timeStr = (t) => {
+        if (!Number.isFinite(t)) return ''
+        const d = new Date(t * 1000)
+        const p2 = (n) => String(n).padStart(2, '0')
+        return `${p2(d.getHours())}:${p2(d.getMinutes())}`
+      }
+      const hv = hover != null ? pts[hover] : null
+      const hx = hover != null ? hover * stepX : 0
+      const anchorEnd = hover != null && hover > (pts.length - 1) / 2
       return h('svg', {
         width, height, viewBox: `0 0 ${width} ${height}`, className: 'dsh-poly-spark',
         role: 'img', 'aria-label': `走势 ${fmtPct(min)} ~ ${fmtPct(max)}`,
+        onMouseMove: onMove, onMouseLeave: () => setHover(null),
       },
         h('polyline', { points: path, fill: 'none', stroke: color, 'stroke-width': 1.5, 'stroke-linejoin': 'round' }),
-        h('circle', { cx: (pts.length - 1) * stepX, cy: y(pts[pts.length - 1]), r: 2.5, fill: color }),
-        h('text', { x: 2, y: 10, className: 'dsh-poly-spark-min', fill: 'currentColor', opacity: .55, 'font-size': 9 }, fmtPct(min)),
+        h('circle', { cx: (pts.length - 1) * stepX, cy: y(pts[pts.length - 1].p), r: 2.5, fill: color }),
+        h('text', { x: 2, y: 10, fill: 'currentColor', opacity: .55, 'font-size': 9 }, fmtPct(min)),
         h('text', { x: width - 2, y: 10, 'text-anchor': 'end', fill: 'currentColor', opacity: .55, 'font-size': 9 }, fmtPct(max)),
+        hv ? h('g', { className: 'dsh-poly-cross', pointerEvents: 'none' },
+          h('line', { x1: hx, y1: 2, x2: hx, y2: height - 2, stroke: 'currentColor', opacity: .3, 'stroke-dasharray': '3 3' }),
+          h('circle', { cx: hx, cy: y(hv.p), r: 3, fill: color, stroke: 'var(--color-bg-2,#1b1e26)', 'stroke-width': 1.5 }),
+          h('text', { x: anchorEnd ? hx - 6 : hx + 6, y: 12, 'text-anchor': anchorEnd ? 'end' : 'start', 'font-size': 10, fill: color, fontWeight: 600 }, fmtPct(hv.p)),
+          h('text', { x: anchorEnd ? hx - 6 : hx + 6, y: 24, 'text-anchor': anchorEnd ? 'end' : 'start', 'font-size': 9, fill: 'currentColor', opacity: .55 }, timeStr(hv.t)),
+        ) : null,
       )
     }
 
@@ -151,7 +238,8 @@ window.__ModuleLoader__.load({
             fetchJson(`${CLOB}/book?token_id=${tid}&side=buy`).catch(() => null),
           ])
           if (signal.aborted) return
-          const series = hist && Array.isArray(hist.history) ? hist.history.map((x) => Number(x.p)) : []
+          const series = hist && Array.isArray(hist.history)
+            ? hist.history.map((x) => ({ t: x.t, p: Number(x.p) })) : []
           setState({
             status: 'ok', error: null,
             mid: mid && mid.mid != null ? Number(mid.mid) : null,
@@ -203,8 +291,8 @@ window.__ModuleLoader__.load({
                 onClick: () => setWin(w),
               }, w))),
           h('div', { className: 'dsh-poly-spark-wrap' },
-            h(Sparkline, { points: state.history }),
-            h('div', { className: 'dsh-poly-vol' }, `${WIN_LABEL[win]} · ${state.history.length} 点 · ${WIN_FID[win]} 分钟线`)),
+            h(Sparkline, { series: state.history }),
+            h('div', { className: 'dsh-poly-vol' }, `${WIN_LABEL[win]} · ${state.history.length} 点 · ${WIN_FID[win]} 分钟线 · 悬停看价格`)),
         ) : null,
         market.slug
           ? h('a', {
@@ -225,6 +313,13 @@ window.__ModuleLoader__.load({
       const [input, setInput] = useState(() => lsGet(LS_QUERY, ''))
       const [state, setState] = useState({ status: 'idle', events: [], error: null, at: null })
       const [detail, setDetail] = useState(null)
+      // 面板宽度（左缘拖拽，300~720px，持久）
+      const [width, setWidth] = useState(() => {
+        const n = Number(lsGet(LS_WIDTH, '360'))
+        return Number.isFinite(n) && n >= 300 && n <= 720 ? n : 360
+      })
+      // 🎯 跟随会话：agent 调 polymarket 工具时侧栏自动跟随；手动搜索即暂停
+      const [follow, setFollow] = useState(() => lsGet(LS_FOLLOW, '1') === '1')
       // 自选（localStorage 持久）：[{condition_id, question, slug}]；价格随 30s 轮询批量刷新
       const [watch, setWatch] = useState(() => {
         try {
@@ -316,10 +411,14 @@ window.__ModuleLoader__.load({
       const toggle = () => {
         setOpen((v) => { lsSet(LS_OPEN, v ? '0' : '1'); return !v })
       }
+      const pauseFollow = () => {
+        if (follow) { setFollow(false); lsSet(LS_FOLLOW, '0') }
+      }
       const submit = (e) => {
         e.preventDefault()
         const q = input.trim()
         setDetail(null)
+        pauseFollow()
         if (!q) {
           setQuery('')
           lsSet(LS_QUERY, '')
@@ -328,6 +427,47 @@ window.__ModuleLoader__.load({
         setQuery(q)
         lsSet(LS_QUERY, q)
       }
+
+      // 左缘拖宽：document 级 move/up 跟踪，松手时才写 localStorage
+      const startDrag = (e) => {
+        e.preventDefault()
+        let w = width
+        const mv = (ev) => {
+          w = Math.max(300, Math.min(720, window.innerWidth - ev.clientX))
+          setWidth(w)
+        }
+        const up = () => {
+          document.removeEventListener('mousemove', mv)
+          document.removeEventListener('mouseup', up)
+          lsSet(LS_WIDTH, String(Math.round(w)))
+        }
+        document.addEventListener('mousemove', mv)
+        document.addEventListener('mouseup', up)
+      }
+
+      // 跟随事件：search → 切搜索词；带 condition_id 的工具 → 拉名称后进详情
+      useEffect(() => {
+        if (!follow) return
+        const onFollow = (v) => {
+          if (v.q) {
+            setQuery(v.q); setInput(v.q); lsSet(LS_QUERY, v.q); setDetail(null)
+          } else if (v.cid) {
+            fetchJson(`${GAMMA}/markets?condition_ids=${encodeURIComponent(v.cid)}`)
+              .then((data) => {
+                const m = Array.isArray(data) ? data[0] : null
+                setDetail({
+                  question: (m && m.question) || ('condition ' + v.cid.slice(0, 12) + '…'),
+                  condition_id: v.cid,
+                  slug: (m && m.slug) || '',
+                  yes: m ? yesPrice(m) : NaN,
+                })
+              })
+              .catch(() => setDetail({ question: 'condition ' + v.cid.slice(0, 12) + '…', condition_id: v.cid, slug: '', yes: NaN }))
+          }
+        }
+        followState.listeners.add(onFollow)
+        return () => { followState.listeners.delete(onFollow) }
+      }, [follow])
 
       // 收起态：边缘浮动按钮
       if (!open) {
@@ -359,16 +499,23 @@ window.__ModuleLoader__.load({
           ),
         )
 
-      return h('div', { className: 'dsh-poly-panel' },
+      return h('div', { className: 'dsh-poly-panel', style: { width: width + 'px' } },
+        h('div', { className: 'dsh-poly-drag', onMouseDown: startDrag, title: '拖拽调整宽度' }),
         h('div', { className: 'dsh-poly-header' },
           h('span', { className: 'dsh-poly-mode' },
             h(PolyIcon, { size: 12 }), ' ',
             query ? '#' + query : '热门榜'),
           h('span', { className: 'dsh-poly-header-r' },
+            h('button', {
+              className: 'dsh-poly-follow' + (follow ? ' on' : ''),
+              title: follow ? '跟随中：agent 查行情时侧栏自动同步（点击暂停）' : '已暂停跟随（点击开启）',
+              'aria-pressed': follow,
+              onClick: () => { setFollow(!follow); lsSet(LS_FOLLOW, follow ? '0' : '1') },
+            }, '🎯'),
             query
               ? h('button', {
                   className: 'dsh-poly-clear', title: '清除搜索，回到热门榜',
-                  onClick: () => { setQuery(''); setInput(''); lsSet(LS_QUERY, ''); setDetail(null) },
+                  onClick: () => { pauseFollow(); setQuery(''); setInput(''); lsSet(LS_QUERY, ''); setDetail(null) },
                 }, '✕')
               : null,
             h('button', { className: 'dsh-poly-close', onClick: toggle, title: '收起' }, '›')),
@@ -479,6 +626,12 @@ window.__ModuleLoader__.load({
   text-decoration:none;font-size:12px;}
 .dsh-poly-link:hover{text-decoration:underline;}
 .dsh-poly-detail-head-r{display:flex;align-items:center;gap:6px;}
+.dsh-poly-drag{position:absolute;left:-3px;top:0;bottom:0;width:7px;cursor:col-resize;z-index:2;}
+.dsh-poly-drag:hover,.dsh-poly-drag:active{background:linear-gradient(90deg,transparent,var(--dsh-poly-accent,#3b82f6),transparent);opacity:.6;}
+.dsh-poly-follow{background:none;border:none;cursor:pointer;font-size:13px;line-height:1;padding:2px;opacity:.35;}
+.dsh-poly-follow:hover{opacity:.8;}
+.dsh-poly-follow.on{opacity:1;}
+.dsh-poly-follow.on::after{content:'跟随';font-size:9px;color:var(--dsh-poly-accent,#3b82f6);margin-left:3px;}
 `
       const el = document.createElement('style')
       el.id = 'dsh-polymarket-style'
@@ -486,9 +639,14 @@ window.__ModuleLoader__.load({
       document.head.appendChild(el)
     }
 
-    const inject = ['slots']
+    const inject = ['slots', 'sessions']
     function apply(ctx) {
       injectStyle()
+      try {
+        wireFollow(ctx)
+      } catch (e) {
+        console.warn('[dsh-polymarket] 跟随会话初始化失败（面板其余功能不受影响）:', e)
+      }
       ctx.slots.inject('shell.overlay', () =>
         ctx.slots.register(
           { name: 'shell.overlay', id: 'dsh-polymarket', order: 100, label: 'Polymarket 行情' },
