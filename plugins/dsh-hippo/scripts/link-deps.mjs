@@ -30,6 +30,8 @@ const LINKS = [
   ['@deepseek-ai/dsh-host-webserver', 'packages/host/webserver'],
   ['@deepseek-ai/dsh-client-runtime', 'packages/client/runtime'],
   ['@deepseek-ai/dsh-client-ui-settings', 'packages/client/ui-settings'],
+  ['@deepseek-ai/dsh-client-ui-layout', 'packages/client/ui-layout'],
+  ['@deepseek-ai/dsh-client-ui-sidebar', 'packages/client/ui-sidebar'],
   ['@deepseek-ai/dsh-tools', 'packages/core/tools'],
   ['@deepseek-ai/dsh-agent', 'packages/core/agent'],
   ['@deepseek-ai/dsh-sandbox-policy', 'packages/sandbox/sandbox-policy'],

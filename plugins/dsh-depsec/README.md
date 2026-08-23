@@ -8,12 +8,12 @@ DeepSeek Harness（dsh）依赖安全审计插件：**漏洞 / 投毒 / 密钥 /
 
 | 模式 | 检测内容 |
 |---|---|
-| `vuln` 漏洞 | 官方审计查已知 CVE/GHSA（npm/pnpm/yarn 完整支持，含结果解析与一键 `audit fix`）；pip/cargo/go 为**实验性**——能执行审计命令但输出解析尚未实现，结果会落「未能解析审计输出」 |
+| `vuln` 漏洞 | 官方审计查已知 CVE/GHSA/OSV（npm/pnpm/yarn/pip/cargo/go，全部含结果解析与严重度汇总），npm 系支持一键 `audit fix` |
 | `supply-chain` 投毒 | **install 脚本内容审查（证据分级 PASS/WARN/BLOCK + 脚本引用文件深挖）** + typosquatting 近名 + npm registry 联网信誉（发布时间/下载量/仓库） |
 | `secrets` 密钥 | 高置信正则 + 香农熵 + git 历史，含 `.depsecignore` 白名单 |
 | `sast` 代码 | 危险代码模式（eval/命令注入/XSS/弱哈希/反序列化等） |
 
-- 🟢/🟡/🔴 判定横幅 + 危险度筛选 + 只看新增（基线 diff）
+- 🟢/🟡/🔴 判定横幅 + 危险度筛选 + 只看新增（基线 diff；基线持久化在 `<root>/.depsec-baseline.json`，每次审计后自动更新，建议加入 .gitignore）
 - 点击告警跳转打开源文件（VS Code goto，回退资源管理器）
 - 导出 SARIF 2.1.0（可进 GitHub Code Scanning / CI 门禁）
 - Windows 原生通知（静默，仅新高危弹窗）
@@ -38,7 +38,7 @@ dsh plugin --profile web add dsh-depsec
 
 ```sh
 pnpm install         # 仅本机构建/测试依赖（peer 由 dsh 宿主运行时注入）
-pnpm test            # vitest：脚本静态分析语料（良性/恶意/未知，29 例）
+pnpm test            # vitest：脚本静态分析语料 + 三语言审计输出解析（35 例）
 node .build-tools/build.cjs   # 本机验证构建：SWC(stage-3 装饰器)+esbuild，产出 lib/index.js + lib/client.js
 ```
 

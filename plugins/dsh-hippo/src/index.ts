@@ -18,7 +18,7 @@ import { currentJob, inventory, startImport } from './import.ts'
 import { readTeamEvents, distillTeamEvents, foldLedger, triage } from 'hippo-mind'
 import {
   loadAutoSettings, saveAutoSettings, listShelved, takeShelved,
-  runAutoDistillOnce, withEngine, type AutoDistillSettings,
+  runAutoDistillOnce, withEngine, distill, type AutoDistillSettings,
 } from 'hippo-mind'
 import { compileMemories, forgetMemory, listMemories, updateMemory } from './memories.ts'
 import { registerPromptContext, registerRecallTool, registerRememberTool } from './tools.ts'
@@ -456,7 +456,6 @@ export function apply(ctx: Context, config?: Config): void {
                   const all = listShelved()
                   const cands = indices.filter((i) => all[i] !== undefined).map((i) => ({ ...all[i].candidate }))
                   if (cands.length === 0) { sendJson(response, 404, { error: 'no such items' }); return }
-                  const { distill } = await import('hippo-mind')
                   const r = await distill(held.engine, cands, { apply: true, agent: 'dsh:review' })
                   takeShelved(indices)
                   sendJson(response, 200, { created: r.created, reinforced: r.reinforced, skipped: r.skipped, maybe: r.maybe })

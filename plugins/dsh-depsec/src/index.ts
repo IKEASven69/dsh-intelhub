@@ -27,6 +27,7 @@ import type {
   WriteApprovalsRequest,
   WriteApprovalsResult,
 } from './types.ts'
+import { parseCargoAudit, parseGoVulncheck, parsePipAudit } from './vuln-parsers.ts'
 
 import { analyzeInstallScript, referencedScriptFiles, renderSignals } from './script-analysis.ts'
 
@@ -153,7 +154,6 @@ function looksRandom(s: string): boolean {
 export class DepsecService extends TypertRemoteService {
   static inject = ['shell', 'fs', 'sandboxPolicy', 'agents', 'web', 'tools']
 
-  private readonly baseline = new Map<string, Set<string>>()
   private monitoringState: MonitorState | null = null
   private lastAutoAt = 0
 
@@ -573,6 +573,9 @@ export class DepsecService extends TypertRemoteService {
 
   private parseResult(manager: string, stdout: string) {
     if (manager === 'npm' || manager === 'pnpm' || manager === 'yarn') return this.parseNpm(stdout)
+    if (manager === 'pip') return parsePipAudit(stdout)
+    if (manager === 'cargo') return parseCargoAudit(stdout)
+    if (manager === 'go') return parseGoVulncheck(stdout)
     return null
   }
 
@@ -686,8 +689,31 @@ export class DepsecService extends TypertRemoteService {
     return 'f:' + ((f as DepsecFinding).file ?? '') + ':' + ((f as DepsecFinding).line ?? 0) + ':' + ((f as DepsecFinding).kind ?? '') + ':' + (f.name ?? '')
   }
 
-  private markNew(scope: DepsecScope, list: (DepsecFinding | DepsecVulnerability)[]): number {
-    const prev = this.baseline.get(scope) ?? new Set<string>()
+  /** 基线文件：<root>/.depsec-baseline.json（审计后自动更新，建议加入 .gitignore）。 */
+  private baselinePath(root: string): string {
+    return this.joinPath(root, '.depsec-baseline.json')
+  }
+
+  private async loadBaseline(root: string): Promise<Partial<Record<DepsecScope, string[]>>> {
+    try {
+      const t = await this.ctx.fs.resolve(this.baselinePath(root))
+      const text = await this.ctx.fs.readText(t)
+      if (text === null) return {}
+      const data = JSON.parse(text) as { scopes?: Partial<Record<DepsecScope, string[]>> }
+      return data && typeof data === 'object' && data.scopes && typeof data.scopes === 'object' ? data.scopes : {}
+    } catch { return {} }
+  }
+
+  private async saveBaseline(root: string, scopes: Partial<Record<DepsecScope, string[]>>): Promise<void> {
+    try {
+      const t = await this.ctx.fs.resolve(this.baselinePath(root))
+      await this.ctx.fs.writeText(t, JSON.stringify({ version: 1, updatedAt: new Date().toISOString(), scopes }, null, 2) + '\n')
+    } catch { /* 只读目录等场景静默跳过，不影响审计 */ }
+  }
+
+  private async markNew(scope: DepsecScope, list: (DepsecFinding | DepsecVulnerability)[], root: string): Promise<number> {
+    const all = await this.loadBaseline(root)
+    const prev = new Set(all[scope] ?? [])
     const curr = new Set<string>()
     let n = 0
     for (const f of list) {
@@ -696,7 +722,8 @@ export class DepsecService extends TypertRemoteService {
       f.isNew = !prev.has(k)
       if (f.isNew) n++
     }
-    this.baseline.set(scope, curr)
+    all[scope] = [...curr]
+    await this.saveBaseline(root, all)
     return n
   }
 
@@ -764,7 +791,7 @@ export class DepsecService extends TypertRemoteService {
     const approvals = [...pkgAllPass.entries()].filter(([name, pass]) => pass && !suspicious.has(name)).map(([name]) => name).sort()
     const ignores = await this.readIgnores(root)
     findings = this.applyIgnores(findings, ignores)
-    const newCount = this.markNew('supply-chain', findings)
+    const newCount = await this.markNew('supply-chain', findings, root)
     const counts: Record<string, number> = { high: 0, medium: 0, low: 0, info: 0 }
     for (const f of findings) counts[f.severity] = (counts[f.severity] ?? 0) + 1
     const summary: DepsecSummary = { total: findings.length, high: counts.high, medium: counts.medium, low: counts.low, info: counts.info, newCount }
@@ -807,7 +834,7 @@ export class DepsecService extends TypertRemoteService {
         stderrTail: run.stderr.slice(0, 2000), stdoutTail: run.stdout.slice(0, 2000),
       }
     }
-    const newCount = this.markNew('vuln', parsed.list)
+    const newCount = await this.markNew('vuln', parsed.list, root)
     const summary: DepsecSummary = { total: parsed.total, critical: parsed.critical, high: parsed.high, moderate: parsed.moderate, low: parsed.low, info: parsed.info, newCount }
     return { ok: true, detected: true, scope: 'vuln', manager: det.manager, root, verdict: verdictOf(summary), command, exitCode: run.exitCode, timedOut: run.timedOut, summary, vulnerabilities: parsed.list, note: run.timedOut ? '审计超时（命令超过 120 秒被终止），结果可能不完整。' : '' }
   }
@@ -817,7 +844,7 @@ export class DepsecService extends TypertRemoteService {
     const hist = await this.scanGitHistory(root, SECRET_PATTERNS)
     const ignores = await this.readIgnores(root)
     let findings = this.applyIgnores([...wt.findings, ...hist.findings], ignores)
-    const newCount = this.markNew('secrets', findings)
+    const newCount = await this.markNew('secrets', findings, root)
     const counts: Record<string, number> = { high: 0, medium: 0, low: 0, info: 0 }
     for (const f of findings) counts[f.severity] = (counts[f.severity] ?? 0) + 1
     const summary: DepsecSummary = { total: findings.length, high: counts.high, medium: counts.medium, low: counts.low, info: counts.info, newCount }
@@ -828,7 +855,7 @@ export class DepsecService extends TypertRemoteService {
     const wt = await this.scanPatterns(root, SAST_PATTERNS, '代码', false)
     const ignores = await this.readIgnores(root)
     const findings = this.applyIgnores(wt.findings, ignores)
-    const newCount = this.markNew('sast', findings)
+    const newCount = await this.markNew('sast', findings, root)
     const counts: Record<string, number> = { high: 0, medium: 0, low: 0, info: 0 }
     for (const f of findings) counts[f.severity] = (counts[f.severity] ?? 0) + 1
     const summary: DepsecSummary = { total: findings.length, high: counts.high, medium: counts.medium, low: counts.low, info: counts.info, newCount }

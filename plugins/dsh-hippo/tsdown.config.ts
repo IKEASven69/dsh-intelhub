@@ -9,10 +9,10 @@ const ROOT = dirname(fileURLToPath(import.meta.url))
 // 会整棵 plugin tree 加载失败。打包后 lib 里仅剩 node: 内置与引擎族外置引用。
 // 入口是 tsconfig.build.json 的 tsc 产物（.tsc/）：tsdown/rolldown 不转换
 // stage-3 装饰器（@Remote），先过 tsc（与 harness 的 tsc -b && tsdown 同构）。
-// 引擎族必须外置（PLAN 形态策略）：better-sqlite3 / sqlite-vec 是原生模块
+// 引擎族必须外置（PLAN 形态策略；hippo-mind 外置是改名后补的——旧名漏改导致整包内联，profile 里解析不到 transformers 炸树）：better-sqlite3 / sqlite-vec 是原生模块
 // （bundle 破坏 prebuild 装载），transformers 携带模型运行时，hippo-skills
 // 本体以 link:/npm 依赖在插件安装时由包管理器装入。
-const ENGINE_EXTERNALS = ['hippo-skills', 'better-sqlite3', 'sqlite-vec', '@zvec/zvec', '@huggingface/transformers']
+const ENGINE_EXTERNALS = ['hippo-mind', 'hippo-skills', 'better-sqlite3', 'sqlite-vec', '@zvec/zvec', '@huggingface/transformers']
 
 const isEngineExternal = (id: string) =>
   ENGINE_EXTERNALS.some((e) => id === e || id.startsWith(e + '/'))

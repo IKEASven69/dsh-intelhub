@@ -1,6 +1,6 @@
 {
   "name": "dsh-polymarket",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Polymarket 预测市场只读行情工具包：搜索/详情/订单簿/价格/历史价格。DSH 生态首个 Polymarket 原生插件（宿主自包含打包，零外部依赖）。",
   "type": "module",
   "main": "./lib/index.js",
@@ -46,5 +46,8 @@
     "link:deps": "node scripts/link-deps.mjs",
     "build": "node scripts/link-deps.mjs && tsdown",
     "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

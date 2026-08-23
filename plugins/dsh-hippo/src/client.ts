@@ -9,6 +9,8 @@ import { createElement, useEffect, useRef, useState, useSyncExternalStore } from
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 // Type-only: pulls the settings shell's SlotMap merge (the 'settings.section' entry).
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
+import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
+import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type { AgentInventory, DoctorReport, ImportJob, MemoryItem, MemoryPage } from './types.ts'
 
 export const inject = ['slots']
@@ -790,7 +792,7 @@ function FooterMemoryButton({ wide }: { wide: boolean }): ReturnType<typeof crea
 }
 
 /** shell.overlay 条目：独立浮层（Esc / 点背景关闭；内容=AutoCard + 设置页同一 Panel）。 */
-function MemoryOverlay(): ReturnType<typeof createElement> {
+function MemoryOverlay(): ReturnType<typeof createElement> | null {
   const open = useSyncExternalStore(overlayStore.subscribe, () => overlayStore.open)
   useEffect(() => {
     if (!open) return
