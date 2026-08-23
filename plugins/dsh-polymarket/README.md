@@ -1,8 +1,5 @@
 # dsh-polymarket
 
-[![npm](https://img.shields.io/badge/npm-dsh--polymarket-3b82f6)](https://www.npmjs.com/package/dsh-polymarket)
-![DSH plugin](https://img.shields.io/badge/DSH-plugin-000?logo=data:image/svg%2bxml;base64,)
-
 **Polymarket 预测市场行情插件 for DeepSeek Harness（dsh）**——5 个只读 agent 工具 + 右侧「边看边展示」行情侧栏。DSH 生态首个 Polymarket 原生插件。
 
 ## 安装
