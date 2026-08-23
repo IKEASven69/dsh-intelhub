@@ -32,6 +32,11 @@ for (const f of files) {
   fs.writeFileSync(path.join(tmpDir, f.replace(/\.ts$/, '.js')), code)
 }
 
+// 宿主半的 @deepseek-ai/* 保持外部化（运行时/构建环境供给）：
+// 构建期由 scripts/link-deps.mjs 从 checkout junction 到本目录 node_modules
+// （esbuild 不解析 external，junction 供 node/tsc 解析）；运行期 link: 安装下
+// ESM 以真实路径向上解析，同样落到本目录 node_modules 的 junction——
+// 2026-08-23 实测：无 junction 时 web 启动报 Cannot find package '@deepseek-ai/cordis'。
 esbuild
   .buildSync({
     entryPoints: [path.join(tmpDir, 'index.js')],
