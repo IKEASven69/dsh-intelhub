@@ -9,8 +9,9 @@
  * 历史）——两 API 均已验证 Access-Control-Allow-Origin: *。
  *
  * 落点：shell.overlay。右侧全高 360px 面板，默认收起为边缘浮动按钮，
- * 点开即「并排查看」：搜索任意主题 → 点市场 → 详情（中间价 / 买卖盘 /
- * 最近一天价格走势，interval=1d&fidelity=60 ≈ 25 点，与宿主工具同语义）。
+ * 点开即「并排查看」：默认热门榜（24h 成交量排序的活跃事件，打开即见），
+ * 可搜索任意主题收窄；点市场 → 详情（中间价 / 买卖盘 / 最近一天价格走势，
+ * interval=1d&fidelity=60 ≈ 25 点，与宿主工具同语义）。
  * 开合状态与上次搜索词存 localStorage。
  */
 window.__ModuleLoader__.load({
@@ -27,6 +28,7 @@ window.__ModuleLoader__.load({
     const LS_QUERY = 'dsh-poly-query'
     const LIST_POLL_MS = 30000
     const DETAIL_POLL_MS = 15000
+    const TREND_LIMIT = 10
 
     // ── 工具 ─────────────────────────────────────────────────────────────
 
@@ -57,6 +59,24 @@ window.__ModuleLoader__.load({
       if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M'
       if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K'
       return String(Math.round(n))
+    }
+
+    // 事件内挑「值得看」的市场：按 24h 量降序取前 3，跳过近似已结算
+    // （Yes <5% 或 >95%）的；全都结算了就回退头名——热门榜头名常是已打完的局。
+    function eventMarkets(e) {
+      const all = (e.markets || [])
+        .map((m) => ({
+          question: m.question || '',
+          condition_id: m.conditionId || m.condition_id || '',
+          yes: yesPrice(m),
+          volume: m.volume ?? 0,
+          v24: m.volume24hr ?? 0,
+        }))
+        .filter((m) => m.condition_id)
+      if (all.length === 0) return []
+      const live = all.filter((m) => Number.isFinite(m.yes) && m.yes > 0.05 && m.yes < 0.95)
+      const pool = live.length > 0 ? live : all
+      return pool.sort((a, b) => b.v24 - a.v24).slice(0, 3)
     }
 
     function lsGet(key, fallback) {
@@ -182,6 +202,7 @@ window.__ModuleLoader__.load({
               condition_id: m.conditionId || m.condition_id || '',
               yes: yesPrice(m),
               volume: m.volume ?? 0,
+              v24: m.volume24hr ?? 0,
             })).filter((m) => m.condition_id),
           }))
           setState({ status: 'ok', events, error: null, at: new Date() })
@@ -191,14 +212,33 @@ window.__ModuleLoader__.load({
         }
       }, [])
 
-      // 开 + 有词：首搜 + 30s 轮询（列表态）
+      // 默认界面：24h 成交量排序的活跃事件（热门榜），打开即见，无需搜索
+      const trending = useCallback(async (signal) => {
+        setState((s) => ({ ...s, status: 'loading', error: null }))
+        try {
+          const data = await fetchJson(`${GAMMA}/events?limit=${TREND_LIMIT}&active=true&closed=false&order=volume24hr&ascending=false`)
+          if (signal && signal.aborted) return
+          const events = (Array.isArray(data) ? data : []).map((e) => ({
+            title: e.title || '',
+            v24: e.volume24hr ?? 0,
+            markets: eventMarkets(e),
+          })).filter((e) => e.markets.length > 0)
+          setState({ status: 'ok', events, error: null, at: new Date() })
+        } catch (err) {
+          if (signal && signal.aborted) return
+          setState((s) => ({ ...s, status: 'error', error: String((err && err.message) || err) }))
+        }
+      }, [])
+
+      // 打开即加载：有搜索词走搜索，没有走热门榜；均 30s 轮询
       useEffect(() => {
-        if (!open || !query) return
+        if (!open) return
         const ac = new AbortController()
-        search(query, ac.signal)
-        const timer = setInterval(() => search(query, ac.signal), LIST_POLL_MS)
+        const load = () => (query ? search(query, ac.signal) : trending(ac.signal))
+        load()
+        const timer = setInterval(load, LIST_POLL_MS)
         return () => { ac.abort(); clearInterval(timer) }
-      }, [open, query, search])
+      }, [open, query, search, trending])
 
       const toggle = () => {
         setOpen((v) => { lsSet(LS_OPEN, v ? '0' : '1'); return !v })
@@ -206,9 +246,13 @@ window.__ModuleLoader__.load({
       const submit = (e) => {
         e.preventDefault()
         const q = input.trim()
-        if (!q) return
-        setQuery(q)
         setDetail(null)
+        if (!q) {
+          setQuery('')
+          lsSet(LS_QUERY, '')
+          return
+        }
+        setQuery(q)
         lsSet(LS_QUERY, q)
       }
 
@@ -222,12 +266,19 @@ window.__ModuleLoader__.load({
 
       return h('div', { className: 'dsh-poly-panel' },
         h('div', { className: 'dsh-poly-header' },
-          h('span', null, 'Polymarket 行情'),
-          h('button', { className: 'dsh-poly-close', onClick: toggle, title: '收起' }, '›'),
+          h('span', { className: 'dsh-poly-mode' }, query ? '#' + query : '🔥 热门榜'),
+          h('span', { className: 'dsh-poly-header-r' },
+            query
+              ? h('button', {
+                  className: 'dsh-poly-clear', title: '清除搜索，回到热门榜',
+                  onClick: () => { setQuery(''); setInput(''); lsSet(LS_QUERY, ''); setDetail(null) },
+                }, '✕')
+              : null,
+            h('button', { className: 'dsh-poly-close', onClick: toggle, title: '收起' }, '›')),
         ),
         h('form', { className: 'dsh-poly-search', onSubmit: submit },
           h('input', {
-            type: 'text', value: input, placeholder: '搜索主题，如 2026 midterm…',
+            type: 'text', value: input, placeholder: '搜索主题；清空回车回热门…',
             onChange: (e) => setInput(e.target.value),
             'aria-label': 'Polymarket 搜索',
           }),
@@ -236,13 +287,14 @@ window.__ModuleLoader__.load({
         detail
           ? h(MarketDetail, { market: detail, onBack: () => setDetail(null) })
           : h('div', { className: 'dsh-poly-list' },
-              state.status === 'idle' ? h('div', { className: 'dsh-poly-loading' }, '输入关键词开始查询行情') : null,
-              state.status === 'loading' && state.events.length === 0 ? h('div', { className: 'dsh-poly-loading' }, '查询中…') : null,
+              state.status === 'loading' && state.events.length === 0 ? h('div', { className: 'dsh-poly-loading' }, '加载中…') : null,
               state.status === 'error' ? h('div', { className: 'dsh-poly-err' }, '行情加载失败：' + state.error + '（受限网络需系统代理）') : null,
               state.status === 'ok' && state.events.length === 0 ? h('div', { className: 'dsh-poly-loading' }, '无结果') : null,
               state.events.map((ev, i) =>
                 h('div', { className: 'dsh-poly-event', key: i },
-                  ev.title ? h('div', { className: 'dsh-poly-event-title' }, ev.title) : null,
+                  h('div', { className: 'dsh-poly-event-title' },
+                    ev.title || '—',
+                    ev.v24 ? h('span', { className: 'dsh-poly-v24', title: '24h 成交量' }, '24h ' + fmtVol(ev.v24)) : null),
                   ev.markets.map((m, j) =>
                     h('button', {
                       className: 'dsh-poly-item', key: j,
@@ -252,14 +304,15 @@ window.__ModuleLoader__.load({
                       h('div', { className: 'dsh-poly-q' }, m.question),
                       h('div', { className: 'dsh-poly-item-foot' },
                         h('span', { className: 'dsh-poly-yes' }, 'Yes ' + fmtPct(m.yes)),
-                        h('span', { className: 'dsh-poly-vol' }, '量 ' + fmtVol(m.volume) + ' · 查看详情 ›'),
+                        h('span', { className: 'dsh-poly-vol' },
+                          (m.v24 ? '24h ' + fmtVol(m.v24) : '量 ' + fmtVol(m.volume)) + ' · 详情 ›'),
                       ),
                     ),
                   ),
                 ),
               ),
               state.at ? h('div', { className: 'dsh-poly-vol', style: { padding: '4px 2px' } },
-                `#${query} · 30s 自动刷新`) : null,
+                (query ? '#' + query : '热门榜') + ' · 30s 自动刷新') : null,
             ),
       )
     }
@@ -276,7 +329,12 @@ window.__ModuleLoader__.load({
   border-left:1px solid var(--color-border-1,#2a2e37);
   font:13px/1.5 system-ui,-apple-system,sans-serif;
   box-shadow:-8px 0 24px rgba(0,0,0,.35);}
-.dsh-poly-header{padding:10px 12px;font-weight:600;border-bottom:1px solid var(--color-border-1,#2a2e37);display:flex;align-items:center;justify-content:space-between;}
+.dsh-poly-header{padding:10px 12px;font-weight:600;border-bottom:1px solid var(--color-border-1,#2a2e37);display:flex;align-items:center;justify-content:space-between;gap:8px;}
+.dsh-poly-mode{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.dsh-poly-header-r{display:flex;align-items:center;gap:4px;flex-shrink:0;}
+.dsh-poly-clear{background:none;border:none;color:inherit;font-size:13px;cursor:pointer;padding:0 4px;opacity:.7;}
+.dsh-poly-clear:hover{opacity:1;}
+.dsh-poly-v24{margin-left:8px;font-size:10px;font-weight:400;opacity:.55;font-variant-numeric:tabular-nums;}
 .dsh-poly-close{background:none;border:none;color:inherit;font-size:18px;cursor:pointer;padding:0 4px;opacity:.7;}
 .dsh-poly-close:hover{opacity:1;}
 .dsh-poly-fab{position:fixed;top:64px;right:0;z-index:50;pointer-events:auto;cursor:pointer;
