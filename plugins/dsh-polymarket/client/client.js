@@ -98,10 +98,12 @@ window.__ModuleLoader__.load({
             question: m.question || '',
             condition_id: m.conditionId || m.condition_id || '',
             slug: m.slug || '',
+            img: m.image || e.icon || '',
             label0: s.l0,
             label1: s.l1,
             p0: s.p0,
             p1: s.p1,
+            tid0: s.tid0,
             yes: s.p0,
             volume: m.volume ?? 0,
             v24: m.volume24hr ?? 0,
@@ -303,15 +305,19 @@ window.__ModuleLoader__.load({
             state.at ? h('span', { className: 'dsh-poly-vol', title: state.at.toLocaleString() },
               `${state.at.getHours().toString().padStart(2, '0')}:${state.at.getMinutes().toString().padStart(2, '0')} 更新`) : null),
         ),
+        market.img
+          ? h('div', { className: 'dsh-poly-banner' },
+              h('img', { src: market.img, alt: '', loading: 'lazy' }))
+          : null,
         h('div', { className: 'dsh-poly-q' }, market.question),
+        state.status === 'ok' && state.mid != null ? h('div', { className: 'dsh-poly-hero' },
+          h('span', { className: 'dsh-poly-hero-num' }, fmtPct(state.mid)),
+          h('span', { className: 'dsh-poly-hero-label' }, cut(market.label0 || 'Yes', 18) + ' · ' +
+            (market.label1 ? cut(market.label1, 18) + ' ' + fmtPct(Number.isFinite(state.mid) ? 1 - state.mid : NaN) : '')),
+        ) : null,
         state.status === 'loading' && !state.mid ? h('div', { className: 'dsh-poly-loading' }, '加载详情…') : null,
         state.status === 'error' ? h('div', { className: 'dsh-poly-err' }, '详情加载失败：' + state.error) : null,
         state.status === 'ok' ? h('div', null,
-          h('div', { className: 'dsh-poly-sides dsh-poly-sides-detail' },
-            h('span', { className: 'dsh-poly-yes' }, cut(market.label0 || 'Yes', 16) + ' ' + fmtPct(state.mid)),
-            market.label1 && Number.isFinite(market.p1)
-              ? h('span', { className: 'dsh-poly-side1' }, cut(market.label1, 16) + ' ' + fmtPct(market.p1)) : null,
-          ),
           h('div', { className: 'dsh-poly-bar dsh-poly-bar-detail' },
             h('div', {
               className: 'dsh-poly-bar-fill',
@@ -363,6 +369,35 @@ window.__ModuleLoader__.load({
         } catch { return [] }
       })
       const [watchQuotes, setWatchQuotes] = useState({})
+      // 实时中间价（CLOB POST /midpoints 批量；Gamma outcomePrices 是缓存价会滞后官网）
+      const [liveMids, setLiveMids] = useState({})
+
+      const refreshLive = useCallback(async (events, signal) => {
+        const tid2cid = new Map()
+        for (const ev of events || []) {
+          for (const m of ev.markets || []) if (m.tid0) tid2cid.set(m.tid0, m.condition_id)
+        }
+        for (const w of watch) if (w.tid0) tid2cid.set(w.tid0, w.condition_id)
+        if (tid2cid.size === 0) return
+        try {
+          const res = await fetch(`${CLOB}/midpoints`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify([...tid2cid.keys()].slice(0, 60).map((token_id) => ({ token_id }))),
+            signal: signal ?? AbortSignal.timeout(10000),
+          })
+          if (!res.ok) return
+          const data = await res.json()
+          const next = {}
+          for (const [tid, mid] of Object.entries(data || {})) {
+            const cid = tid2cid.get(tid)
+            const v = Number(mid)
+            if (cid != null && Number.isFinite(v)) next[cid] = v
+          }
+          if (signal && signal.aborted) return
+          setLiveMids(next)
+        } catch { /* 实时价拉取失败则保留 Gamma 缓存价展示 */ }
+      }, [watch])
 
       const watchIds = watch.map((m) => m.condition_id).join(',')
       const isWatched = (m) => watch.some((w) => w.condition_id === m.condition_id)
@@ -372,7 +407,7 @@ window.__ModuleLoader__.load({
             ? list.filter((w) => w.condition_id !== m.condition_id)
             : [...list, {
                 condition_id: m.condition_id, question: m.question || '', slug: m.slug || '',
-                label0: m.label0 || '', label1: m.label1 || '',
+                label0: m.label0 || '', label1: m.label1 || '', tid0: m.tid0 || '', img: m.img || '',
                 p0: Number.isFinite(m.p0) ? m.p0 : m.yes, p1: m.p1,
               }]
           lsSet(LS_WATCH, JSON.stringify(next))
@@ -389,13 +424,15 @@ window.__ModuleLoader__.load({
             const events = (data.events || []).map((e) => ({
             title: e.title || '',
             icon: e.icon || '',
+            img: e.image || e.icon || '',
             markets: (e.markets || []).map((m) => {
               const s = marketSides(m)
               return {
                 question: m.question || '',
                 condition_id: m.conditionId || m.condition_id || '',
                 slug: m.slug || '',
-                label0: s.l0, label1: s.l1, p0: s.p0, p1: s.p1,
+                img: m.image || e.icon || '',
+                label0: s.l0, label1: s.l1, p0: s.p0, p1: s.p1, tid0: s.tid0,
                 yes: s.p0,
                 volume: m.volume ?? 0,
                 v24: m.volume24hr ?? 0,
@@ -403,12 +440,13 @@ window.__ModuleLoader__.load({
               }
             }).filter((m) => m.condition_id && !m.closed),
           }))
+          refreshLive(events, signal)
           setState({ status: 'ok', events, error: null, at: new Date() })
         } catch (err) {
           if (signal && signal.aborted) return
           setState((s) => ({ ...s, status: 'error', error: String((err && err.message) || err) }))
         }
-      }, [])
+      }, [refreshLive])
 
       // 默认界面：24h 成交量排序的活跃事件（热门榜），打开即见，无需搜索
       const trending = useCallback(async (signal) => {
@@ -419,15 +457,17 @@ window.__ModuleLoader__.load({
           const events = (Array.isArray(data) ? data : []).map((e) => ({
             title: e.title || '',
             icon: e.icon || '',
+            img: e.image || e.icon || '',
             v24: e.volume24hr ?? 0,
             markets: eventMarkets(e),
           })).filter((e) => e.markets.length > 0)
+          refreshLive(events, signal)
           setState({ status: 'ok', events, error: null, at: new Date() })
         } catch (err) {
           if (signal && signal.aborted) return
           setState((s) => ({ ...s, status: 'error', error: String((err && err.message) || err) }))
         }
-      }, [])
+      }, [refreshLive])
 
       // 打开即加载：有搜索词走搜索，没有走热门榜；均 30s 轮询；自选价格同轮批量刷新
       useEffect(() => {
@@ -526,9 +566,11 @@ window.__ModuleLoader__.load({
         }, h(PolyIcon, { size: 13 }), ' 行情')
       }
 
-      // 市场卡片：真实双方标签 + 概率条；整卡点击进详情，右上角 ☆ 自选
+      // 市场卡片（官方风格）：缩略图 + 两行问题 + 大号品牌蓝概率；实时价优先
       const renderMarket = (m, key) => {
-        const p0 = Number.isFinite(m.p0) ? m.p0 : m.yes
+        const live = liveMids[m.condition_id]
+        const p0 = Number.isFinite(live) ? live : (Number.isFinite(m.p0) ? m.p0 : m.yes)
+        const p1 = Number.isFinite(live) ? 1 - live : m.p1
         const label0 = m.label0 || 'Yes'
         return h('div', {
           className: 'dsh-poly-item', key, role: 'button', tabIndex: 0,
@@ -536,17 +578,23 @@ window.__ModuleLoader__.load({
           onKeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDetail(m) } },
           title: m.condition_id,
         },
-          h('div', { className: 'dsh-poly-q' }, m.question),
-          h('div', { className: 'dsh-poly-sides' },
-            h('span', { className: 'dsh-poly-yes' }, cut(label0, 14) + ' ' + fmtPct(p0)),
-            m.label1 && Number.isFinite(m.p1)
-              ? h('span', { className: 'dsh-poly-side1' }, cut(m.label1, 14) + ' ' + fmtPct(m.p1)) : null,
-            h('button', {
-              className: 'dsh-poly-star' + (isWatched(m) ? ' on' : ''),
-              title: isWatched(m) ? '取消自选' : '加入自选',
-              onClick: (e) => { e.stopPropagation(); toggleWatch(m) },
-            }, isWatched(m) ? '★' : '☆'),
+          m.img ? h('img', { className: 'dsh-poly-thumb', src: m.img, alt: '', loading: 'lazy' }) : null,
+          h('div', { className: 'dsh-poly-item-main' },
+            h('div', { className: 'dsh-poly-q2' }, m.question),
+            h('div', { className: 'dsh-poly-item-meta' },
+              h('span', { className: 'dsh-poly-vol' }, m.v24 ? '24h ' + fmtVol(m.v24) : '量 ' + fmtVol(m.volume)),
+              m.label1 && Number.isFinite(p1)
+                ? h('span', { className: 'dsh-poly-side1' }, cut(m.label1, 10) + ' ' + fmtPct(p1)) : null,
+              h('button', {
+                className: 'dsh-poly-star' + (isWatched(m) ? ' on' : ''),
+                title: isWatched(m) ? '取消自选' : '加入自选',
+                onClick: (e) => { e.stopPropagation(); toggleWatch(m) },
+              }, isWatched(m) ? '★' : '☆'),
+            ),
           ),
+          h('div', { className: 'dsh-poly-big' },
+            h('span', { className: 'dsh-poly-big-num' }, fmtPct(p0)),
+            h('span', { className: 'dsh-poly-big-label' }, cut(label0, 12))),
           h('div', { className: 'dsh-poly-bar', title: cut(label0, 20) + ' 概率' },
             h('div', {
               className: 'dsh-poly-bar-fill',
@@ -603,10 +651,17 @@ window.__ModuleLoader__.load({
                 : null,
               state.events.map((ev, i) =>
                 h('div', { className: 'dsh-poly-event', key: i },
-                  h('div', { className: 'dsh-poly-event-title' },
-                    ev.icon ? h('img', { className: 'dsh-poly-eicon', src: ev.icon, alt: '', loading: 'lazy' }) : null,
-                    h('span', { className: 'dsh-poly-etitle' }, ev.title || '—'),
-                    ev.v24 ? h('span', { className: 'dsh-poly-v24', title: '24h 成交量' }, '24h ' + fmtVol(ev.v24)) : null),
+                  ev.img
+                    ? h('div', { className: 'dsh-poly-event-banner' },
+                        h('img', { src: ev.img, alt: '', loading: 'lazy' }),
+                        h('div', { className: 'dsh-poly-event-banner-shade' }),
+                        h('div', { className: 'dsh-poly-event-banner-title' },
+                          h('span', { className: 'dsh-poly-etitle' }, ev.title || '—'),
+                          ev.v24 ? h('span', { className: 'dsh-poly-v24' }, '24h ' + fmtVol(ev.v24)) : null))
+                    : h('div', { className: 'dsh-poly-event-title' },
+                        ev.icon ? h('img', { className: 'dsh-poly-eicon', src: ev.icon, alt: '', loading: 'lazy' }) : null,
+                        h('span', { className: 'dsh-poly-etitle' }, ev.title || '—'),
+                        ev.v24 ? h('span', { className: 'dsh-poly-v24', title: '24h 成交量' }, '24h ' + fmtVol(ev.v24)) : null),
                   ev.markets.map((m, j) => renderMarket(m, i + '-' + j)),
                 ),
               ),
@@ -645,34 +700,47 @@ window.__ModuleLoader__.load({
 .dsh-poly-search{display:flex;gap:6px;padding:8px;border-bottom:1px solid var(--color-border-1,#2a2e37);}
 .dsh-poly-search input{flex:1;min-width:0;background:var(--color-bg-2,#1b1e26);color:inherit;
   border:1px solid var(--color-border-1,#2a2e37);border-radius:6px;padding:6px 8px;font:inherit;outline:none;}
-.dsh-poly-search input:focus{border-color:var(--dsh-poly-accent,#3b82f6);}
-.dsh-poly-search button{background:var(--dsh-poly-accent,#3b82f6);color:#fff;border:none;border-radius:6px;padding:6px 10px;cursor:pointer;font:inherit;}
+.dsh-poly-search input:focus{border-color:var(--dsh-poly-accent,#1652F0);}
+.dsh-poly-search button{background:var(--dsh-poly-accent,#1652F0);color:#fff;border:none;border-radius:6px;padding:6px 10px;cursor:pointer;font:inherit;}
 .dsh-poly-list{overflow-y:auto;flex:1;padding:8px;}
-.dsh-poly-event{margin-bottom:10px;}
-.dsh-poly-event-title{font-weight:600;opacity:.85;margin-bottom:4px;}
-.dsh-poly-item{display:block;width:100%;text-align:left;padding:8px;border-radius:8px;margin-bottom:6px;
+.dsh-poly-event{margin-bottom:12px;}
+.dsh-poly-item{display:grid;grid-template-columns:48px minmax(0,1fr) auto;gap:6px 8px;align-items:center;
+  padding:8px;border-radius:10px;margin-bottom:6px;
   background:var(--color-bg-2,#1b1e26);border:1px solid var(--color-border-1,#2a2e37);
   color:inherit;font:inherit;cursor:pointer;}
-.dsh-poly-item:hover{border-color:var(--dsh-poly-accent,#3b82f6);}
-.dsh-poly-q{margin-bottom:4px;}
-.dsh-poly-sides{display:flex;align-items:baseline;gap:8px;margin-bottom:6px;}
-.dsh-poly-sides .dsh-poly-star{margin-left:auto;}
+.dsh-poly-item:hover{border-color:var(--dsh-poly-accent,#1652F0);}
+.dsh-poly-thumb{width:48px;height:48px;border-radius:8px;object-fit:cover;}
+.dsh-poly-item-main{display:flex;flex-direction:column;gap:3px;min-width:0;}
+.dsh-poly-q2{font-size:12.5px;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.dsh-poly-item-meta{display:flex;align-items:center;gap:6px;min-width:0;}
+.dsh-poly-item-meta .dsh-poly-star{margin-left:auto;}
+.dsh-poly-big{display:flex;flex-direction:column;align-items:flex-end;line-height:1;}
+.dsh-poly-big-num{font-size:22px;font-weight:700;color:var(--dsh-poly-accent,#1652F0);font-variant-numeric:tabular-nums;}
+.dsh-poly-big-label{font-size:9px;opacity:.6;margin-top:3px;max-width:84px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .dsh-poly-side1{opacity:.75;font-variant-numeric:tabular-nums;font-size:12px;}
-.dsh-poly-sides-detail{font-size:14px;}
 .dsh-poly-bar{height:6px;border-radius:3px;background:var(--color-bg-1,#14161c);
-  border:1px solid var(--color-border-1,#2a2e37);overflow:hidden;}
+  border:1px solid var(--color-border-1,#2a2e37);overflow:hidden;grid-column:1/-1;}
 .dsh-poly-bar-fill{height:100%;border-radius:2px;
-  background:linear-gradient(90deg,var(--dsh-poly-accent,#3b82f6),var(--dsh-poly-up,#34d399));
+  background:linear-gradient(90deg,var(--dsh-poly-accent,#1652F0),var(--dsh-poly-up,#34d399));
   transition:width .4s ease;}
 .dsh-poly-bar-detail{height:10px;margin-bottom:8px;}
+.dsh-poly-event-banner{position:relative;height:64px;border-radius:10px;overflow:hidden;margin-bottom:6px;}
+.dsh-poly-event-banner img{width:100%;height:100%;object-fit:cover;display:block;}
+.dsh-poly-event-banner-shade{position:absolute;inset:0;background:linear-gradient(180deg,transparent 25%,rgba(0,0,0,.82));}
+.dsh-poly-event-banner-title{position:absolute;left:8px;right:8px;bottom:6px;display:flex;justify-content:space-between;align-items:baseline;gap:8px;color:#fff;font-weight:600;font-size:12.5px;}
+.dsh-poly-q{font-size:14px;font-weight:600;line-height:1.4;margin-bottom:2px;}
 .dsh-poly-event-title{font-weight:600;opacity:.85;margin-bottom:4px;display:flex;align-items:center;gap:6px;}
 .dsh-poly-eicon{width:18px;height:18px;border-radius:4px;object-fit:cover;flex-shrink:0;}
 .dsh-poly-etitle{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}
-.dsh-poly-yes{color:var(--dsh-poly-up,#34d399);font-weight:600;font-variant-numeric:tabular-nums;}
+.dsh-poly-banner{height:110px;border-radius:10px;overflow:hidden;margin-bottom:8px;flex-shrink:0;}
+.dsh-poly-banner img{width:100%;height:100%;object-fit:cover;display:block;}
+.dsh-poly-hero{display:flex;align-items:baseline;gap:10px;margin:2px 0 6px;flex-wrap:wrap;}
+.dsh-poly-hero-num{font-size:32px;font-weight:800;color:var(--dsh-poly-accent,#1652F0);font-variant-numeric:tabular-nums;line-height:1;}
+.dsh-poly-hero-label{font-size:12px;opacity:.75;}
 .dsh-poly-vol{opacity:.6;font-size:11px;font-variant-numeric:tabular-nums;}
 .dsh-poly-detail{display:flex;flex-direction:column;flex:1;overflow-y:auto;padding:8px 10px;}
 .dsh-poly-detail-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
-.dsh-poly-back{background:none;border:none;color:var(--dsh-poly-accent,#3b82f6);cursor:pointer;font:inherit;padding:2px 4px;}
+.dsh-poly-back{background:none;border:none;color:var(--dsh-poly-accent,#1652F0);cursor:pointer;font:inherit;padding:2px 4px;}
 .dsh-poly-mid{margin-bottom:8px;}
 .dsh-poly-spark-wrap{background:var(--color-bg-2,#1b1e26);border:1px solid var(--color-border-1,#2a2e37);border-radius:8px;padding:8px;}
 .dsh-poly-spark{display:block;width:100%;height:auto;color:var(--color-text-1,#e6e6e6);}
@@ -692,17 +760,17 @@ window.__ModuleLoader__.load({
   border:1px solid var(--color-border-1,#2a2e37);border-radius:6px;
   font:11px/1.6 system-ui,sans-serif;cursor:pointer;padding:2px 0;opacity:.7;}
 .dsh-poly-win button:hover{opacity:1;}
-.dsh-poly-win button.on{border-color:var(--dsh-poly-accent,#3b82f6);color:var(--dsh-poly-accent,#3b82f6);opacity:1;font-weight:600;}
-.dsh-poly-link{display:inline-block;margin-top:8px;color:var(--dsh-poly-accent,#3b82f6);
+.dsh-poly-win button.on{border-color:var(--dsh-poly-accent,#1652F0);color:var(--dsh-poly-accent,#1652F0);opacity:1;font-weight:600;}
+.dsh-poly-link{display:inline-block;margin-top:8px;color:var(--dsh-poly-accent,#1652F0);
   text-decoration:none;font-size:12px;}
 .dsh-poly-link:hover{text-decoration:underline;}
 .dsh-poly-detail-head-r{display:flex;align-items:center;gap:6px;}
 .dsh-poly-drag{position:absolute;left:-3px;top:0;bottom:0;width:7px;cursor:col-resize;z-index:2;}
-.dsh-poly-drag:hover,.dsh-poly-drag:active{background:linear-gradient(90deg,transparent,var(--dsh-poly-accent,#3b82f6),transparent);opacity:.6;}
+.dsh-poly-drag:hover,.dsh-poly-drag:active{background:linear-gradient(90deg,transparent,var(--dsh-poly-accent,#1652F0),transparent);opacity:.6;}
 .dsh-poly-follow{background:none;border:none;cursor:pointer;font-size:13px;line-height:1;padding:2px;opacity:.35;}
 .dsh-poly-follow:hover{opacity:.8;}
 .dsh-poly-follow.on{opacity:1;}
-.dsh-poly-follow.on::after{content:'跟随';font-size:9px;color:var(--dsh-poly-accent,#3b82f6);margin-left:3px;}
+.dsh-poly-follow.on::after{content:'跟随';font-size:9px;color:var(--dsh-poly-accent,#1652F0);margin-left:3px;}
 `
       const el = document.createElement('style')
       el.id = 'dsh-polymarket-style'
