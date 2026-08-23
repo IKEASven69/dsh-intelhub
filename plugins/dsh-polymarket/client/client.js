@@ -53,6 +53,27 @@ window.__ModuleLoader__.load({
       }
     }
 
+    // 解析一个市场的双方标签与价格（outcomes 可能是 JSON 字符串或数组；
+    // 体育市场是队名而非 Yes/No——显示必须用真实标签）。
+    function marketSides(m) {
+      const parse = (v) => {
+        if (typeof v === 'string') { try { return JSON.parse(v) } catch { return [] } }
+        return Array.isArray(v) ? v : []
+      }
+      const labels = parse(m.outcomes).map((x) => String(x))
+      const prices = parse(m.outcomePrices).map((x) => Number(x))
+      const l0 = labels[0] || ''
+      const l1 = labels[1] || ''
+      return {
+        l0, l1,
+        p0: Number.isFinite(prices[0]) ? prices[0] : NaN,
+        p1: Number.isFinite(prices[1]) ? prices[1] : NaN,
+        closed: m.closed === true,
+      }
+    }
+
+    const cut = (s, n) => (s && s.length > n ? s.slice(0, n) + '…' : s || '')
+
     function fmtPct(v) {
       const n = Number(v)
       return Number.isFinite(n) ? `${Math.round(n * 100)}%` : '?'
@@ -67,23 +88,29 @@ window.__ModuleLoader__.load({
       return String(Math.round(n))
     }
 
-    // 事件内挑「值得看」的市场：按 24h 量降序取前 3，跳过近似已结算
-    // （Yes <5% 或 >95%）的；全都结算了就回退头名——热门榜头名常是已打完的局。
+    // 事件内挑「值得看」的市场：跳过已结算（closed 或价格 <2%/>98%），
+    // 按 24h 量降序取前 3；事件全死返回 []（整个事件不进热门榜）。
     function eventMarkets(e) {
       const all = (e.markets || [])
-        .map((m) => ({
-          question: m.question || '',
-          condition_id: m.conditionId || m.condition_id || '',
-          slug: m.slug || '',
-          yes: yesPrice(m),
-          volume: m.volume ?? 0,
-          v24: m.volume24hr ?? 0,
-        }))
+        .map((m) => {
+          const s = marketSides(m)
+          return {
+            question: m.question || '',
+            condition_id: m.conditionId || m.condition_id || '',
+            slug: m.slug || '',
+            label0: s.l0,
+            label1: s.l1,
+            p0: s.p0,
+            p1: s.p1,
+            yes: s.p0,
+            volume: m.volume ?? 0,
+            v24: m.volume24hr ?? 0,
+            closed: s.closed,
+          }
+        })
         .filter((m) => m.condition_id)
-      if (all.length === 0) return []
-      const live = all.filter((m) => Number.isFinite(m.yes) && m.yes > 0.05 && m.yes < 0.95)
-      const pool = live.length > 0 ? live : all
-      return pool.sort((a, b) => b.v24 - a.v24).slice(0, 3)
+      const live = all.filter((m) => !m.closed && Number.isFinite(m.p0) && m.p0 > 0.02 && m.p0 < 0.98)
+      return live.sort((a, b) => b.v24 - a.v24).slice(0, 3)
     }
 
     function lsGet(key, fallback) {
@@ -226,12 +253,12 @@ window.__ModuleLoader__.load({
       const load = useCallback(async (signal) => {
         try {
           setState((s) => ({ ...s, status: 'loading', error: null }))
-          // conditionId → yes 侧 token_id（CLOB /markets/{cid}）
+          // conditionId → 第一 outcome 的 token（体育等市场没有 yes 侧，用 tokens[0]）
           const meta = await fetchJson(`${CLOB}/markets/${encodeURIComponent(market.condition_id)}`)
           const tokens = Array.isArray(meta && meta.tokens) ? meta.tokens : []
-          const yes = tokens.find((t) => String(t.outcome || '').toLowerCase() === 'yes')
-          if (!yes) throw new Error('该市场无 yes 侧 token（可能已结算/关闭）')
-          const tid = yes.token_id
+          const tk = tokens[0]
+          if (!tk) throw new Error('该市场无 token（可能已结算/关闭）')
+          const tid = tk.token_id
           const [mid, hist, book] = await Promise.all([
             fetchJson(`${CLOB}/midpoint?token_id=${tid}`).catch(() => null),
             fetchJson(`${CLOB}/prices-history?market=${tid}&interval=${win}&fidelity=${WIN_FID[win]}`).catch(() => null),
@@ -280,10 +307,18 @@ window.__ModuleLoader__.load({
         state.status === 'loading' && !state.mid ? h('div', { className: 'dsh-poly-loading' }, '加载详情…') : null,
         state.status === 'error' ? h('div', { className: 'dsh-poly-err' }, '详情加载失败：' + state.error) : null,
         state.status === 'ok' ? h('div', null,
-          h('div', { className: 'dsh-poly-mid' },
-            h('span', { className: 'dsh-poly-yes' }, 'Yes 中间价 ' + fmtPct(state.mid)),
-            state.mid != null ? h('span', { className: 'dsh-poly-vol' }, ` 买一 ${fmtPct(bestBid)} · 卖一 ${fmtPct(bestAsk)} · 盘口 ${bidDepth}/${askDepth} 档`) : null,
+          h('div', { className: 'dsh-poly-sides dsh-poly-sides-detail' },
+            h('span', { className: 'dsh-poly-yes' }, cut(market.label0 || 'Yes', 16) + ' ' + fmtPct(state.mid)),
+            market.label1 && Number.isFinite(market.p1)
+              ? h('span', { className: 'dsh-poly-side1' }, cut(market.label1, 16) + ' ' + fmtPct(market.p1)) : null,
           ),
+          h('div', { className: 'dsh-poly-bar dsh-poly-bar-detail' },
+            h('div', {
+              className: 'dsh-poly-bar-fill',
+              style: { width: (state.mid != null && Number.isFinite(state.mid) ? Math.max(0, Math.min(1, state.mid)) * 100 : 0) + '%' },
+            })),
+          h('div', { className: 'dsh-poly-vol' },
+            state.mid != null ? `中间价 · 买一 ${fmtPct(bestBid)} · 卖一 ${fmtPct(bestAsk)} · 盘口 ${bidDepth}/${askDepth} 档` : ''),
           h('div', { className: 'dsh-poly-win', role: 'tablist', 'aria-label': '走势时间窗' },
             Object.keys(WIN_FID).map((w) =>
               h('button', {
@@ -335,7 +370,11 @@ window.__ModuleLoader__.load({
         setWatch((list) => {
           const next = isWatched(m)
             ? list.filter((w) => w.condition_id !== m.condition_id)
-            : [...list, { condition_id: m.condition_id, question: m.question || '', slug: m.slug || '' }]
+            : [...list, {
+                condition_id: m.condition_id, question: m.question || '', slug: m.slug || '',
+                label0: m.label0 || '', label1: m.label1 || '',
+                p0: Number.isFinite(m.p0) ? m.p0 : m.yes, p1: m.p1,
+              }]
           lsSet(LS_WATCH, JSON.stringify(next))
           return next
         })
@@ -349,14 +388,20 @@ window.__ModuleLoader__.load({
           if (signal && signal.aborted) return
             const events = (data.events || []).map((e) => ({
             title: e.title || '',
-            markets: (e.markets || []).map((m) => ({
-              question: m.question || '',
-              condition_id: m.conditionId || m.condition_id || '',
-              slug: m.slug || '',
-              yes: yesPrice(m),
-              volume: m.volume ?? 0,
-              v24: m.volume24hr ?? 0,
-            })).filter((m) => m.condition_id),
+            icon: e.icon || '',
+            markets: (e.markets || []).map((m) => {
+              const s = marketSides(m)
+              return {
+                question: m.question || '',
+                condition_id: m.conditionId || m.condition_id || '',
+                slug: m.slug || '',
+                label0: s.l0, label1: s.l1, p0: s.p0, p1: s.p1,
+                yes: s.p0,
+                volume: m.volume ?? 0,
+                v24: m.volume24hr ?? 0,
+                closed: s.closed,
+              }
+            }).filter((m) => m.condition_id && !m.closed),
           }))
           setState({ status: 'ok', events, error: null, at: new Date() })
         } catch (err) {
@@ -373,6 +418,7 @@ window.__ModuleLoader__.load({
           if (signal && signal.aborted) return
           const events = (Array.isArray(data) ? data : []).map((e) => ({
             title: e.title || '',
+            icon: e.icon || '',
             v24: e.volume24hr ?? 0,
             markets: eventMarkets(e),
           })).filter((e) => e.markets.length > 0)
@@ -394,7 +440,10 @@ window.__ModuleLoader__.load({
             if (ac.signal.aborted) return
             const quotes = {}
             for (const m of Array.isArray(data) ? data : []) {
-              if (m && m.conditionId) quotes[m.conditionId] = yesPrice(m)
+              if (m && m.conditionId) {
+                const s = marketSides(m)
+                quotes[m.conditionId] = { p0: s.p0, p1: s.p1 }
+              }
             }
             setWatchQuotes(quotes)
           } catch { /* 自选刷新失败不打断主列表 */ }
@@ -477,27 +526,34 @@ window.__ModuleLoader__.load({
         }, h(PolyIcon, { size: 13 }), ' 行情')
       }
 
-      // 市场卡片：整卡点击进详情，右上角 ☆ 自选（stopPropagation 防误触）
-      const renderMarket = (m, key) =>
-        h('div', {
+      // 市场卡片：真实双方标签 + 概率条；整卡点击进详情，右上角 ☆ 自选
+      const renderMarket = (m, key) => {
+        const p0 = Number.isFinite(m.p0) ? m.p0 : m.yes
+        const label0 = m.label0 || 'Yes'
+        return h('div', {
           className: 'dsh-poly-item', key, role: 'button', tabIndex: 0,
           onClick: () => setDetail(m),
           onKeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDetail(m) } },
           title: m.condition_id,
         },
           h('div', { className: 'dsh-poly-q' }, m.question),
-          h('div', { className: 'dsh-poly-item-foot' },
-            h('span', { className: 'dsh-poly-yes' }, 'Yes ' + fmtPct(m.yes)),
-            h('span', { className: 'dsh-poly-item-foot-r' },
-              h('span', { className: 'dsh-poly-vol' }, m.v24 ? '24h ' + fmtVol(m.v24) : '量 ' + fmtVol(m.volume)),
-              h('button', {
-                className: 'dsh-poly-star' + (isWatched(m) ? ' on' : ''),
-                title: isWatched(m) ? '取消自选' : '加入自选',
-                onClick: (e) => { e.stopPropagation(); toggleWatch(m) },
-              }, isWatched(m) ? '★' : '☆'),
-            ),
+          h('div', { className: 'dsh-poly-sides' },
+            h('span', { className: 'dsh-poly-yes' }, cut(label0, 14) + ' ' + fmtPct(p0)),
+            m.label1 && Number.isFinite(m.p1)
+              ? h('span', { className: 'dsh-poly-side1' }, cut(m.label1, 14) + ' ' + fmtPct(m.p1)) : null,
+            h('button', {
+              className: 'dsh-poly-star' + (isWatched(m) ? ' on' : ''),
+              title: isWatched(m) ? '取消自选' : '加入自选',
+              onClick: (e) => { e.stopPropagation(); toggleWatch(m) },
+            }, isWatched(m) ? '★' : '☆'),
           ),
+          h('div', { className: 'dsh-poly-bar', title: cut(label0, 20) + ' 概率' },
+            h('div', {
+              className: 'dsh-poly-bar-fill',
+              style: { width: (Number.isFinite(p0) ? Math.max(0, Math.min(1, p0)) * 100 : 0) + '%' },
+            })),
         )
+      }
 
       return h('div', { className: 'dsh-poly-panel', style: { width: width + 'px' } },
         h('div', { className: 'dsh-poly-drag', onMouseDown: startDrag, title: '拖拽调整宽度' }),
@@ -540,13 +596,16 @@ window.__ModuleLoader__.load({
               watch.length > 0
                 ? h('div', { className: 'dsh-poly-watch' },
                     h('div', { className: 'dsh-poly-watch-title' }, '★ 自选 · 30s 刷新'),
-                    watch.map((m, i) =>
-                      renderMarket({ ...m, yes: watchQuotes[m.condition_id] ?? m.yes }, 'w' + i)))
+                    watch.map((m, i) => {
+                      const q = watchQuotes[m.condition_id] || {}
+                      return renderMarket({ ...m, p0: Number.isFinite(q.p0) ? q.p0 : m.p0, p1: Number.isFinite(q.p1) ? q.p1 : m.p1 }, 'w' + i)
+                    }))
                 : null,
               state.events.map((ev, i) =>
                 h('div', { className: 'dsh-poly-event', key: i },
                   h('div', { className: 'dsh-poly-event-title' },
-                    ev.title || '—',
+                    ev.icon ? h('img', { className: 'dsh-poly-eicon', src: ev.icon, alt: '', loading: 'lazy' }) : null,
+                    h('span', { className: 'dsh-poly-etitle' }, ev.title || '—'),
                     ev.v24 ? h('span', { className: 'dsh-poly-v24', title: '24h 成交量' }, '24h ' + fmtVol(ev.v24)) : null),
                   ev.markets.map((m, j) => renderMarket(m, i + '-' + j)),
                 ),
@@ -596,7 +655,19 @@ window.__ModuleLoader__.load({
   color:inherit;font:inherit;cursor:pointer;}
 .dsh-poly-item:hover{border-color:var(--dsh-poly-accent,#3b82f6);}
 .dsh-poly-q{margin-bottom:4px;}
-.dsh-poly-item-foot{display:flex;justify-content:space-between;align-items:baseline;gap:8px;}
+.dsh-poly-sides{display:flex;align-items:baseline;gap:8px;margin-bottom:6px;}
+.dsh-poly-sides .dsh-poly-star{margin-left:auto;}
+.dsh-poly-side1{opacity:.75;font-variant-numeric:tabular-nums;font-size:12px;}
+.dsh-poly-sides-detail{font-size:14px;}
+.dsh-poly-bar{height:6px;border-radius:3px;background:var(--color-bg-1,#14161c);
+  border:1px solid var(--color-border-1,#2a2e37);overflow:hidden;}
+.dsh-poly-bar-fill{height:100%;border-radius:2px;
+  background:linear-gradient(90deg,var(--dsh-poly-accent,#3b82f6),var(--dsh-poly-up,#34d399));
+  transition:width .4s ease;}
+.dsh-poly-bar-detail{height:10px;margin-bottom:8px;}
+.dsh-poly-event-title{font-weight:600;opacity:.85;margin-bottom:4px;display:flex;align-items:center;gap:6px;}
+.dsh-poly-eicon{width:18px;height:18px;border-radius:4px;object-fit:cover;flex-shrink:0;}
+.dsh-poly-etitle{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}
 .dsh-poly-yes{color:var(--dsh-poly-up,#34d399);font-weight:600;font-variant-numeric:tabular-nums;}
 .dsh-poly-vol{opacity:.6;font-size:11px;font-variant-numeric:tabular-nums;}
 .dsh-poly-detail{display:flex;flex-direction:column;flex:1;overflow-y:auto;padding:8px 10px;}
