@@ -24,7 +24,11 @@ import type {
   MonitorState,
   OpenFileRequest,
   SarifResult,
+  WriteApprovalsRequest,
+  WriteApprovalsResult,
 } from './types.ts'
+
+import { analyzeInstallScript, referencedScriptFiles, renderSignals } from './script-analysis.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -191,12 +195,12 @@ export class DepsecService extends TypertRemoteService {
   }
 
   @Remote('audit')
-  async audit(request: AuditRequest = {}): Promise<DepsecResult> {
+  async audit(request: AuditRequest): Promise<DepsecResult> {
     return await this.runAudit(request.path, request.scope ?? 'vuln')
   }
 
   @Remote('audit-fix')
-  async auditFix(request: FixRequest = {}): Promise<FixResult> {
+  async auditFix(request: FixRequest): Promise<FixResult> {
     const root = this.rootFor(request.path)
     if (root === undefined) return { ok: false, error: '无法确定工作区根目录' }
     const det = await this.detectManager(root)
@@ -208,7 +212,7 @@ export class DepsecService extends TypertRemoteService {
   }
 
   @Remote('export-sarif')
-  async exportSarif(request: AuditRequest = {}): Promise<SarifResult> {
+  async exportSarif(request: AuditRequest): Promise<SarifResult> {
     const root = this.rootFor(request.path)
     if (root === undefined) return { ok: false, error: '无法确定工作区根目录' }
     const result = await this.runScope(root, request.scope ?? 'vuln')
@@ -222,6 +226,47 @@ export class DepsecService extends TypertRemoteService {
     }
     const run = sarif.runs[0]
     return { ok: true, path: outPath, ruleCount: run?.tool.driver.rules.length, resultCount: run?.results.length }
+  }
+
+  @Remote('write-approvals')
+  async writeApprovals(request: WriteApprovalsRequest): Promise<WriteApprovalsResult> {
+    const root = this.rootFor(request.path)
+    if (root === undefined) return { ok: false, error: '无法确定工作区根目录' }
+    let packages = request.packages
+    if (packages === undefined || packages.length === 0) {
+      const scan = await this.runSupplyChain(root)
+      if (!scan.ok) return { ok: false, error: scan.message ?? scan.error ?? '扫描失败，无法计算放行清单' }
+      packages = scan.approvals ?? []
+    }
+    const pkgPath = this.joinPath(root, 'package.json')
+    const doc = await this.readJson(pkgPath)
+    if (doc === null) return { ok: false, error: '无法读取 package.json' }
+    const pnpmField = (doc.pnpm as Record<string, unknown> | undefined) ?? {}
+    const existing = new Set<string>([
+      ...((pnpmField.onlyBuiltDependencies as string[] | undefined) ?? []),
+      ...((doc.trustedDependencies as string[] | undefined) ?? []),
+    ])
+    const added = [...new Set(packages)].filter((p) => !existing.has(p)).sort()
+    if (added.length === 0) return { ok: true, added: [], existing: [...existing].sort(), total: existing.size, note: '放行清单已是最新。' }
+    if (request.dryRun === true) return { ok: true, added, existing: [...existing].sort(), total: existing.size + added.length, note: 'dryRun：仅计算，未写入。' }
+    const merged = [...new Set([...existing, ...packages])].sort()
+    const next: Record<string, unknown> = {
+      ...doc,
+      pnpm: { ...pnpmField, onlyBuiltDependencies: merged },
+      trustedDependencies: merged,
+    }
+    try {
+      await this.ctx.fs.writeText(await this.ctx.fs.resolve(pkgPath), JSON.stringify(next, null, 2) + '\n')
+    } catch (e) {
+      return { ok: false, error: `写入 package.json 失败：${e instanceof Error ? e.message : String(e)}` }
+    }
+    return {
+      ok: true,
+      added,
+      existing: merged,
+      total: merged.length,
+      note: `已写入 package.json：pnpm.onlyBuiltDependencies 与 trustedDependencies（bun）共 ${merged.length} 项。仅自动放行「脚本全 PASS 且无其他中高危信号」的包；WARN/BLOCK 不会入单。pnpm 11 的 approvedBuilds 与 npm v12 的 opt-in 键名以官方文档为准，需要时手动同步。`,
+    }
   }
 
   @Remote('monitor-status')
@@ -366,7 +411,7 @@ export class DepsecService extends TypertRemoteService {
     return out
   }
 
-  private async scanNodeModules(root: string): Promise<{ findings: { name: string; scripts: { script: string; command: string }[] }[]; scanned: number; skipped: string }> {
+  private async scanNodeModules(root: string): Promise<{ findings: { name: string; dir: string; scripts: { script: string; command: string }[] }[]; scanned: number; skipped: string }> {
     const nmPath = this.joinPath(root, 'node_modules')
     let entries
     try {
@@ -374,13 +419,13 @@ export class DepsecService extends TypertRemoteService {
     } catch {
       return { findings: [], scanned: 0, skipped: 'node_modules 不存在或不可读' }
     }
-    const byName = new Map<string, { name: string; scripts: { script: string; command: string }[] }>()
+    const byName = new Map<string, { name: string; dir: string; scripts: { script: string; command: string }[] }>()
     let scanned = 0
     const MAX = 600
-    const record = (name: string, pj: Record<string, unknown> | null): void => {
+    const record = (name: string, dir: string, pj: Record<string, unknown> | null): void => {
       if (byName.has(name)) return
       const s = this.scriptsOf(pj)
-      if (s.length > 0) byName.set(name, { name, scripts: s })
+      if (s.length > 0) byName.set(name, { name, dir, scripts: s })
     }
     for (const e of entries) {
       if (scanned >= MAX) break
@@ -390,11 +435,11 @@ export class DepsecService extends TypertRemoteService {
         try { sub = await this.ctx.fs.listDir(await this.ctx.fs.resolve(base)) } catch { continue }
         for (const se of sub) {
           if (scanned >= MAX) break
-          record(e.name + '/' + se.name, await this.readJson(base + '/' + se.name + '/package.json'))
+          record(e.name + '/' + se.name, base + '/' + se.name, await this.readJson(base + '/' + se.name + '/package.json'))
           scanned++
         }
       } else if (!e.name.startsWith('.')) {
-        record(e.name, await this.readJson(base + '/package.json'))
+        record(e.name, base, await this.readJson(base + '/package.json'))
         scanned++
       }
     }
@@ -412,12 +457,12 @@ export class DepsecService extends TypertRemoteService {
             const scoped = await this.ctx.fs.listDir(await this.ctx.fs.resolve(innerDir + '/' + ie.name))
             for (const sk of scoped) {
               if (scanned >= MAX) break
-              record(ie.name + '/' + sk.name, await this.readJson(innerDir + '/' + ie.name + '/' + sk.name + '/package.json'))
+              record(ie.name + '/' + sk.name, innerDir + '/' + ie.name + '/' + sk.name, await this.readJson(innerDir + '/' + ie.name + '/' + sk.name + '/package.json'))
               scanned++
             }
           } catch { continue }
         } else {
-          record(ie.name, await this.readJson(innerDir + '/' + ie.name + '/package.json'))
+          record(ie.name, innerDir + '/' + ie.name, await this.readJson(innerDir + '/' + ie.name + '/package.json'))
           scanned++
         }
       }
@@ -670,12 +715,53 @@ export class DepsecService extends TypertRemoteService {
     const rep = await this.fetchReputation(depNames)
 
     let findings: DepsecFinding[] = []
-    for (const s of projScripts) findings.push({ kind: '项目 install 脚本', name: (pkg.name as string) ?? '(root)', detail: `${s.script}: ${s.command}`, severity: 'high' })
-    for (const f of nm.findings) {
-      for (const s of f.scripts) findings.push({ kind: '依赖 install 脚本', name: f.name, detail: `${s.script}: ${s.command}`, severity: 'high' })
+
+    // 脚本内容审查：按证据分级（pass/warn/block），取代旧「带脚本一律 high」的全标红
+    let scriptsPassed = 0
+    let scriptsWarn = 0
+    let scriptsBlocked = 0
+    const pkgAllPass = new Map<string, boolean>()
+    const analyzeOne = async (name: string, dir: string, isRoot: boolean, s: { script: string; command: string }): Promise<DepsecFinding | null> => {
+      const files: Record<string, string> = {}
+      for (const ref of referencedScriptFiles(s.command)) {
+        let text = await this.readTextFile(this.joinPath(dir, ref))
+        if (text === null) text = await this.readTextFile(this.joinPath(dir, ref + '.js'))
+        if (text !== null && text.length <= 65536) files[ref] = text
+      }
+      const a = analyzeInstallScript(s.command, files)
+      if (!isRoot) pkgAllPass.set(name, pkgAllPass.get(name) !== false && a.verdict === 'pass')
+      if (a.verdict === 'pass') {
+        scriptsPassed++
+        return null
+      }
+      if (a.verdict === 'warn') scriptsWarn++
+      else scriptsBlocked++
+      return {
+        kind: isRoot ? '项目 install 脚本审查' : '依赖 install 脚本审查',
+        name,
+        detail: `${s.script}: ${s.command.slice(0, 160)}｜${renderSignals(a)}`,
+        severity: a.verdict === 'block' ? 'high' : 'medium',
+      }
+    }
+    const projName = (pkg.name as string) ?? '(root)'
+    for (const s of projScripts) {
+      const f = await analyzeOne(projName, root, true, s)
+      if (f !== null) findings.push(f)
+    }
+    for (const dep of nm.findings) {
+      for (const s of dep.scripts) {
+        const f = await analyzeOne(dep.name, dep.dir, false, s)
+        if (f !== null) findings.push(f)
+      }
     }
     findings.push(...typos)
     findings.push(...rep.items)
+
+    // 放行清单候选：全部脚本 PASS 且无近名/信誉中高危的依赖
+    const suspicious = new Set<string>()
+    for (const t of typos) if (t.severity === 'high' || t.severity === 'medium') suspicious.add(t.name)
+    for (const r of rep.items) if (r.severity === 'high' || r.severity === 'medium') suspicious.add(r.name)
+    const approvals = [...pkgAllPass.entries()].filter(([name, pass]) => pass && !suspicious.has(name)).map(([name]) => name).sort()
     const ignores = await this.readIgnores(root)
     findings = this.applyIgnores(findings, ignores)
     const newCount = this.markNew('supply-chain', findings)
@@ -686,8 +772,21 @@ export class DepsecService extends TypertRemoteService {
       ok: true, scope: 'supply-chain', root, manager: det.manager, verdict: verdictOf(summary),
       project: { name: (pkg.name as string) ?? '', version: (pkg.version as string) ?? '', depCount: depNames.length },
       summary, findings: findings.slice(0, 200),
-      stats: { nodeModulesScanned: nm.scanned, reputationScanned: rep.items.length, reputationTruncated: rep.truncated ? 1 : 0 },
-      note: [nm.skipped, rep.truncated ? '直接依赖超过 25 个，仅对前 25 个做联网信誉检查' : ''].filter(Boolean).join('；'),
+      approvals,
+      stats: {
+        nodeModulesScanned: nm.scanned,
+        reputationScanned: rep.items.length,
+        reputationTruncated: rep.truncated ? 1 : 0,
+        scriptsPassed,
+        scriptsWarn,
+        scriptsBlocked,
+        approvalsSuggested: approvals.length,
+      },
+      note: [
+        nm.skipped,
+        rep.truncated ? '直接依赖超过 25 个，仅对前 25 个做联网信誉检查' : '',
+        `install 脚本审查：${scriptsPassed} 通过 / ${scriptsWarn} 待查 / ${scriptsBlocked} 高危${approvals.length > 0 ? `；可放行 ${approvals.length} 个包（点「写回放行清单」）` : ''}`,
+      ].filter(Boolean).join('；'),
     }
   }
 

@@ -9,7 +9,7 @@ DeepSeek Harness（dsh）依赖安全审计插件：**漏洞 / 投毒 / 密钥 /
 | 模式 | 检测内容 |
 |---|---|
 | `vuln` 漏洞 | 官方审计查已知 CVE/GHSA（npm/pnpm/yarn/pip/cargo/go），支持一键 `audit fix` |
-| `supply-chain` 投毒 | install 脚本扫描 + typosquatting 近名 + npm registry 联网信誉（发布时间/下载量/仓库） |
+| `supply-chain` 投毒 | **install 脚本内容审查（证据分级 PASS/WARN/BLOCK + 脚本引用文件深挖）** + typosquatting 近名 + npm registry 联网信誉（发布时间/下载量/仓库） |
 | `secrets` 密钥 | 高置信正则 + 香农熵 + git 历史，含 `.depsecignore` 白名单 |
 | `sast` 代码 | 危险代码模式（eval/命令注入/XSS/弱哈希/反序列化等） |
 
@@ -18,6 +18,7 @@ DeepSeek Harness（dsh）依赖安全审计插件：**漏洞 / 投毒 / 密钥 /
 - 导出 SARIF 2.1.0（可进 GitHub Code Scanning / CI 门禁）
 - Windows 原生通知（静默，仅新高危弹窗）
 - 安装依赖自动值守（监听 install/add 命令，自动投毒扫描）
+- **一键写回放行清单**：仅「脚本全 PASS 且无近名/信誉中高危」的依赖写入 `pnpm.onlyBuiltDependencies` 与 `trustedDependencies`（bun）；pnpm 11 `approvedBuilds` / npm v12 opt-in 键名以官方文档为准，需手动同步。npm v12 / pnpm 10+ 默认拦截安装脚本后，这是「有证据的放行」，对抗无脑 approve
 
 ## 安装
 
@@ -37,6 +38,7 @@ dsh plugin --profile web add dsh-depsec
 
 ```sh
 pnpm install
+pnpm test           # vitest：脚本静态分析语料（良性/恶意/未知，26 例）
 pnpm build          # tsdown 产出 lib/index.js + lib/client.js
 ```
 
