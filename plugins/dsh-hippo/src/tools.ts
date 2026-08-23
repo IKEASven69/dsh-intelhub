@@ -13,7 +13,7 @@ import type { Context } from '@deepseek-ai/cordis'
 // Type-only: pulls the Context merges（tools/agents/sandboxPolicy/systemPrompt 服务声明）。
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
 import type {} from '@deepseek-ai/dsh-system-prompt'
-import { cwdToProject, openEngine, withEngine } from 'hippo-skills'
+import { cwdToProject, openEngine, withEngine } from 'hippo-mind'
 
 /** 渲染：execute 返回字符串，render 包成 text block（dsh-polymarket 先例）。 */
 export function renderText(_args: unknown, value: unknown): Array<{ type: 'text'; text: string }> {

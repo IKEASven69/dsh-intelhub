@@ -15,7 +15,7 @@ import type { Context } from '@deepseek-ai/cordis'
 // Type-only: pulls the Context.webServer merge（宿主由 web bundle 提供，不打进产物）。
 import type {} from '@deepseek-ai/dsh-host-webserver'
 import { currentJob, inventory, startImport } from './import.ts'
-import { readTeamEvents, distillTeamEvents, foldLedger, triage } from 'hippo-skills'
+import { readTeamEvents, distillTeamEvents, foldLedger, triage } from 'hippo-mind'
 import { compileMemories, forgetMemory, listMemories, updateMemory } from './memories.ts'
 import { registerPromptContext, registerRecallTool, registerRememberTool } from './tools.ts'
 import { registerLifeTools } from './life-tools.ts'
@@ -40,13 +40,13 @@ async function tryImport(spec: string): Promise<string | null> {
 }
 
 /**
- * 在引擎 hippo-skills 的真实安装位置上构造 require：原生/平台依赖是引擎的传递依赖，
+ * 在引擎 hippo-mind 的真实安装位置上构造 require：原生/平台依赖是引擎的传递依赖，
  * pnpm 严格布局（或 link: 开发安装）下位于引擎自己的 node_modules，从插件目录
  * 直接解析必然失败——必须以引擎为锚点探测。
  */
 function engineScopedRequire(): ((spec: string) => unknown) | null {
   try {
-    const enginePkg = createRequire(import.meta.url).resolve('hippo-skills/package.json')
+    const enginePkg = createRequire(import.meta.url).resolve('hippo-mind/package.json')
     return createRequire(enginePkg)
   } catch {
     return null
@@ -55,7 +55,7 @@ function engineScopedRequire(): ((spec: string) => unknown) | null {
 
 /** 用引擎锚点的 require 实际加载一个依赖，返回 null（成功）或错误信息。 */
 function tryEngineLoad(req: ((spec: string) => unknown) | null, spec: string): string | null {
-  if (req === null) return `无法定位 hippo-skills 的安装位置，跳过 ${spec} 探测`
+  if (req === null) return `无法定位 hippo-mind 的安装位置，跳过 ${spec} 探测`
   try {
     req(spec)
     return null
@@ -71,14 +71,14 @@ const NATIVE_BLOCKED_HINT =
 async function doctor(): Promise<DoctorReport> {
   const guidance: string[] = []
 
-  const engineErr = await tryImport('hippo-skills')
+  const engineErr = await tryImport('hippo-mind')
   const engineReq = engineScopedRequire()
   // 当前存储栈是 @zvec/zvec（proxima 向量索引 + rocksdb FTS）；
   // better-sqlite3/sqlite-vec 是旧版 SQLite 存储遗留，但仍在 import 链上必须可加载。
   const zvecErr = engineErr === null ? tryEngineLoad(engineReq, '@zvec/zvec') : '引擎不可用，无法探测'
   const legacyErr = engineErr === null ? tryEngineLoad(engineReq, 'better-sqlite3') : '引擎不可用，无法探测'
 
-  if (engineErr !== null) guidance.push(`引擎包 hippo-skills 加载失败：${engineErr}。请在插件目录重装依赖（pnpm install）。`)
+  if (engineErr !== null) guidance.push(`引擎包 hippo-mind 加载失败：${engineErr}。请在插件目录重装依赖（pnpm install）。`)
   if (engineErr === null && zvecErr !== null) guidance.push(`当前存储栈 @zvec/zvec 加载失败：${zvecErr}。请在插件目录重装依赖（pnpm install）。`)
   if (engineErr === null && legacyErr !== null) guidance.push(NATIVE_BLOCKED_HINT)
 
@@ -94,7 +94,7 @@ async function doctor(): Promise<DoctorReport> {
   }
 
   const checks = [
-    { name: '引擎 hippo-skills', ok: engineErr === null, detail: engineErr ?? 'openEngine() 可用' },
+    { name: '引擎 hippo-mind', ok: engineErr === null, detail: engineErr ?? 'openEngine() 可用' },
     { name: '向量存储 @zvec/zvec', ok: zvecErr === null, detail: zvecErr ?? 'proxima 索引 + rocksdb FTS 就绪' },
     { name: '遗留 SQLite 模块', ok: legacyErr === null, detail: legacyErr ?? '旧版存储，仍在 import 链上（memories.db 为其遗留文件）' },
     { name: '记忆库', ok: true, detail: storeExists === true ? storePath : storeExists === false ? `尚未创建（首次 import/recall 时自动建立）：${storePath}` : `无法探测：${storePath}` },

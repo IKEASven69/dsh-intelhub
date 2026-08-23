@@ -1,6 +1,6 @@
 # dsh-hippo · 跨 agent 记忆桥插件 · 方案文档
 
-> 起草:2026-08-21(基于 hippo-skills v0.1.0 实测代码 + dsh v0.1.0-rc.8 插件体系;2026-08-22 收入本仓库)
+> 起草:2026-08-21(基于 hippo-mind v0.1.0 实测代码 + dsh v0.1.0-rc.8 插件体系;2026-08-22 收入本仓库)
 > 位置:`dsh-plugin/plugins/dsh-hippo/`
 > 定位:项目清单 P2(快赢线,一周体量)
 
@@ -8,10 +8,10 @@
 
 ## 〇、形态策略(2026-08-21 定)
 
-**dsh 插件是唯一主产品形态;hippo-skills 降级为引擎包,不追求先打磨成独立产品。**理由:①hippo-skills 形态尚不完整(作者自评);②生态处于抢位期,速度 > 完整;③用户实际使用的场景就是 dsh 内,独立 CLI 没有独立分发价值。
+**dsh 插件是唯一主产品形态;hippo-mind 降级为引擎包,不追求先打磨成独立产品。**理由:①hippo-mind 形态尚不完整(作者自评);②生态处于抢位期,速度 > 完整;③用户实际使用的场景就是 dsh 内,独立 CLI 没有独立分发价值。
 
 由此带来的调整:
-- **集成方式从 spawn CLI 改为 npm 依赖导入**——插件直接 `import hippo-skills`(`openEngine()` 库入口),用户无需全局安装,无进程开销;未完成的部分(蒸馏质量/数据源覆盖/模型下载体验等)作为**插件内路线图**迭代,带"beta"标注发布,不阻塞 H5。
+- **集成方式从 spawn CLI 改为 npm 依赖导入**——插件直接 `import hippo-mind`(`openEngine()` 库入口),用户无需全局安装,无进程开销;未完成的部分(蒸馏质量/数据源覆盖/模型下载体验等)作为**插件内路线图**迭代,带"beta"标注发布,不阻塞 H5。
 - 引擎不完整不等于体验残缺:H1 迁移输出**诚实的统计与质量标记**(哪些会话/项目覆盖了、置信度如何),面板标注"迁移引擎 beta,持续改进",把预期管理做在前面。
 
 ---
@@ -24,7 +24,7 @@
 |---|---|
 | 从本地其他 agent 会话历史**挖记忆**(hippo distill,已有能力) | ❌ 通用记忆系统(OpenViking 29515⭐ / hindsight 20215⭐ 的战场) |
 | dsh 内 `memory_recall` 语义检索 + 注入 | ❌ 云同步 / 账号体系(坚持 local-first) |
-| 一键迁移命令 `/memory import` | ❌ 重写嵌入/存储引擎(全部复用 hippo-skills) |
+| 一键迁移命令 `/memory import` | ❌ 重写嵌入/存储引擎(全部复用 hippo-mind) |
 | (H4)dsh 会话回写记忆 → 双向 | ❌ 自动全量注入(只按任务检索 Top-K,防上下文污染) |
 
 **市场依据**(调研清单 v2.1 核实):77 个记忆插件中"一键迁移"专用位为空(sage-mem 4⭐ 手工复制;engramory 155⭐ 是"共用"不是"迁移");rc.8 官方把 Claude Code/Codex 做成可安装 Profile Bundle——官方亲自打通生态,迁移叙事有背书。
@@ -33,7 +33,7 @@
 
 ## 二、现状盘点(全是现成的)
 
-hippo-skills(npm 已发布,v0.1.0):
+hippo-mind(npm 已发布,v0.1.0):
 
 | 资产 | 形态 | 对插件的意义 |
 |---|---|---|
@@ -46,7 +46,7 @@ hippo-skills(npm 已发布,v0.1.0):
 | `server-http.ts` / `dashboard.ts` / `ui` / `web` | HTTP 引擎 + 仪表盘 | 常驻模式与面板素材 |
 | `doctor` | 环境体检 | 首次运行引导 |
 
-**关键事实**:hippo-skills 依赖 `better-sqlite3` + `sqlite-vec`(原生模块)。按 〇 的决策,插件**以 npm dependencies 声明引入**(tsdown external,不打进产物),原生二进制在插件安装时由 pnpm 装入;install 脚本被默认拦截的风险由 H0 doctor 兜底(见三)。
+**关键事实**:hippo-mind 依赖 `better-sqlite3` + `sqlite-vec`(原生模块)。按 〇 的决策,插件**以 npm dependencies 声明引入**(tsdown external,不打进产物),原生二进制在插件安装时由 pnpm 装入;install 脚本被默认拦截的风险由 H0 doctor 兜底(见三)。
 
 ---
 
@@ -54,12 +54,12 @@ hippo-skills(npm 已发布,v0.1.0):
 
 ```
 L0(今天就能用,零开发):hippo compile → AGENTS.md → dsh 自动加载(引流技巧,保留)
-L1(插件 MVP,发布形态):插件 npm 依赖 hippo-skills,直接 import openEngine()
+L1(插件 MVP,发布形态):插件 npm 依赖 hippo-mind,直接 import openEngine()
     —— 首选 node:sqlite / better-sqlite3 由插件安装带入,无需用户全局装任何东西
 L2(体验优化,引擎侧迭代):distill 质量提升、更多 agent 数据源、嵌入模型轻量化
 ```
 
-- **L1 是发布形态**:插件 `dependencies` 里声明 hippo-skills,tsdown external 处理,dsh 插件安装(pnpm)时一并装入
+- **L1 是发布形态**:插件 `dependencies` 里声明 hippo-mind,tsdown external 处理,dsh 插件安装(pnpm)时一并装入
 - **嵌入模型**:首次 distill/recall 下载 bge-m3(插件 doctor 负责引导与进度展示);后续 L2 可换轻量模型降低首跑门槛
 - ⚠️ **一个必须处理的坑(与 depsec 形成互文)**:pnpm 10 / npm v12 默认拦截依赖 install 脚本,`better-sqlite3` 的 prebuild 二进制正是靠 postinstall 下载的——被拦则回退 node-gyp 源码编译,Windows 用户大概率失败。对策:H0 doctor 检测原生模块是否可用,不可用时引导用户放行(`pnpm approve-builds` 或把 better-sqlite3/sqlite-vec 加入 `onlyBuiltDependencies`);README 直接写明;**装了 depsec 的用户可用它的"写回放行清单"一键完成**——两个插件互相导流
 
@@ -69,7 +69,7 @@ L2(体验优化,引擎侧迭代):distill 质量提升、更多 agent 数据源�
 
 | # | 内容 | 验收 |
 |---|---|---|
-| **H0** | 插件骨架:`plugins/dsh-hippo/`(抄 depsec 的 package.json/cordis.patch.yml/tsdown 三件套,改名);dependencies 引入 hippo-skills;doctor 自检(原生模块可加载?嵌入模型就绪?失败给放行/下载指引) | dsh 加载插件,设置页出现"记忆桥"面板,自检结果与指引正确显示 |
+| **H0** | 插件骨架:`plugins/dsh-hippo/`(抄 depsec 的 package.json/cordis.patch.yml/tsdown 三件套,改名);dependencies 引入 hippo-mind;doctor 自检(原生模块可加载?嵌入模型就绪?失败给放行/下载指引) | dsh 加载插件,设置页出现"记忆桥"面板,自检结果与指引正确显示 |
 | **H1** | `/memory import`(command):doctor → 对 Claude Code/Codex/opencode 会话目录跑 distill → stats 汇报("从 312 个会话提炼出 87 条记忆,覆盖 4 个项目") | 在有 Claude Code 使用史的机器上,一条命令完成迁移 |
 | **H2** | `memory_recall`(tools.register):参数 query + 自动带当前 workspaceRoot 作 project 过滤;输出结构化(记忆+来源会话+时间);**`systemPrompt.section` 注入一段**:告知模型有此工具 + 当前项目 pinned 记忆 3 条以内 | dsh 会话中模型自主调用 recall 回答项目问题;注入段 <200 token |
 | **H3** | 面板(设置页,抄 depsec 的 RPC 模式):搜索框 + 记忆列表(类型/强度/来源)+ forget/update + "编译 AGENTS.md"按钮(=hippo compile) | 面板检索与工具检索同源;一键 compile 后 AGENTS.md 更新 |
@@ -129,7 +129,7 @@ L2(体验优化,引擎侧迭代):distill 质量提升、更多 agent 数据源�
 | | kimi code | `~/.kimi/`(本机实测为空,2026-03 建目录未使用;Wake 有 kimi 适配器可抄路径) | 无数据,待装机后验证 |
 | | copilot / kiro / grok | 各家目录(Wake 路径可抄) | 本机无数据,路径待验证 |
 
-**2026-08-22 G3 侦察改判**(详见 hippo-skills/docs/GUI-PLAN.md):pi 已实现(五家);antigravity 会话为 protobuf 私有格式挂 backlog;trae 聊天体在 Chromium LevelDB 挂 backlog;gemini 本机无会话数据待使用后再接。
+**2026-08-22 G3 侦察改判**(详见 hippo-mind/docs/GUI-PLAN.md):pi 已实现(五家);antigravity 会话为 protobuf 私有格式挂 backlog;trae 聊天体在 Chromium LevelDB 挂 backlog;gemini 本机无会话数据待使用后再接。
 
 技术注记:
 - VSCode 系(antigravity/trae/cursor/kiro/windsurf)聊天记录在 `state.vscdb` 的 JSON blob 里,键名各家不同——better-sqlite3 **readonly** 打开(引擎已依赖,零新增),逐家摸键;zcode 同为 SQLite 三层表(session/message/part),结构比 vscdb 干净,适配成本最低;

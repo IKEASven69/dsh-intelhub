@@ -7,7 +7,7 @@
  */
 
 import { existsSync, readFileSync } from 'node:fs'
-import { compileTarget, groupMemories, renderAgentsMd, withEngine, type MemoryRecord } from 'hippo-skills'
+import { compileTarget, groupMemories, renderAgentsMd, withEngine, type MemoryRecord } from 'hippo-mind'
 import type { MemoryItem, MemoryPage } from './types.ts'
 
 function toItem(r: MemoryRecord): MemoryItem {

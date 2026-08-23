@@ -1,6 +1,6 @@
 {
   "name": "dsh-hippo",
-  "description": "记忆桥：把 Claude Code / Codex / opencode 会话里积累的记忆蒸馏进 dsh——开局即认识你的项目与偏好（引擎 hippo-skills beta）",
+  "description": "记忆桥：把 Claude Code / Codex / opencode 会话里积累的记忆蒸馏进 dsh——开局即认识你的项目与偏好（引擎 hippo-mind beta）",
   "version": "0.1.0",
   "type": "module",
   "main": "lib/index.js",
@@ -42,7 +42,7 @@
     }
   },
   "dependencies": {
-    "hippo-skills": "link:D:/coding/hippo-skills"
+    "hippo-mind": "link:D:/coding/hippo-skills"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "*",

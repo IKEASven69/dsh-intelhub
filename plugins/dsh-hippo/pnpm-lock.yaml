@@ -8,7 +8,7 @@ importers:
 
   .:
     dependencies:
-      hippo-skills:
+      hippo-mind:
         specifier: link:D:/coding/hippo-skills
         version: link:../../../hippo-skills
     devDependencies:

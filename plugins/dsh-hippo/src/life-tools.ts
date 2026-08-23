@@ -13,7 +13,7 @@ import {
   getResident, listResidents, createResident, createChannel,
   appendMessage, readMessages, readBookmark, writeBookmark,
   withEngine, makeTurn, extractCandidates,
-} from 'hippo-skills'
+} from 'hippo-mind'
 import { makeResolver, renderText } from './tools.ts'
 
 /** 居民记忆 scope（引擎 project 机制）。 */

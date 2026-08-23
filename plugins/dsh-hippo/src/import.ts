@@ -16,7 +16,7 @@ import {
   writeImportState,
   type ImportState,
   type SessionRef,
-} from 'hippo-skills'
+} from 'hippo-mind'
 import type { AgentInventory, ImportJob, ImportStats } from './types.ts'
 
 export { inventory }
