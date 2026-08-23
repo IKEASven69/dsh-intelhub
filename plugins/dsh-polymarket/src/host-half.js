@@ -31,7 +31,13 @@ return {
      * ctx.web.fetch 非 2xx 返回的是结果不是异常，必须显式判定。
      */
     async function fetchJson(base, path) {
-      const res = await ctx.web.fetch({ url: base + path })
+      let res
+      try {
+        res = await ctx.web.fetch({ url: base + path })
+      } catch (err) {
+        const reason = err instanceof Error ? `${err.name}: ${err.message}` : String(err)
+        throw new Error(`Polymarket API 请求失败 ${base + path}: ${reason}（受限网络需配置代理，参见 DEV.md「网络前提」）`)
+      }
       if (res.statusCode < 200 || res.statusCode >= 300) {
         throw new Error(`Polymarket API ${res.statusCode} ${base + path}`)
       }
@@ -127,15 +133,16 @@ return {
       return { condition_id: cid, side, price, mid: clean(midpoint?.mid) }
     })
 
-    // 5) 历史价格（CLOB /prices-history，interval 与 fidelity 必须配套）
+    // 5) 历史价格（CLOB /prices-history；interval=回看时间窗，fidelity=K线粒度）
     harness.handle('polymarket_get_price_history', async (args = {}) => {
       const cid = String(args.condition_id ?? '')
-      const interval = String(args.interval ?? '1d')
-      // fidelity 必须与 interval 配套（单独传 fidelity 报 400）；缺省按粒度映射
-      const fidelity = args.fidelity === undefined
-        ? (interval === '1h' ? 60 : interval === '6h' ? 360 : 1440)
-        : Number(args.fidelity)
       if (!cid) throw new Error('polymarket_get_price_history 需要 condition_id')
+      // 实测语义（2026-08-23）：interval 是回看窗口（1d=最近一天，all=全部历史），
+      // fidelity 才是 K 线粒度；窗口配同尺寸 K 线只剩 1~2 点（旧 bug 根因）。
+      const INTERVALS = new Set(['1h', '6h', '1d', '1w', 'all'])
+      const interval = INTERVALS.has(args.interval) ? args.interval : '1d'
+      const FIDELITY = { '1h': 5, '6h': 30, '1d': 60, '1w': 360, all: 1440 }
+      const fidelity = args.fidelity === undefined ? FIDELITY[interval] : Number(args.fidelity)
       const tokenId = await tokenIdFor(cid, 'yes')
       const history = await fetchJson(
         CLOB_BASE,

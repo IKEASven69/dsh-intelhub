@@ -13,10 +13,14 @@
  * 本插件对外统一暴露 `condition_id`（与 Gamma/CLOB 的字段命名一致），内部
  * 自动完成 conditionId → token_id 转换，agent 无需感知。
  *
+ * 历史价格参数语义（2026-08-23 实测）：
+ *  - `interval` 是回看时间窗（1d=最近一天，all=全部历史），不是聚合粒度；
+ *  - `fidelity` 才是 K 线粒度（分钟）；缺省按窗口配平，默认组合 13~380 点。
+ *
  * 高性能铁律（参考 dsh-super-injector dev_scaffold_plugin，DeepSeek V4 Pro 实测）：
  *  1. 工具 schema 精简：description 短句点明用途，返回数据即说明书；
  *  2. 首轮锚定：5 个工具面偏大，首轮只露 search_markets 一个入口，
- *     首个调用落地后恢复全部——启用步骤见 apply() 末尾注释块。
+ *     首个调用落地后恢复全部（apply() 末尾已启用）。
  *
  * 构建：tsdown 宿主自包含打包（除 node: 外全部打进 lib/index.js），
  * 官方装配 `dsh plugin --profile web add <目录>` 任何路径都能加载。
@@ -50,10 +54,16 @@ export const Config = z.object({
 /** 带 UA 与超时的 JSON GET；非 2xx 抛错（含状态码与响应体摘要）。 */
 async function fetchJson(base: string, path: string, timeoutMs: number): Promise<unknown> {
   const url = base + path
-  const res = await fetch(url, {
-    headers: { 'user-agent': 'dsh-polymarket/0.1.0' },
-    signal: AbortSignal.timeout(timeoutMs),
-  })
+  let res: Response
+  try {
+    res = await fetch(url, {
+      headers: { 'user-agent': 'dsh-polymarket/0.1.0' },
+      signal: AbortSignal.timeout(timeoutMs),
+    })
+  } catch (err) {
+    const reason = err instanceof Error ? `${err.name}: ${err.message}` : String(err)
+    throw new Error(`Polymarket API 请求失败 ${url}: ${reason}（受限网络需配置代理，参见 DEV.md「网络前提」）`)
+  }
   if (!res.ok) {
     const body = (await res.text()).slice(0, 300)
     throw new Error(`Polymarket API ${res.status} ${url}: ${body}`)
@@ -111,7 +121,7 @@ interface PriceArgs {
 
 interface HistoryArgs {
   condition_id: string
-  interval?: string
+  interval?: '1h' | '6h' | '1d' | '1w' | 'all'
   fidelity?: number
 }
 
@@ -231,20 +241,22 @@ export function apply(ctx: Context, config: Config): void {
     },
   })), 'dsh-polymarket: price tool')
 
-  // 5) 历史价格（CLOB /prices-history，interval 或 startTs/endTs）
+  // 5) 历史价格（CLOB /prices-history；interval=回看时间窗，fidelity=K线粒度）
   ctx.effect(() => ctx.tools.register(defineTool({
     name: 'polymarket_get_price_history',
     description: '查询市场历史价格序列（OHLC 分时，供图表/趋势分析）',
     parameters: {
       condition_id: { type: 'string', required: true, description: '市场条件 ID' },
-      interval: { type: 'string', enum: ['1h', '6h', '1d', 'all'], description: '聚合粒度（默认 1d）' },
-      fidelity: { type: 'integer', description: '每根 K 线分钟数（如 1440=日线；缺省按 interval 映射）' },
+      interval: { type: 'string', enum: ['1h', '6h', '1d', '1w', 'all'], description: '回看时间窗（默认 1d=最近一天；all=全部历史）' },
+      fidelity: { type: 'integer', description: 'K 线粒度（分钟）；缺省按窗口配平：1h→5、6h→30、1d→60、1w→360、all→1440' },
     },
     output: { schema: { type: 'string' }, render: renderText },
     async execute(args: HistoryArgs) {
       const interval = args.interval ?? '1d'
-      // fidelity 必须与 interval 配套（单独传 fidelity 报 400）；缺省按粒度映射
-      const fidelity = args.fidelity ?? (interval === '1h' ? 60 : interval === '6h' ? 360 : 1440)
+      // 实测语义（2026-08-23）：interval 是回看窗口（1d=最近一天），fidelity 才是
+      // K 线粒度；窗口配同尺寸 K 线会只剩 1~2 点（旧 bug 根因）。缺省按窗口配平，
+      // 默认组合 13~380 点。1max 非法（返回空），全历史用 all。
+      const fidelity = args.fidelity ?? ({ '1h': 5, '6h': 30, '1d': 60, '1w': 360, all: 1440 } as const)[interval] ?? 60
       const tokenId = await tokenIdFor(clobBase, timeoutMs, args.condition_id, 'yes')
       const history = await fetchJson(
         clobBase,
@@ -259,14 +271,13 @@ export function apply(ctx: Context, config: Config): void {
   // 机制：system-prompt/assemble 是 Waterfall（必须 await next() 再裁剪）；
   // 会话无任何持久化 tool/call 前，只保留 search 入口；首个工具调用落地后
   // 恢复全部。阶段从持久 session events 推导，resume/reload 不丢状态。
-  // 若与其它插件同面竞争首轮注意力，可改为只保留本插件核心工具并放开全量：
-  //   ctx.on('system-prompt/assemble', async (_assembly, context: any, next) => {
-  //     const assembled = await next()
-  //     const agent = context.agent
-  //     if (!agent || agent.session.events.some((e: any) => e.type === 'tool/call')) return assembled
-  //     const MINE = new Set(['polymarket_search_markets', 'polymarket_get_market',
-  //       'polymarket_get_orderbook', 'polymarket_get_price', 'polymarket_get_price_history'])
-  //     const CORE = 'polymarket_search_markets'
-  //     return { ...assembled, tools: assembled.tools.filter((t: any) => !MINE.has(t.name) || t.name === CORE) }
-  //   })
+  ;(ctx as any).on('system-prompt/assemble', async (_assembly: unknown, context: any, next: () => Promise<any>) => {
+    const assembled = await next()
+    const agent = context.agent
+    if (!agent || agent.session.events.some((e: any) => e.type === 'tool/call')) return assembled
+    const MINE = new Set(['polymarket_search_markets', 'polymarket_get_market',
+      'polymarket_get_orderbook', 'polymarket_get_price', 'polymarket_get_price_history'])
+    const CORE = 'polymarket_search_markets'
+    return { ...assembled, tools: assembled.tools.filter((t: any) => !MINE.has(t.name) || t.name === CORE) }
+  })
 }

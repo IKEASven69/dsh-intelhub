@@ -1,16 +1,17 @@
 # dsh-polymarket 开发文档
 
-> 2026-08-18 建立。目标：记录验证基线、装配机制与下一步开发路线，新会话直接从「开发路线」开工。
+> 2026-08-18 建立，2026-08-23 更新（P1/P2 完成）。目标：记录验证基线、装配机制与下一步开发路线，新会话直接从「开发路线」开工。
 
-## 一、现状快照（2026-08-18 验证基线）
+## 一、现状快照（2026-08-23 验证基线）
 
 - **v0.1.0**，5 个只读工具全部实现并已装配 web profile（`~/.dsh/profiles/web`，link: junction）
-- 三层冒烟**全部通过**（当日实测，走本机代理）：
-  - `host-smoke`：5 个 handler 真实 API 调用，JSON 无损往返 ✓
+- 三层冒烟**全部通过**（2026-08-23 实测，走本机代理）：
+  - `host-smoke`：5 个 handler 真实 API 调用，JSON 无损往返 ✓（history 断言：25 点）
   - `client-smoke`：登录/未登录两种状态渲染 ✓
-  - `smoke`（全链路）：cordis 注册 5 工具 → 真实 API 搜索→详情→订单簿→价格→历史 ✓（实测市场：2026 中期参议院，mid 0.495）
-- 源码 `src/index.ts`（272 行工具面）+ `src/host-half.js` / `src/client-half.js`（浏览器 UI 半包）
-- 目录：`D:\coding\dsh-plugin\自己的\dsh-polymarket`（2026-08-18 从根目录迁入，所有绝对路径引用已修复）
+  - `smoke`（全链路）：cordis 注册 5 工具 → 真实 API 搜索→详情→订单簿→价格→历史 ✓（实测市场：2026 中期参议院，mid 0.495，history 25 点）
+- 首轮锚定已启用（见开发路线 2）
+- 源码 `src/index.ts`（工具面）+ `src/host-half.js` / `src/client-half.js`（浏览器 UI 半包）
+- 目录：`D:\coding\dsh-plugin\plugins\dsh-polymarket`（2026-08-21 随仓库英文化从 `自己的/` 改名）
 
 ## 二、网络前提（重要）
 
@@ -27,7 +28,7 @@ dsh web 由宿主进程发起请求时同理受此限制——若 web 里工具�
 ## 三、验证体系（改代码后按序跑）
 
 ```bash
-cd D:\coding\dsh-plugin\自己的\dsh-polymarket
+cd D:\coding\dsh-plugin\plugins\dsh-polymarket
 
 # 1. 宿主半包：5 handler + 真实 API（需代理，见上）
 node scripts/host-smoke.mjs
@@ -61,11 +62,24 @@ pnpm tsc --noEmit            # 类型检查
 
 ## 五、开发路线（按优先级）
 
-1. **P1 · price_history 点数异常**：实测 `interval=1d&fidelity=1440` 只返回 2 个点，活跃数月的市场应有几十根日 K。排查 CLOB `/prices-history` 参数（可能需 startTs/endTs 或 fidelity 映射有误）。修法：smoke.mjs 加断言（点数 > 10）防回归。
-2. **P2 · 首轮锚定启用**：`src/index.ts` 末尾注释里有完整方案（system-prompt/assemble Waterfall，首轮只露 search_markets）。5 工具面偏大，建议启用；启用后 client/smoke 需补锚定场景测试。
-3. **P2 · 超时错误提示**：`fetchJson` 超时抛错不含代理提示，web 用户会看到裸 ConnectTimeout。错误信息加一句「检查代理」。
+1. ~~**P1 · price_history 点数异常**~~ ✅ 2026-08-23 修复：实测确认 `interval` 是回看时间窗（1d=最近一天）而非聚合粒度，`fidelity` 才是 K 线粒度；缺省映射改为按窗口配平（1h→5、6h→30、1d→60、1w→360、all→1440），枚举补 `1w`（`1max` 非法返回空，全历史用 `all` 实测 380 点）。默认参数 2 点 → 25 点；smoke/host-smoke 均加「点数 > 10」断言
+2. ~~**P2 · 首轮锚定启用**~~ ✅ 2026-08-23 启用：src/index.ts 末尾 system-prompt/assemble Waterfall，首轮只露 search_markets，首个 tool/call 后恢复全部；阶段从持久 session events 推导，resume/reload 不丢
+3. ~~**P2 · 超时错误提示**~~ ✅ 2026-08-23：两份 fetchJson 的连接失败/超时错误均追加「受限网络需配置代理」指引
 4. **P3 · 新工具**：候选——`list_events`（热门事件榜）、`get_market_by_slug`（人类可读 slug 入口）。保持只读边界。
 5. **P3 · 发布**：npm 包化（去掉 private、补 README.en）或提交 dsh 社区市场。「DSH 生态首个 Polymarket 插件」的先发叙事值得抢时间窗。
+
+## 五·二、错题记录
+
+### 2026-08-23 — interval 语义误读导致历史价格只有 2 个点
+- 现象：`interval=1d` 默认只返回 2 个数据点，无法画趋势
+- 根因：把 CLOB `/prices-history` 的 `interval` 当聚合粒度用（1d 配 fidelity=1440 日 K），实测它是**回看窗口**；窗口与 K 线同尺寸自然只剩 1~2 点。`1max` 非法（空结果），全历史用 `all`
+- 修复：`src/index.ts` 与 `src/host-half.js` 两份实现同步改缺省映射与枚举（host 半顺带补枚举校验）；断言防回归
+- 另见：本文件「二、网络前提」
+
+### 2026-08-23 — pnpm 在本目录安装 404（dsh-type-meta 不在公网）
+- 现象：`pnpm install`/`pnpm tsdown` 触发 peer 自动安装，拉 `@deepseek-ai/*` 时 404；且失败安装会清掉 node_modules 的 .bin
+- 根因：peerDependencies 声明的宿主包不在公网 registry
+- 修复：本目录补 `pnpm-workspace.yaml`（`autoInstallPeers: false` + esbuild 放行，同 dsh-hippo 先例）；`pnpm install` → `node scripts/link-deps.mjs` → `pnpm build` 恢复正常
 
 ## 六、已知坑
 

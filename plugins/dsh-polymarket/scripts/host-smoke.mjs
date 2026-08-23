@@ -81,7 +81,9 @@ console.log('[OK] get_price 返回 lossless JSON')
 // —— 冒烟 5: get_price_history ——
 console.log('\n—— 5) get_price_history ——')
 const h = await call('polymarket_get_price_history', { condition_id: cid, interval: '1d' })
-console.log('history points:', Array.isArray(h?.history?.history) ? h.history.history.length : JSON.stringify(h).slice(0, 200))
+const hpts = Array.isArray(h?.history?.history) ? h.history.history.length : -1
+console.log(`interval=${h?.interval} fidelity=${h?.fidelity} history points:`, hpts > -1 ? hpts : JSON.stringify(h).slice(0, 200))
+if (hpts <= 10) throw new Error(`history 点数异常（${hpts} ≤ 10）：interval/fidelity 语义疑似回归`)
 console.log('[OK] get_price_history 返回 lossless JSON')
 
 console.log('\n=== 全部 5 个 handler 冒烟通过 ===')

@@ -55,9 +55,11 @@ async function runChain() {
       const price = JSON.parse(await byName['polymarket_get_price'].execute({ condition_id: first.condition_id }))
       console.log(`[price] mid: ${price.midpoint?.mid ?? price.price?.price ?? '?'}`)
 
-      // 历史
+      // 历史（interval=1d 默认配 fidelity=60，应返回 ~25 点；≤10 视为语义回归）
       const hist = JSON.parse(await byName['polymarket_get_price_history'].execute({ condition_id: first.condition_id, interval: '1d' }))
-      console.log(`[history] 点数: ${(hist.history?.history ?? []).length}`)
+      const pts = (hist.history?.history ?? []).length
+      console.log(`[history] interval=${hist.interval} fidelity=${hist.fidelity} 点数: ${pts}`)
+      if (pts <= 10) throw new Error(`history 点数异常（${pts} ≤ 10）：interval/fidelity 语义疑似回归（窗口配了同尺寸 K 线）`)
 
       chainDone = true
       break
