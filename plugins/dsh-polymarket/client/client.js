@@ -26,9 +26,13 @@ window.__ModuleLoader__.load({
     const CLOB = 'https://clob.polymarket.com'
     const LS_OPEN = 'dsh-poly-open'
     const LS_QUERY = 'dsh-poly-query'
+    const LS_WATCH = 'dsh-poly-watch'
     const LIST_POLL_MS = 30000
     const DETAIL_POLL_MS = 15000
     const TREND_LIMIT = 10
+    // 走势窗口 → K 线粒度（分钟）；语义与宿主 get_price_history 实测一致
+    const WIN_FID = { '1h': 5, '1d': 60, '1w': 360, all: 1440 }
+    const WIN_LABEL = { '1h': '近 1 小时', '1d': '近 24 小时', '1w': '近一周', all: '全部历史' }
 
     // ── 工具 ─────────────────────────────────────────────────────────────
 
@@ -68,6 +72,7 @@ window.__ModuleLoader__.load({
         .map((m) => ({
           question: m.question || '',
           condition_id: m.conditionId || m.condition_id || '',
+          slug: m.slug || '',
           yes: yesPrice(m),
           volume: m.volume ?? 0,
           v24: m.volume24hr ?? 0,
@@ -84,6 +89,20 @@ window.__ModuleLoader__.load({
     }
     function lsSet(key, value) {
       try { localStorage.setItem(key, value) } catch { /* 隐私模式等场景忽略 */ }
+    }
+
+    // ── Polymarket 官方标志（favicon 93×116 复刻：四个三角的折纸结构）──
+    // fill=currentColor 随主题前景色，明暗主题都成立，无外部资源依赖。
+    function PolyIcon({ size = 14 }) {
+      return h('svg', {
+        width: size, height: Math.round(size * 87 / 93), viewBox: '0 29 93 87',
+        fill: 'currentColor', 'aria-hidden': 'true', style: { verticalAlign: '-0.125em' },
+      },
+        h('path', { d: 'M0 29 L93 29 L46.5 58 Z' }),
+        h('path', { d: 'M0 58 L46.5 58 L0 87 Z' }),
+        h('path', { d: 'M93 58 L46.5 58 L93 87 Z' }),
+        h('path', { d: 'M0 87 L93 87 L46.5 116 Z' }),
+      )
     }
 
     // ── Sparkline：纯 SVG 折线，首末点决定涨跌色 ─────────────────────────
@@ -113,8 +132,9 @@ window.__ModuleLoader__.load({
 
     // ── 市场详情：token 解析 → midpoint / book / history 并取 ─────────────
 
-    function MarketDetail({ market, onBack }) {
+    function MarketDetail({ market, onBack, watched, onToggleWatch }) {
       const [state, setState] = useState({ status: 'loading', error: null, mid: null, history: [], book: null, at: null })
+      const [win, setWin] = useState('1d')
 
       const load = useCallback(async (signal) => {
         try {
@@ -127,7 +147,7 @@ window.__ModuleLoader__.load({
           const tid = yes.token_id
           const [mid, hist, book] = await Promise.all([
             fetchJson(`${CLOB}/midpoint?token_id=${tid}`).catch(() => null),
-            fetchJson(`${CLOB}/prices-history?market=${tid}&interval=1d&fidelity=60`).catch(() => null),
+            fetchJson(`${CLOB}/prices-history?market=${tid}&interval=${win}&fidelity=${WIN_FID[win]}`).catch(() => null),
             fetchJson(`${CLOB}/book?token_id=${tid}&side=buy`).catch(() => null),
           ])
           if (signal.aborted) return
@@ -143,7 +163,7 @@ window.__ModuleLoader__.load({
           if (signal.aborted) return
           setState((s) => ({ ...s, status: 'error', error: String((err && err.message) || err) }))
         }
-      }, [market.condition_id])
+      }, [market.condition_id, win])
 
       useEffect(() => {
         const ac = new AbortController()
@@ -160,8 +180,13 @@ window.__ModuleLoader__.load({
       return h('div', { className: 'dsh-poly-detail' },
         h('div', { className: 'dsh-poly-detail-head' },
           h('button', { className: 'dsh-poly-back', onClick: onBack, title: '返回列表' }, '‹ 返回'),
-          state.at ? h('span', { className: 'dsh-poly-vol', title: state.at.toLocaleString() },
-            `${state.at.getHours().toString().padStart(2, '0')}:${state.at.getMinutes().toString().padStart(2, '0')} 更新`) : null,
+          h('span', { className: 'dsh-poly-detail-head-r' },
+            h('button', {
+              className: 'dsh-poly-star' + (watched ? ' on' : ''), title: watched ? '取消自选' : '加入自选',
+              onClick: () => onToggleWatch(market),
+            }, watched ? '★' : '☆'),
+            state.at ? h('span', { className: 'dsh-poly-vol', title: state.at.toLocaleString() },
+              `${state.at.getHours().toString().padStart(2, '0')}:${state.at.getMinutes().toString().padStart(2, '0')} 更新`) : null),
         ),
         h('div', { className: 'dsh-poly-q' }, market.question),
         state.status === 'loading' && !state.mid ? h('div', { className: 'dsh-poly-loading' }, '加载详情…') : null,
@@ -171,10 +196,22 @@ window.__ModuleLoader__.load({
             h('span', { className: 'dsh-poly-yes' }, 'Yes 中间价 ' + fmtPct(state.mid)),
             state.mid != null ? h('span', { className: 'dsh-poly-vol' }, ` 买一 ${fmtPct(bestBid)} · 卖一 ${fmtPct(bestAsk)} · 盘口 ${bidDepth}/${askDepth} 档`) : null,
           ),
+          h('div', { className: 'dsh-poly-win', role: 'tablist', 'aria-label': '走势时间窗' },
+            Object.keys(WIN_FID).map((w) =>
+              h('button', {
+                key: w, className: w === win ? 'on' : '', role: 'tab', 'aria-selected': w === win,
+                onClick: () => setWin(w),
+              }, w))),
           h('div', { className: 'dsh-poly-spark-wrap' },
             h(Sparkline, { points: state.history }),
-            h('div', { className: 'dsh-poly-vol' }, `近 24h · ${state.history.length} 点 · 60 分钟线`)),
+            h('div', { className: 'dsh-poly-vol' }, `${WIN_LABEL[win]} · ${state.history.length} 点 · ${WIN_FID[win]} 分钟线`)),
         ) : null,
+        market.slug
+          ? h('a', {
+              className: 'dsh-poly-link', href: `https://polymarket.com/market/${market.slug}`,
+              target: '_blank', rel: 'noopener noreferrer',
+            }, '在 Polymarket 打开 ↗')
+          : null,
         h('div', { className: 'dsh-poly-vol', style: { marginTop: 'auto', paddingTop: 8 } },
           'condition ' + String(market.condition_id).slice(0, 18) + '… · CLOB 直连'),
       )
@@ -188,6 +225,26 @@ window.__ModuleLoader__.load({
       const [input, setInput] = useState(() => lsGet(LS_QUERY, ''))
       const [state, setState] = useState({ status: 'idle', events: [], error: null, at: null })
       const [detail, setDetail] = useState(null)
+      // 自选（localStorage 持久）：[{condition_id, question, slug}]；价格随 30s 轮询批量刷新
+      const [watch, setWatch] = useState(() => {
+        try {
+          const v = JSON.parse(lsGet(LS_WATCH, '[]'))
+          return Array.isArray(v) ? v.filter((m) => m && m.condition_id) : []
+        } catch { return [] }
+      })
+      const [watchQuotes, setWatchQuotes] = useState({})
+
+      const watchIds = watch.map((m) => m.condition_id).join(',')
+      const isWatched = (m) => watch.some((w) => w.condition_id === m.condition_id)
+      const toggleWatch = (m) => {
+        setWatch((list) => {
+          const next = isWatched(m)
+            ? list.filter((w) => w.condition_id !== m.condition_id)
+            : [...list, { condition_id: m.condition_id, question: m.question || '', slug: m.slug || '' }]
+          lsSet(LS_WATCH, JSON.stringify(next))
+          return next
+        })
+      }
 
       const search = useCallback(async (q, signal) => {
         if (!q) return
@@ -195,11 +252,12 @@ window.__ModuleLoader__.load({
         try {
           const data = await fetchJson(`${GAMMA}/public-search?q=${encodeURIComponent(q)}&limit=8`)
           if (signal && signal.aborted) return
-          const events = (data.events || []).map((e) => ({
+            const events = (data.events || []).map((e) => ({
             title: e.title || '',
             markets: (e.markets || []).map((m) => ({
               question: m.question || '',
               condition_id: m.conditionId || m.condition_id || '',
+              slug: m.slug || '',
               yes: yesPrice(m),
               volume: m.volume ?? 0,
               v24: m.volume24hr ?? 0,
@@ -230,15 +288,30 @@ window.__ModuleLoader__.load({
         }
       }, [])
 
-      // 打开即加载：有搜索词走搜索，没有走热门榜；均 30s 轮询
+      // 打开即加载：有搜索词走搜索，没有走热门榜；均 30s 轮询；自选价格同轮批量刷新
       useEffect(() => {
         if (!open) return
         const ac = new AbortController()
-        const load = () => (query ? search(query, ac.signal) : trending(ac.signal))
+        const loadWatch = async () => {
+          if (!watchIds) { setWatchQuotes({}); return }
+          try {
+            const data = await fetchJson(`${GAMMA}/markets?condition_ids=${encodeURIComponent(watchIds)}`)
+            if (ac.signal.aborted) return
+            const quotes = {}
+            for (const m of Array.isArray(data) ? data : []) {
+              if (m && m.conditionId) quotes[m.conditionId] = yesPrice(m)
+            }
+            setWatchQuotes(quotes)
+          } catch { /* 自选刷新失败不打断主列表 */ }
+        }
+        const load = () => {
+          if (query) search(query, ac.signal); else trending(ac.signal)
+          loadWatch()
+        }
         load()
         const timer = setInterval(load, LIST_POLL_MS)
         return () => { ac.abort(); clearInterval(timer) }
-      }, [open, query, search, trending])
+      }, [open, query, search, trending, watchIds])
 
       const toggle = () => {
         setOpen((v) => { lsSet(LS_OPEN, v ? '0' : '1'); return !v })
@@ -261,12 +334,36 @@ window.__ModuleLoader__.load({
         return h('button', {
           className: 'dsh-poly-fab', onClick: toggle,
           title: 'Polymarket 行情侧栏',
-        }, '📊 行情')
+        }, h(PolyIcon, { size: 13 }), ' 行情')
       }
+
+      // 市场卡片：整卡点击进详情，右上角 ☆ 自选（stopPropagation 防误触）
+      const renderMarket = (m, key) =>
+        h('div', {
+          className: 'dsh-poly-item', key, role: 'button', tabIndex: 0,
+          onClick: () => setDetail(m),
+          onKeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDetail(m) } },
+          title: m.condition_id,
+        },
+          h('div', { className: 'dsh-poly-q' }, m.question),
+          h('div', { className: 'dsh-poly-item-foot' },
+            h('span', { className: 'dsh-poly-yes' }, 'Yes ' + fmtPct(m.yes)),
+            h('span', { className: 'dsh-poly-item-foot-r' },
+              h('span', { className: 'dsh-poly-vol' }, m.v24 ? '24h ' + fmtVol(m.v24) : '量 ' + fmtVol(m.volume)),
+              h('button', {
+                className: 'dsh-poly-star' + (isWatched(m) ? ' on' : ''),
+                title: isWatched(m) ? '取消自选' : '加入自选',
+                onClick: (e) => { e.stopPropagation(); toggleWatch(m) },
+              }, isWatched(m) ? '★' : '☆'),
+            ),
+          ),
+        )
 
       return h('div', { className: 'dsh-poly-panel' },
         h('div', { className: 'dsh-poly-header' },
-          h('span', { className: 'dsh-poly-mode' }, query ? '#' + query : '🔥 热门榜'),
+          h('span', { className: 'dsh-poly-mode' },
+            h(PolyIcon, { size: 12 }), ' ',
+            query ? '#' + query : '热门榜'),
           h('span', { className: 'dsh-poly-header-r' },
             query
               ? h('button', {
@@ -285,30 +382,26 @@ window.__ModuleLoader__.load({
           h('button', { type: 'submit' }, '搜索'),
         ),
         detail
-          ? h(MarketDetail, { market: detail, onBack: () => setDetail(null) })
+          ? h(MarketDetail, {
+              market: detail, onBack: () => setDetail(null),
+              watched: isWatched(detail), onToggleWatch: toggleWatch,
+            })
           : h('div', { className: 'dsh-poly-list' },
               state.status === 'loading' && state.events.length === 0 ? h('div', { className: 'dsh-poly-loading' }, '加载中…') : null,
               state.status === 'error' ? h('div', { className: 'dsh-poly-err' }, '行情加载失败：' + state.error + '（受限网络需系统代理）') : null,
               state.status === 'ok' && state.events.length === 0 ? h('div', { className: 'dsh-poly-loading' }, '无结果') : null,
+              watch.length > 0
+                ? h('div', { className: 'dsh-poly-watch' },
+                    h('div', { className: 'dsh-poly-watch-title' }, '★ 自选 · 30s 刷新'),
+                    watch.map((m, i) =>
+                      renderMarket({ ...m, yes: watchQuotes[m.condition_id] ?? m.yes }, 'w' + i)))
+                : null,
               state.events.map((ev, i) =>
                 h('div', { className: 'dsh-poly-event', key: i },
                   h('div', { className: 'dsh-poly-event-title' },
                     ev.title || '—',
                     ev.v24 ? h('span', { className: 'dsh-poly-v24', title: '24h 成交量' }, '24h ' + fmtVol(ev.v24)) : null),
-                  ev.markets.map((m, j) =>
-                    h('button', {
-                      className: 'dsh-poly-item', key: j,
-                      onClick: () => setDetail(m),
-                      title: m.condition_id,
-                    },
-                      h('div', { className: 'dsh-poly-q' }, m.question),
-                      h('div', { className: 'dsh-poly-item-foot' },
-                        h('span', { className: 'dsh-poly-yes' }, 'Yes ' + fmtPct(m.yes)),
-                        h('span', { className: 'dsh-poly-vol' },
-                          (m.v24 ? '24h ' + fmtVol(m.v24) : '量 ' + fmtVol(m.volume)) + ' · 详情 ›'),
-                      ),
-                    ),
-                  ),
+                  ev.markets.map((m, j) => renderMarket(m, i + '-' + j)),
                 ),
               ),
               state.at ? h('div', { className: 'dsh-poly-vol', style: { padding: '4px 2px' } },
@@ -368,6 +461,24 @@ window.__ModuleLoader__.load({
 .dsh-poly-err{padding:12px;color:var(--dsh-poly-down,#f87171);}
 .dsh-poly-loading{padding:12px;opacity:.6;}
 .dsh-poly-note{opacity:.6;font-size:11px;padding:4px 0;}
+.dsh-poly-item-foot-r{display:flex;align-items:center;gap:6px;flex-shrink:0;}
+.dsh-poly-star{background:none;border:none;color:var(--dsh-poly-star,#f5c518);cursor:pointer;
+  font-size:15px;line-height:1;padding:2px;opacity:.45;}
+.dsh-poly-star:hover{opacity:1;}
+.dsh-poly-star.on{opacity:1;}
+.dsh-poly-watch{margin-bottom:10px;padding:8px;border-radius:8px;
+  background:var(--color-bg-3,#232732);border:1px dashed var(--color-border-1,#2a2e37);}
+.dsh-poly-watch-title{font-size:11px;font-weight:600;opacity:.75;margin-bottom:6px;}
+.dsh-poly-win{display:flex;gap:4px;margin:0 0 6px;}
+.dsh-poly-win button{flex:1;background:var(--color-bg-2,#1b1e26);color:inherit;
+  border:1px solid var(--color-border-1,#2a2e37);border-radius:6px;
+  font:11px/1.6 system-ui,sans-serif;cursor:pointer;padding:2px 0;opacity:.7;}
+.dsh-poly-win button:hover{opacity:1;}
+.dsh-poly-win button.on{border-color:var(--dsh-poly-accent,#3b82f6);color:var(--dsh-poly-accent,#3b82f6);opacity:1;font-weight:600;}
+.dsh-poly-link{display:inline-block;margin-top:8px;color:var(--dsh-poly-accent,#3b82f6);
+  text-decoration:none;font-size:12px;}
+.dsh-poly-link:hover{text-decoration:underline;}
+.dsh-poly-detail-head-r{display:flex;align-items:center;gap:6px;}
 `
       const el = document.createElement('style')
       el.id = 'dsh-polymarket-style'
