@@ -8,7 +8,7 @@ DeepSeek Harness（dsh）依赖安全审计插件：**漏洞 / 投毒 / 密钥 /
 
 | 模式 | 检测内容 |
 |---|---|
-| `vuln` 漏洞 | 官方审计查已知 CVE/GHSA（npm/pnpm/yarn/pip/cargo/go），支持一键 `audit fix` |
+| `vuln` 漏洞 | 官方审计查已知 CVE/GHSA（npm/pnpm/yarn 完整支持，含结果解析与一键 `audit fix`）；pip/cargo/go 为**实验性**——能执行审计命令但输出解析尚未实现，结果会落「未能解析审计输出」 |
 | `supply-chain` 投毒 | **install 脚本内容审查（证据分级 PASS/WARN/BLOCK + 脚本引用文件深挖）** + typosquatting 近名 + npm registry 联网信誉（发布时间/下载量/仓库） |
 | `secrets` 密钥 | 高置信正则 + 香农熵 + git 历史，含 `.depsecignore` 白名单 |
 | `sast` 代码 | 危险代码模式（eval/命令注入/XSS/弱哈希/反序列化等） |
@@ -30,17 +30,19 @@ dsh plugin --profile web add dsh-depsec
 
 设置 → 依赖安全审计 → 选模式 → 点「运行」（可填目录，留空=当前工作区）。
 
-白名单：在工作区根目录放 `.depsecignore`，每行一个子串（文件路径/包名），命中即忽略，`#` 开头为注释。
+白名单：在工作区根目录放 `.depsecignore`，每行一个子串（文件路径/包名），命中即忽略，`#` 开头为注释。作用于 supply-chain / secrets / sast 三模式；vuln 模式不套用（结果直接来自官方审计器）。
 
 ## 开发 / 构建
 
-本包为标准 Cordis 插件（host `TypertRemoteService` + client `dsh.client` 双面），构建依赖 harness 工具链：
+本包为标准 Cordis 插件（host `TypertRemoteService` + client `dsh.client` 双面）。
 
 ```sh
-pnpm install
-pnpm test           # vitest：脚本静态分析语料（良性/恶意/未知，26 例）
-pnpm build          # tsdown 产出 lib/index.js + lib/client.js
+pnpm install         # 仅本机构建/测试依赖（peer 由 dsh 宿主运行时注入）
+pnpm test            # vitest：脚本静态分析语料（良性/恶意/未知，29 例）
+node .build-tools/build.cjs   # 本机验证构建：SWC(stage-3 装饰器)+esbuild，产出 lib/index.js + lib/client.js
 ```
+
+正式构建走 tsdown（需 harness 工具链；装饰器转译等价性见 `.build-tools/build.cjs` 头注）。`@deepseek-ai/*` 一律不进 devDependencies——其传递依赖有未公开发布的包（如 dsh-type-meta），整树安装会 404。
 
 `cordis.patch.yml`（经 package.json 的 `dsh.bundle.patch` 声明）把 host 服务插入 profile 合成；浏览器半由 `dsh.client` manifest + `exports["./client"]` 提供。
 
