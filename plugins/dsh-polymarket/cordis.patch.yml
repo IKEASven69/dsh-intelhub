@@ -2,5 +2,5 @@
 # 对齐 dsh-super-injector 先例（id = 插件实例名，name = 包名）。
 - insert:
     - id: dsh-polymarket
-      name: '@dsh-external/dsh-polymarket'
+      name: 'dsh-polymarket'
       config: {}

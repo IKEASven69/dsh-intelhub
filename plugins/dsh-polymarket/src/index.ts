@@ -1,5 +1,5 @@
 /**
- * @dsh-external/dsh-polymarket — Polymarket 预测市场只读行情工具包。
+ * dsh-polymarket — Polymarket 预测市场只读行情工具包。
  *
  * DSH 生态首个 Polymarket 原生插件。5 个只读工具：
  *  search_markets / get_market / get_orderbook / get_price / get_price_history。

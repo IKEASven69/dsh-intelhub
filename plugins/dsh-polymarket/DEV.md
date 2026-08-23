@@ -39,7 +39,7 @@ node scripts/client-smoke.mjs
 # 3. 全链路：cordis Context 注册 + 真实 API 串链
 NODE_USE_ENV_PROXY=1 HTTPS_PROXY=http://127.0.0.1:7897 node --experimental-vm-modules scripts/smoke.mjs
 
-# 4. 装配验证（无需启动 web）：应看到 `# == @dsh-external/dsh-polymarket` 段
+# 4. 装配验证（无需启动 web）：应看到 `# == dsh-polymarket` 段
 node "D:\coding\deepseek-harness\apps\cli\lib\bin.js" web --dump-config
 
 # 5. web 实测：重启 dsh web（junction 链接，改码后无需重新 add，但要重启清 ESM 缓存）
@@ -59,6 +59,16 @@ pnpm tsc --noEmit            # 类型检查
 - 进 `dsh.profile.bundles` 层的条件：package.json 声明 `dsh.bundle.patch: "./cordis.patch.yml"`
 - link: 协议 = junction，改代码即时生效，但**新增/删除文件和 ESM 缓存需重启 web**
 - profile 的 `package.json` 里 link 路径是**绝对路径**——本插件目录再搬家时必须同步改 `~/.dsh/profiles/web/package.json` 并 `pnpm install`（2026-08-18 迁移时已处理）
+
+## 四·二、侧边栏行情面板（client.js，2026-08-23 v0.2）
+
+「边看边展示」的 UI 半：`shell.overlay` 右侧 360px 全高面板，静态客户端模块（`window.__ModuleLoader__.load` 注册，无需 agent 运行）。
+
+- **浏览器直连** Gamma（搜索/元数据）+ CLOB（中间价/订单簿/历史）——两 API 均实测 `Access-Control-Allow-Origin: *`，不走 host.call（静态插件无 pluginRunId）
+- 功能：搜索框（任意关键词）→ 事件/市场列表（Yes% + 量，30s 轮询）→ 点市场进详情（中间价 + 买一卖一盘口 + 近 24h 价格走势 SVG 折线，`interval=1d&fidelity=60` ≈ 25 点，与宿主工具同语义，15s 轮询）
+- 默认收起为右缘竖排「📊 行情」浮动按钮；开合状态与搜索词存 localStorage
+- 已知取舍：固定悬浮层会盖住 DSH 自带右侧详情面板（z-50）——后续可评估改为 `conversation.view` tab 或并排布局插槽
+- 改动生效方式：client.js 由浏览器经 web 服务加载，**重启 web + 浏览器硬刷新**即可（无需重新装配）
 
 ## 五、开发路线（按优先级）
 
@@ -80,6 +90,12 @@ pnpm tsc --noEmit            # 类型检查
 - 现象：`pnpm install`/`pnpm tsdown` 触发 peer 自动安装，拉 `@deepseek-ai/*` 时 404；且失败安装会清掉 node_modules 的 .bin
 - 根因：peerDependencies 声明的宿主包不在公网 registry
 - 修复：本目录补 `pnpm-workspace.yaml`（`autoInstallPeers: false` + esbuild 放行，同 dsh-hippo 先例）；`pnpm install` → `node scripts/link-deps.mjs` → `pnpm build` 恢复正常
+
+### 2026-08-23 — scoped 包名 + link: 安装进不了 client-modules 清单（侧边栏不加载的根因）
+- 现象：`dsh.client` 声明齐全、exports 正常、bundle 存在，但 `/client-modules` 清单始终没有本插件，浏览器侧栏面板不加载
+- 根因：client-modules 的 Node 半（`@deepseek-ai/dsh-client-modules`）按 loader entry 名解析包，**scoped 名（`@dsh-external/dsh-polymarket`）+ link: junction 安装**的组合被判负（对照：scoped+npm 装的 modlens 能进、link: 装的非 scoped depsec/brain 能进，唯 scoped+link 不行）；负判定整个进程生命周期缓存不重试
+- 修复：包名改非 scoped `dsh-polymarket`（同步 cordis.patch.yml、profile 依赖键、bundles），重装 junction 后立即入清单。`@dsh-external` scope 非自有，npm 发布本来也得改名；`private: true` 一并移除
+- 教训：第三方插件包名用非 scoped 或自有 scope；client 面板不加载先查 `http://127.0.0.1:3080/client-modules` 清单再查代码
 
 ## 六、已知坑
 

@@ -1,8 +1,7 @@
 {
-  "name": "@dsh-external/dsh-polymarket",
+  "name": "dsh-polymarket",
   "version": "0.1.0",
   "description": "Polymarket 预测市场只读行情工具包：搜索/详情/订单簿/价格/历史价格。DSH 生态首个 Polymarket 原生插件（宿主自包含打包，零外部依赖）。",
-  "private": true,
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/types/index.d.ts",
@@ -11,12 +10,12 @@
       "types": "./lib/types/index.d.ts",
       "default": "./lib/index.js"
     },
-    "./client": "./client.js",
+    "./client": "./client/client.js",
     "./package.json": "./package.json"
   },
   "files": [
     "lib",
-    "client.js",
+    "client/client.js",
     "cordis.patch.yml",
     "scripts/link-deps.mjs"
   ],

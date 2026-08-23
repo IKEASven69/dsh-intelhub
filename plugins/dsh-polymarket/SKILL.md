@@ -42,7 +42,7 @@ node "D:\coding\deepseek-harness\apps\cli\lib\bin.js" plugin --profile web add "
 
 # 4. 验证装配后的组合配置树（无需启动 web）
 node "D:\coding\deepseek-harness\apps\cli\lib\bin.js" web --dump-config
-# 应看到 `# == @dsh-external/dsh-polymarket` 段
+# 应看到 `# == dsh-polymarket` 段
 
 # 5. 重启 web 使插件生效（启动时读 bundles 列表 + ESM 缓存）
 #    web 由用户手动启动（vite），重启后工具即注册
@@ -52,7 +52,7 @@ node "D:\coding\deepseek-harness\apps\cli\lib\bin.js" web --dump-config
 
 - `dsh plugin --profile web add <绝对路径>` = 在 profile 目录跑 pnpm add + reconcile
 - 只有 package.json 声明 `dsh.bundle.patch: "./cordis.patch.yml"` 的依赖才进入 `dsh.profile.bundles` 层（plugin.ts `exportsPatch` 判定）
-- `cordis.patch.yml`（本插件根目录）insert 一行插件行：`{ id: dsh-polymarket, name: '@dsh-external/dsh-polymarket', config: {} }`
+- `cordis.patch.yml`（本插件根目录）insert 一行插件行：`{ id: dsh-polymarket, name: 'dsh-polymarket', config: {} }`
 - profile：`C:\Users\20369\.dsh\profiles\web`，node_modules junction → 本目录
 - 已知坑：pnpm 11 supply-chain policy 会拒绝发布未满 release-age 的包（如用户强制更新的 dshmarket）——在 profile 的 `pnpm-workspace.yaml` 加 `minimumReleaseAgeExclude` 放行，无需回滚
 
