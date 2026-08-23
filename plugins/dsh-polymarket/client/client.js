@@ -29,6 +29,9 @@ window.__ModuleLoader__.load({
     const LS_WATCH = 'dsh-poly-watch'
     const LS_WIDTH = 'dsh-poly-width'
     const LS_FOLLOW = 'dsh-poly-follow'
+    const LS_CAT = 'dsh-poly-cat'
+    // 官方首页同款分类（Gamma tag_slug，全部='' 用全时量排序出旗舰市场）
+    const CATS = [['', '全部'], ['politics', '政治'], ['sports', '体育'], ['crypto', '加密'], ['pop-culture', '文化'], ['economics', '经济']]
     const LIST_POLL_MS = 30000
     const DETAIL_POLL_MS = 15000
     const TREND_LIMIT = 10
@@ -361,6 +364,8 @@ window.__ModuleLoader__.load({
       })
       // 🎯 跟随会话：agent 调 polymarket 工具时侧栏自动跟随；手动搜索即暂停
       const [follow, setFollow] = useState(() => lsGet(LS_FOLLOW, '1') === '1')
+      // 分类 tab（官方首页同款；'' = 全部）
+      const [cat, setCat] = useState(() => lsGet(LS_CAT, ''))
       // 自选（localStorage 持久）：[{condition_id, question, slug}]；价格随 30s 轮询批量刷新
       const [watch, setWatch] = useState(() => {
         try {
@@ -448,11 +453,13 @@ window.__ModuleLoader__.load({
         }
       }, [refreshLive])
 
-      // 默认界面：24h 成交量排序的活跃事件（热门榜），打开即见，无需搜索
-      const trending = useCallback(async (signal) => {
+      // 默认界面：官方首页同款——全时成交量排序的旗舰事件（分类 tab 过滤），
+      // 全时量出的就是大选/加密这类旗舰市场，而不是高频换手的电竞局霸榜
+      const trending = useCallback(async (cat, signal) => {
         setState((s) => ({ ...s, status: 'loading', error: null }))
         try {
-          const data = await fetchJson(`${GAMMA}/events?limit=${TREND_LIMIT}&active=true&closed=false&order=volume24hr&ascending=false`)
+          const tag = cat ? `&tag_slug=${encodeURIComponent(cat)}` : ''
+          const data = await fetchJson(`${GAMMA}/events?limit=${TREND_LIMIT}&active=true&closed=false&order=volume&ascending=false${tag}`)
           if (signal && signal.aborted) return
           const events = (Array.isArray(data) ? data : []).map((e) => ({
             title: e.title || '',
@@ -489,13 +496,13 @@ window.__ModuleLoader__.load({
           } catch { /* 自选刷新失败不打断主列表 */ }
         }
         const load = () => {
-          if (query) search(query, ac.signal); else trending(ac.signal)
+          if (query) search(query, ac.signal); else trending(cat, ac.signal)
           loadWatch()
         }
         load()
         const timer = setInterval(load, LIST_POLL_MS)
         return () => { ac.abort(); clearInterval(timer) }
-      }, [open, query, search, trending, watchIds])
+      }, [open, query, cat, search, trending, watchIds])
 
       const toggle = () => {
         setOpen((v) => { lsSet(LS_OPEN, v ? '0' : '1'); return !v })
@@ -610,6 +617,10 @@ window.__ModuleLoader__.load({
             h(PolyIcon, { size: 12 }), ' ',
             query ? '#' + query : '热门榜'),
           h('span', { className: 'dsh-poly-header-r' },
+            h('a', {
+              className: 'dsh-poly-site', href: 'https://polymarket.com',
+              target: '_blank', rel: 'noopener noreferrer', title: '在浏览器打开 Polymarket 官网',
+            }, '官网 ↗'),
             h('button', {
               className: 'dsh-poly-follow' + (follow ? ' on' : ''),
               title: follow ? '跟随中：agent 查行情时侧栏自动同步（点击暂停）' : '已暂停跟随（点击开启）',
@@ -632,6 +643,15 @@ window.__ModuleLoader__.load({
           }),
           h('button', { type: 'submit' }, '搜索'),
         ),
+        !detail
+          ? h('div', { className: 'dsh-poly-cats', role: 'tablist', 'aria-label': '分类' },
+              CATS.map(([slug, label]) =>
+                h('button', {
+                  key: slug || 'all', role: 'tab', 'aria-selected': cat === slug,
+                  className: cat === slug ? 'on' : '',
+                  onClick: () => { setCat(slug); lsSet(LS_CAT, slug); setQuery(''); setInput(''); lsSet(LS_QUERY, ''); pauseFollow() },
+                }, label)))
+          : null,
         detail
           ? h(MarketDetail, {
               market: detail, onBack: () => setDetail(null),
@@ -702,6 +722,14 @@ window.__ModuleLoader__.load({
   border:1px solid var(--color-border-1,#2a2e37);border-radius:6px;padding:6px 8px;font:inherit;outline:none;}
 .dsh-poly-search input:focus{border-color:var(--dsh-poly-accent,#1652F0);}
 .dsh-poly-search button{background:var(--dsh-poly-accent,#1652F0);color:#fff;border:none;border-radius:6px;padding:6px 10px;cursor:pointer;font:inherit;}
+.dsh-poly-site{font-size:11px;font-weight:400;color:var(--dsh-poly-accent,#1652F0);text-decoration:none;opacity:.85;flex-shrink:0;}
+.dsh-poly-site:hover{opacity:1;text-decoration:underline;}
+.dsh-poly-cats{display:flex;gap:4px;padding:6px 8px;border-bottom:1px solid var(--color-border-1,#2a2e37);overflow-x:auto;scrollbar-width:none;}
+.dsh-poly-cats::-webkit-scrollbar{display:none;}
+.dsh-poly-cats button{background:none;border:1px solid transparent;border-radius:999px;color:inherit;
+  font:11px/1.6 system-ui,sans-serif;cursor:pointer;padding:2px 10px;opacity:.65;white-space:nowrap;flex-shrink:0;}
+.dsh-poly-cats button:hover{opacity:1;}
+.dsh-poly-cats button.on{border-color:var(--dsh-poly-accent,#1652F0);color:var(--dsh-poly-accent,#1652F0);opacity:1;font-weight:600;}
 .dsh-poly-list{overflow-y:auto;flex:1;padding:8px;}
 .dsh-poly-event{margin-bottom:12px;}
 .dsh-poly-item{display:grid;grid-template-columns:48px minmax(0,1fr) auto;gap:6px 8px;align-items:center;
