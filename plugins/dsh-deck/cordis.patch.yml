@@ -1,0 +1,5 @@
+# dsh-deck bundle 层：插入本插件行（id = 插件实例名，name = 包名，非 scoped）。
+- insert:
+    - id: dsh-deck
+      name: 'dsh-deck'
+      config: {}
