@@ -619,6 +619,11 @@ function Panel(): ReturnType<typeof createElement> {
     createElement('style', null, CSS),
 
     createElement('div', { className: 'hb-card' },
+      createElement('button', {
+        className: 'hb-btn hb-btn-ghost', style: { alignSelf: 'flex-end', fontSize: 12 },
+        onClick: overlayStore.toggle,
+        title: '打开独立记忆面板（不占设置页空间）',
+      }, '🦛 在独立面板中打开'),
       createElement('div', { className: 'hb-hero' },
         createElement('span', { className: 'hb-logo' }, '桥'),
         createElement('span', { className: 'hb-hero-txt' },
@@ -834,10 +839,6 @@ export function apply(ctx: ClientContext): void {
   ctx.slots.inject('settings.section', () => ctx.slots.register(
     { name: 'settings.section', id: 'memory-bridge', order: 41, label: '记忆桥' },
     () => createElement(Panel),
-  ))
-  ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register(
-    { name: 'sidebar.footer.action', id: 'hippo-memory', order: 10 },
-    ({ wide }: { wide: boolean }) => createElement(FooterMemoryButton, { wide }),
   ))
   ctx.slots.inject('shell.overlay', () => ctx.slots.register(
     { name: 'shell.overlay', id: 'hippo-memory-overlay', order: 50 },
