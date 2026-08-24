@@ -83,8 +83,8 @@ plugins/dsh-deck/
 
 ## 九、逐日排期（半天块 + 验收框）
 
-- [ ] D1上 骨架+security+fs+state+项目 CRUD+单测 → 安全/CRUD 测试绿
-- [ ] D1下 环境前置逐项检查（bun/npx、Chrome 或 Edge 验证或剪贴板降级、APIFY_TOKEN、公众号凭据链确认）+ 三通道验证（CDP 试开微博发页 / 公众号草稿实发一篇【用户配合】/ FTS 索引 5578 计时）→ 失败当天定降级
+- [x] D1上 骨架+security+fs+state+项目 CRUD+单测 → ✅ 2026-08-24 完成：vitest 14/14 绿；端到端 10 项实测过（双源拦截 403/穿越 400/根外 folder 400/内置不可删/写读 roundtrip/CRUD）。commit e431175
+- [x] D1下 环境前置检查 → ✅ 2026-08-24 结果：bun✓ npx✓ **Chrome✓（已装，CDP 可行——此前"无 Chrome"判断有误）** kb-git✓（工作树干净）FTS 计时✓（5487 md / 5.2MB 全扫 2.4s → FTS5+mtime 增量方案绿灯，无需降级）。**两个待用户解锁**：①公众号凭据链空（EXTEND.md/env/.baoyu-skills/.env 全无）→ 草稿 API 验证挂起，需 AppID/AppSecret 或改浏览器模式；②APIFY_TOKEN 无 → D6 海外数据回流挂起。CDP 预填实测顺延 D5（本就要登录态）
 - [ ] D2上 FTS 查询路由+知识台读侧（移植 panel-src）+ 点子 tab
 - [ ] D2下 md 预览+insights 复盘+搜索联调+点子捕获/流转 → 搜索 <100ms 实测；点子从捕获到采纳成任务卡
 - [ ] D3上 任务卡协议+「发给 zcode」+AGENTS.md 接单+绑定+容器侧栏/向导/tile
