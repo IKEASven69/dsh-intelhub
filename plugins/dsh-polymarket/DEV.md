@@ -60,15 +60,17 @@ pnpm tsc --noEmit            # 类型检查
 - link: 协议 = junction，改代码即时生效，但**新增/删除文件和 ESM 缓存需重启 web**
 - profile 的 `package.json` 里 link 路径是**绝对路径**——本插件目录再搬家时必须同步改 `~/.dsh/profiles/web/package.json` 并 `pnpm install`（2026-08-18 迁移时已处理）
 
-## 四·二、侧边栏行情面板（client.js，2026-08-23 v0.2）
+## 四·二、侧边栏行情面板（client/client.js，2026-08-24 最新态）
 
-「边看边展示」的 UI 半：`shell.overlay` 右侧 360px 全高面板，静态客户端模块（`window.__ModuleLoader__.load` 注册，无需 agent 运行）。
+「边看边展示」的 UI 半：`shell.overlay` 右侧可拖宽面板（300~720px，默认 360），静态客户端模块（`window.__ModuleLoader__.load` 注册，无需 agent 运行）。
 
-- **浏览器直连** Gamma（搜索/元数据）+ CLOB（中间价/订单簿/历史）——两 API 均实测 `Access-Control-Allow-Origin: *`，不走 host.call（静态插件无 pluginRunId）
-- 功能：搜索框（任意关键词）→ 事件/市场列表（Yes% + 量，30s 轮询）→ 点市场进详情（中间价 + 买一卖一盘口 + 近 24h 价格走势 SVG 折线，`interval=1d&fidelity=60` ≈ 25 点，与宿主工具同语义，15s 轮询）
-- 默认收起为右缘竖排「📊 行情」浮动按钮；开合状态与搜索词存 localStorage
-- 已知取舍：固定悬浮层会盖住 DSH 自带右侧详情面板（z-50）——后续可评估改为 `conversation.view` tab 或并排布局插槽
-- 改动生效方式：client.js 由浏览器经 web 服务加载，**重启 web + 浏览器硬刷新**即可（无需重新装配）
+- **浏览器直连** Gamma（搜索/元数据/热门）+ CLOB（**实时中间价/订单簿/历史**）——均实测 `Access-Control-Allow-Origin: *`，不走 host.call
+- **默认页=热门榜（官方首页同款）**：`order=volume` 全时量排序出旗舰市场（2028 大选等）；**分类 tab** 全部/政治/体育/加密/文化(`pop-culture`)/经济(`economics`)，`tag_slug` 过滤，选择持久化。已结算过滤：`closed` 或价格 ±2% 跳过，事件全死不进榜
+- **价格=CLOB 实时**：列表加载后 `POST /midpoints` 批量拉可见市场+自选（Gamma `outcomePrices` 是缓存价会滞后官网——「数据对不上」的根因）；失败回退缓存价；第二方价实时模式取 `1-p0`
+- **官方风格视觉**：事件横幅图（`e.image`）+ 渐变叠标题 + 24h 量徽标；卡片=48px 缩略图（`market.image`）+ 两行问题 + **22px 品牌蓝 #1652F0 大号概率** + 细概率条；详情页=横幅 + 32px 巨号价格
+- **数据形状**：`marketSides()` 解析 `outcomes/outcomePrices/clobTokenIds`——体育市场 outcomes 是队名非 Yes/No，显示必须用真实队名（`TEAM VISION 43%`）
+- 功能全表：自选★（localStorage 存 tid0/img，随批量实时价刷新）· 🎯跟随会话（`ctx.sessions.currentProvideInfo → hooks.session` 快照，从 assistant 节点 tool-call 块的 name/argsRaw 提取最近一次 polymarket 调用：search 自动切词、带 condition_id 自动进详情；手动搜索即暂停）· 走势 hover 十字线（价格+时间）· 窗口切换 1h/1d/1w/all · 拖宽 · 头部「官网 ↗」直达 polymarket.com（iframe 被 frame-ancestors 封禁，直达是唯一合规形态）· `inject=['slots','sessions']`，sessions 不可用时跟随优雅降级
+- 改动生效：**重启 web + 刷新页面**（清单嵌首页 HTML，rev 自动更替）
 
 ## 五、开发路线（按优先级）
 
