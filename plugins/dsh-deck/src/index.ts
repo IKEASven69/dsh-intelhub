@@ -20,6 +20,9 @@ import type { Context } from '@deepseek-ai/cordis'
 import { DeckStore, deckDefaults, deckPath, nodeFs } from './state.ts'
 import { allowRequest, readJsonBody, resolveWithinRoot, RootRegistry, type RequestLike } from './security.ts'
 import { createProject, deleteProject, updateProject, type DeckState, type ProjectInput } from './protocol.ts'
+import { KbIndex, nodeWalk } from './search.ts'
+import { adoptIdea, captureIdea, listIdeas, type IdeasFs } from './ideas.ts'
+import { join as joinPath } from 'node:path'
 import z from 'schemastery'
 
 export const name = 'dsh-deck'
@@ -168,6 +171,87 @@ export function apply(ctx: Context, config: Config): void {
   reg('exact', '/api/deck/fs/read', fsRoute('read'))
   reg('exact', '/api/deck/fs/write', fsRoute('write'))
   reg('exact', '/api/deck/fs/mkdir', fsRoute('mkdir'))
+
+  // ── 知识库：FTS 搜索（懒建索引 + 5 分钟 TTL 增量）──
+  const ideasDir = joinPath(kbRoot, 'ideas')
+  const index = new KbIndex(joinPath(dshHome, 'storages', 'dsh-deck-fts.db'), kbRoot, nodeWalk(kbRoot))
+  let lastIndexAt = 0
+  const ensureIndex = (): void => {
+    if (Date.now() - lastIndexAt < 5 * 60 * 1000) return
+    lastIndexAt = Date.now()
+    setImmediate(() => { try { index.sync() } catch (e) { ctx.logger.warn(`dsh-deck fts sync: ${e instanceof Error ? e.message : String(e)}`) } })
+  }
+
+  reg('exact', '/api/deck/search', (req, res) => {
+    if (!guard(req, res)) return
+    void (async () => {
+      const body = await readJsonBody(req, 64 * 1024)
+      const q = body !== null && typeof body === 'object' ? String((body as Record<string, unknown>).q ?? '') : ''
+      if (q.trim() === '') { sendJson(res, 200, { ok: true, results: [], tookMs: 0 }); return }
+      try {
+        ensureIndex()
+        const t0 = Date.now()
+        // 首查可能索引未建：同步补一次（首建全量约 2.4s，之后毫秒级）
+        if (index.count() === 0) index.sync()
+        const results = index.query(q, 20)
+        sendJson(res, 200, { ok: true, results, tookMs: Date.now() - t0, indexed: index.count() })
+      } catch (e) {
+        sendJson(res, 500, { ok: false, error: `搜索失败：${e instanceof Error ? e.message : String(e)}` })
+      }
+    })()
+  })
+
+  const fileRoute = (path: (kbRoot: string) => string) => (req: any, res: any): void => {
+    if (!guard(req, res)) return
+    try {
+      const abs = path(kbRoot)
+      const content = readFileSync(abs, 'utf8')
+      sendJson(res, 200, { ok: true, content })
+    } catch (e) {
+      sendJson(res, 404, { ok: false, error: `读取失败：${e instanceof Error ? e.message : String(e)}` })
+    }
+  }
+  reg('exact', '/api/deck/kb/index', fileRoute((r) => joinPath(r, 'INDEX.md')))
+  reg('exact', '/api/deck/insights', fileRoute((r) => joinPath(r, 'insights', 'LESSONS.md')))
+
+  // ── 点子库 ──
+  const ideasFs: IdeasFs = {
+    list: (dir) => { try { return readdirSync(dir).filter((n) => n.endsWith('.md')) } catch { return [] } },
+    read: (p) => { try { return readFileSync(p, 'utf8') } catch { return null } },
+    write: (p, c) => { mkdirSync(dirnameOf(p), { recursive: true }); writeFileSync(p, c, 'utf8') },
+    exists: (p) => { try { statSync(p); return true } catch { return false } },
+    mkdirs: (p) => { mkdirSync(p, { recursive: true }) },
+  }
+  reg('exact', '/api/deck/ideas', (req, res) => {
+    if (!guard(req, res)) return
+    try { sendJson(res, 200, { ok: true, ideas: listIdeas(ideasFs, ideasDir) }) }
+    catch (e) { sendJson(res, 500, { ok: false, error: String(e) }) }
+  })
+  reg('exact', '/api/deck/idea/capture', (req, res) => {
+    if (!guard(req, res)) return
+    void (async () => {
+      const body = await readJsonBody(req, 64 * 1024)
+      const text = body !== null && typeof body === 'object' ? String((body as Record<string, unknown>).text ?? '') : ''
+      try { const file = captureIdea(ideasFs, ideasDir, text, new Date()); sendJson(res, 200, { ok: true, file }) }
+      catch (e) { sendJson(res, 400, { ok: false, error: e instanceof Error ? e.message : String(e) }) }
+    })()
+  })
+  reg('exact', '/api/deck/idea/adopt', (req, res) => {
+    if (!guard(req, res)) return
+    void (async () => {
+      const body = await readJsonBody(req, 64 * 1024)
+      if (body === null || typeof body !== 'object') { sendJson(res, 400, { ok: false, error: 'body 非法' }); return }
+      const { file, to } = body as { file?: string; to?: string }
+      if (typeof file !== 'string' || !file.endsWith('.md') || file.includes('/') || file.includes('\\') || file.includes('..')) {
+        sendJson(res, 400, { ok: false, error: 'file 非法' }); return
+      }
+      if (to !== 'research' && to !== 'content') { sendJson(res, 400, { ok: false, error: 'to 必须是 research|content' }); return }
+      try {
+        const r = adoptIdea(ideasFs, ideasDir, file, to, kbRoot, contentRoot)
+        sendJson(res, 200, r)
+      } catch (e) { sendJson(res, 400, { ok: false, error: e instanceof Error ? e.message : String(e) }) }
+    })()
+  })
 }
 
 function dirnameOf(p: string): string {

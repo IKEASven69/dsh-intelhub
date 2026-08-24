@@ -18,7 +18,7 @@ import { currentJob, inventory, startImport } from './import.ts'
 import { readTeamEvents, distillTeamEvents, foldLedger, triage } from 'hippo-mind'
 import {
   loadAutoSettings, saveAutoSettings, listShelved, takeShelved,
-  runAutoDistillOnce, withEngine, distill, type AutoDistillSettings,
+  runAutoDistillOnce, withEngine, distill, deleteSession, type AutoDistillSettings,
 } from 'hippo-mind'
 import { compileMemories, forgetMemory, listMemories, updateMemory } from './memories.ts'
 import { registerPromptContext, registerRecallTool, registerRememberTool } from './tools.ts'
@@ -462,6 +462,86 @@ export function apply(ctx: Context, config?: Config): void {
                 }).catch((error: unknown) => {
                   sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) })
                 })
+              },
+              (error: unknown) => { sendJson(response, 400, { error: error instanceof Error ? error.message : String(error) }) },
+            )
+          },
+        }),
+        host.webServer.register({
+          kind: 'exact',
+          path: '/dsh-hippo/memories/supersede',
+          handler: (request, response) => {
+            if (request.method !== 'POST') {
+              response.writeHead(405, { allow: 'POST' })
+              response.end()
+              return
+            }
+            if (!sameOrigin(request)) {
+              sendJson(response, 403, { error: '仅接受同源请求' })
+              return
+            }
+            void readJsonBody(request).then(
+              (body) => {
+                void withEngine(async (held) => {
+                  const ok = await held.engine.markSuperseded(String(body.oldId), String(body.newId))
+                  sendJson(response, 200, { ok })
+                }).catch((error: unknown) => {
+                  sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) })
+                })
+              },
+              (error: unknown) => { sendJson(response, 400, { error: error instanceof Error ? error.message : String(error) }) },
+            )
+          },
+        }),
+        host.webServer.register({
+          kind: 'exact',
+          path: '/dsh-hippo/sleep',
+          handler: (request, response) => {
+            if (request.method !== 'POST') {
+              response.writeHead(405, { allow: 'POST' })
+              response.end()
+              return
+            }
+            if (!sameOrigin(request)) {
+              sendJson(response, 403, { error: '仅接受同源请求' })
+              return
+            }
+            void readJsonBody(request).then(
+              (body) => {
+                void withEngine(async (held) => {
+                  const { runSleep } = await import('hippo-mind')
+                  const r = await runSleep(held.engine, { apply: body.apply === true })
+                  sendJson(response, 200, r)
+                }).catch((error: unknown) => {
+                  sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) })
+                })
+              },
+              (error: unknown) => { sendJson(response, 400, { error: error instanceof Error ? error.message : String(error) }) },
+            )
+          },
+        }),
+        host.webServer.register({
+          kind: 'exact',
+          path: '/dsh-hippo/sessions/delete',
+          handler: (request, response) => {
+            if (request.method !== 'POST') {
+              response.writeHead(405, { allow: 'POST' })
+              response.end()
+              return
+            }
+            if (!sameOrigin(request)) {
+              sendJson(response, 403, { error: '仅接受同源请求' })
+              return
+            }
+            void readJsonBody(request).then(
+              (body) => {
+                try {
+                  const { deleteSession } = require('hippo-mind') as typeof import('hippo-mind')
+                  const r = deleteSession(String(body.id), { deleteSource: body.deleteSource === true })
+                  sendJson(response, 200, r)
+                } catch (e) {
+                  sendJson(response, 500, { error: e instanceof Error ? e.message : String(e) })
+                }
               },
               (error: unknown) => { sendJson(response, 400, { error: error instanceof Error ? error.message : String(error) }) },
             )

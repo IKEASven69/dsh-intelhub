@@ -96,8 +96,8 @@ plugins/dsh-deck/
 
 ## 十、环境前置 / 用户配合点 / 数据安全 / 席位
 
-**环境（D1上）**：bun 或 npx；Chrome（CDP；无则装/验证 Edge/剪贴板降级）；APIFY_TOKEN；公众号 AppID/AppSecret（EXTEND.md→env→.baoyu-skills/.env 链）+ access_token 缓存确认。
-**用户配合点（提前约）**：D1下 公众号授权；D5 微博/X 登录+三平台人工点发；D6 评论审阅发送。其余 agent 自主。
+**环境（D1上）**：bun 或 npx ✅；Chrome ✅（已装）；FTS 计时 ✅。**范围变更（2026-08-24 用户拍板）**：公众号凭据跳过——D5 发布一律走浏览器预填模式（含公众号，不依赖草稿 API）；APIFY_TOKEN 跳过——D6 数据回流仅中文平台薄抓/手动录入。
+**用户配合点（提前约）**：D5 各平台浏览器登录+人工点发；D6 评论审阅发送。其余 agent 自主。
 **数据安全**：knowledge-base 先确认 git（无则 init+首提交）；落库执行器原子写（tmp+rename）；每落库 git commit（信息=判断编号）。
 **席位**：deck 的 shell.overlay order=90（polymarket=100）；sidebar.footer.action order=20。
 

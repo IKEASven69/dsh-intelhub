@@ -1,6 +1,9 @@
 allowBuilds:
+  better-sqlite3: set this to true or false
   esbuild: set this to true or false
 # peer 由 dsh 宿主运行时注入，不在本目录安装（否则 pnpm 去 npm 拉 @deepseek-ai/* 会 404）。
+# better-sqlite3 为真实依赖（原生模块，postinstall 装 prebuild 二进制，hippo 同例）。
 autoInstallPeers: false
 onlyBuiltDependencies:
   - esbuild
+  - better-sqlite3

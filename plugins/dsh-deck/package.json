@@ -6,10 +6,12 @@
   "main": "./lib/index.js",
   "exports": {
     ".": "./lib/index.js",
+    "./client": "./client/client.js",
     "./package.json": "./package.json"
   },
   "files": [
     "lib",
+    "client",
     "cordis.patch.yml",
     "scripts/link-deps.mjs"
   ],
@@ -17,12 +19,22 @@
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-layout"
+      ],
+      "platform": "web"
     }
   },
   "scripts": {
     "link:deps": "node scripts/link-deps.mjs",
     "build": "node scripts/link-deps.mjs && tsdown",
     "test": "vitest run"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.10.0"
   },
   "devDependencies": {
     "tsdown": "^0.22.14",
