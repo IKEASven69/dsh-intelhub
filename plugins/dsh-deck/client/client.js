@@ -81,7 +81,7 @@ window.__ModuleLoader__.load({
         setText(null); setErr(null)
         API.read(root, path).then((j) => {
           if (!alive) return
-          if (j.ok) setText(j.content) else setErr(j.error)
+          if (j.ok) { setText(j.content) } else { setErr(j.error) }
         }).catch((e) => alive && setErr(String(e)))
         return () => { alive = false }
       }, [root, path])
@@ -118,7 +118,7 @@ window.__ModuleLoader__.load({
           h('div', { key: i, className: 'deck-hit', role: 'button', tabIndex: 0, onClick: () => setFile(r) },
             h('div', { className: 'deck-hit-title' }, r.title),
             h('div', { className: 'deck-hit-path' }, r.path),
-            h('div', { className: 'deck-hit-snip' }, h('span', { dangerouslySetInnerHTML: { __html: esc(r.snippet).replaceAll('«', '<mark>').replaceAll('»', '</mark>') } }))),
+            h('div', { className: 'deck-hit-snip' }, h('span', { dangerouslySetInnerHTML: { __html: esc(r.snippet).replaceAll('«', '<mark>').replaceAll('»', '</mark>') } })))),
         res !== null && res.ok && (res.results ?? []).length > 0
           ? h('div', { className: 'deck-note deck-fine' }, `${res.results.length} 条 · ${res.tookMs}ms · 索引 ${res.indexed} 篇`) : null,
       )
@@ -136,7 +136,7 @@ window.__ModuleLoader__.load({
         setEntries(null); setErr(null)
         API.list('kb', dir).then((j) => {
           if (!alive) return
-          if (j.ok) setEntries(j.entries) else setErr(j.error)
+          if (j.ok) { setEntries(j.entries) } else { setErr(j.error) }
         }).catch((e) => alive && setErr(String(e)))
         return () => { alive = false }
       }, [dir])
@@ -157,7 +157,7 @@ window.__ModuleLoader__.load({
             role: 'button', tabIndex: 0,
             onClick: () => {
               const next = dir === '' ? e.name : dir + '/' + e.name
-              if (e.type === 'dir') setDir(next) else setFile(next)
+              if (e.type === "dir") { setDir(next) } else { setFile(next) }
             },
           }, (e.type === 'dir' ? '📁 ' : '📄 ') + e.name)),
       )
