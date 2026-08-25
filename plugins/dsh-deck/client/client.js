@@ -568,7 +568,10 @@ window.__ModuleLoader__.load({
             : null,
           htmlFiles.length > 0
             ? h('div', null, h('div', { className: 'dk-field-label' }, 'HTML 产物'),
-              htmlFiles.map((f) => h(FileWidget, { key: f, path: f, root: 'content', base: item.slug })))
+              htmlFiles.filter((f) => {
+                const n = './' + f
+                return !(widget !== null && widget.windows && widget.windows.some((w) => w.path === f || w.path === n || (w.path ?? '').replace(/^\.\//, '') === f))
+              }).map((f) => h(FileWidget, { key: f, path: f, root: 'content', base: item.slug })))
             : null,
           h('div', { className: 'dk-modal-actions' },
             h('button', { type: 'button', className: 'dk-ghost', onClick: onClose }, '关闭'),
@@ -1206,6 +1209,10 @@ window.__ModuleLoader__.load({
 .dk-modal{width:min(440px,92vw);background:var(--color-bg-1,#14161c);border:1px solid var(--color-border-1,#2a2e37);
   border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:10px;box-shadow:0 20px 60px rgba(0,0,0,.5);}
 .dk-modal.wide{width:min(720px,94vw);max-height:88vh;overflow-y:auto;}
+.dk-modal.wide .dk-modal-actions{position:sticky;bottom:-18px;margin-top:auto;padding:10px 0 2px;
+  background:var(--color-bg-1,#14161c);border-top:1px solid var(--color-border-1,#2a2e37);}
+@media (max-height:780px){.dk-frame{height:190px;}}
+@media (max-width:1100px){.dk-board{grid-template-columns:repeat(auto-fit,minmax(170px,1fr));}}
 .dk-modal-title{font-weight:700;font-size:14px;}
 .dk-field{display:flex;flex-direction:column;gap:4px;font-size:12px;}
 .dk-field label{opacity:.6;}
