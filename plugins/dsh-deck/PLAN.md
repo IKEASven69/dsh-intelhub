@@ -160,7 +160,7 @@ plugins/dsh-deck/
 
 ## 附：运维备忘
 
-web 可靠启动（后台 shell PATH 不含 node，用绝对路径）：
+web 可靠启动（后台 shell PATH 不含 node，用绝对路径）：<br>**Playwright 演示窗口一律 3840×2160 全屏开（用户双 4K 屏，小窗直接挨骂）**：
 ```
 cd C:\Users\20369\.dsh\profiles\web
 NODE_USE_ENV_PROXY=1 HTTPS_PROXY=http://127.0.0.1:7897 HTTP_PROXY=http://127.0.0.1:7897 C:\Users\20369\.version-fox\sdks\nodejs\node.exe D:\coding\deepseek-harness\apps\cli\lib\bin.js web
