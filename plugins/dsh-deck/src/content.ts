@@ -119,3 +119,38 @@ export function setContentStatus(fs: ContentFs, root: string, slug: string, stat
   const items = listContent(fs, root)
   return items.find((i) => i.slug === slug) ?? null
 }
+
+/** 正文来源文件（按形态）。 */
+export function draftFileOf(type: ContentType): string {
+  if (type === 'article') return '草稿.md'
+  if (type === 'video') return '脚本.md'
+  return 'PPT.md'
+}
+
+/** 预填文本：标题 + 正文前 limit 字（去 markdown 记号），够贴进意图链。 */
+export function buildPrefillText(fs: ContentFs, root: string, item: ContentItem, limit: number): string {
+  const body = (fs.read(join(root, item.slug, draftFileOf(item.type))) ?? fs.read(join(root, item.slug, '选题.md')) ?? '')
+    .replace(/^#\s+.*$/m, '')
+    .replace(/[#*`>|_-]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  const head = item.title + (item.platforms !== '' ? '' : '')
+  const text = head + (body !== '' ? '：' + body : '')
+  return text.length > limit ? text.slice(0, limit - 1) + '…' : text
+}
+
+export const PREFILL_TARGETS: Record<string, { name: string, intent: (text: string) => string, limit: number }> = {
+  weibo: { name: '微博', limit: 300, intent: (t) => `https://service.weibo.com/share/share.php?title=${encodeURIComponent(t)}` },
+  x: { name: 'X', limit: 260, intent: (t) => `https://x.com/intent/post?text=${encodeURIComponent(t)}` },
+}
+
+/** 发布记录.md 追加一行（表格末尾）。 */
+export function appendPublishRow(fs: ContentFs, root: string, slug: string, row: { date: string; platform: string; result: string; note: string }): boolean {
+  if (slug.includes('/') || slug.includes('\\') || slug.includes('..') || slug === '') return false
+  const p = join(root, slug, '发布记录.md')
+  const raw = fs.read(p)
+  if (raw === null) return false
+  const line = `| ${row.date} | ${row.platform} | ${row.result} | ${row.note} |`
+  fs.write(p, raw.trimEnd() + '\n' + line + '\n')
+  return true
+}

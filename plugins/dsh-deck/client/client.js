@@ -34,6 +34,8 @@ window.__ModuleLoader__.load({
       contentCreate: (title, type, platforms) => post('/api/deck/content/create', { title, type, platforms }),
       contentStatus: (slug, status) => post('/api/deck/content/status', { slug, status }),
       contentHandoff: (slug) => post('/api/deck/content/handoff', { slug }),
+      prefill: (slug, platform) => post('/api/deck/publish/prefill', { slug, platform }),
+      publishRecord: (slug, platform, link) => post('/api/deck/publish/record', { slug, platform, link }),
       projectCreate: (input) => post('/api/deck/project/create', input),
       projectUpdate: (id, patch) => post('/api/deck/project/update', Object.assign({ id }, patch)),
     }
@@ -521,6 +523,7 @@ window.__ModuleLoader__.load({
       const [msg, setMsg] = useState(null)
       const [busy, setBusy] = useState(false)
       const [widget, setWidget] = useState(null)
+      const [pub, setPub] = useState(null)
       useEffect(() => {
         let alive = true
         API.read('content', item.slug + '/选题.md').then((j) => { if (alive) { setTopicHtml(j.ok ? mdToHtml(j.content) : '<p>（无选题.md）</p>') } }).catch(() => {})
@@ -570,7 +573,61 @@ window.__ModuleLoader__.load({
           h('div', { className: 'dk-modal-actions' },
             h('button', { type: 'button', className: 'dk-ghost', onClick: onClose }, '关闭'),
             next !== null ? h('button', { type: 'button', className: 'dk-ghost', onClick: advance }, '状态 → ' + next) : null,
+            h('button', { type: 'button', className: 'dk-ghost', onClick: () => setPub(item.status) }, '📢 预填发布'),
             h('button', { type: 'button', disabled: busy, onClick: handoff }, '🚀 交给 zcode')),
+        ),
+        pub !== null ? h(PublishFlow, { item, stage: pub, onClose: () => setPub(null), onChanged }) : null,
+      )
+    }
+
+    // ── D5 发布预填：意图链打开（微博 share / X intent）+ 剪贴板兜底；人工点发后回写记录 ──
+    function PublishFlow({ item, stage, onClose, onChanged }) {
+      const [platform, setPlatform] = useState('weibo')
+      const [msg, setMsg] = useState(null)
+      const [url, setUrl] = useState(null)
+      const [text, setText] = useState('')
+      const [link, setLink] = useState('')
+      const doPrefill = () => {
+        setMsg('生成预填…')
+        API.prefill(item.slug, platform).then((j) => {
+          if (!j.ok) { setMsg('失败：' + j.error); return }
+          setUrl(j.url); setText(j.text)
+          try { window.open(j.url, '_blank', 'noopener') } catch {}
+          setMsg(j.platform + ' 预填页已打开（被拦就点下面链接）——确认内容后**你自己点发布**')
+          onChanged()
+        }).catch((e) => setMsg(String(e)))
+      }
+      const copy = async () => { try { await navigator.clipboard.writeText(text); setMsg('预填文本已复制 ✓') } catch { setMsg('复制失败，手动选择') } }
+      const record = () => {
+        API.publishRecord(item.slug, platform, link).then((j) => {
+          if (!j.ok) { setMsg('失败：' + j.error); return }
+          setMsg('已记录发布 + 状态 → published ✓')
+          onChanged()
+          setTimeout(onClose, 800)
+        })
+      }
+      return h('div', { className: 'dk-modal-back', onClick: (e) => { if (e.target.className === 'dk-modal-back') onClose() } },
+        h('div', { className: 'dk-modal' },
+          h('div', { className: 'dk-modal-title' }, '📢 预填发布 · ' + item.title),
+          h('div', { className: 'dk-field-row' },
+            h('div', { className: 'dk-field' }, h('label', null, '平台'),
+              h('select', { value: platform, onChange: (e) => setPlatform(e.target.value) },
+                h('option', { value: 'weibo' }, '微博'),
+                h('option', { value: 'x' }, 'X')))),
+          msg !== null ? h(Note, null, msg) : null,
+          url !== null ? h('div', { className: 'dk-col', style: { gap: 6 } },
+            h('a', { href: url, target: '_blank', rel: 'noopener noreferrer' }, '↗ 打开预填页'),
+            h('textarea', { value: text, readOnly: true, rows: 4, style: { background: 'var(--color-bg-2,#1b1e26)', color: 'inherit', border: '1px solid var(--color-border-1,#2a2e37)', borderRadius: 8, padding: 8, font: '12px/1.6 ui-monospace,monospace' } }),
+            h('button', { type: 'button', className: 'dk-mini', style: { alignSelf: 'flex-start' }, onClick: copy }, '复制预填文本')) : null,
+          stage === 'published'
+            ? null
+            : h('div', { className: 'dk-field' }, h('label', null, '发布完成后：贴链接回写记录'),
+              h('div', { className: 'dk-field-row' },
+                h('input', { value: link, onChange: (e) => setLink(e.target.value), placeholder: 'https://（可空）', style: { flex: 1 } }),
+                h('button', { type: 'button', onClick: record }, '已发布，记录 ✓'))),
+          h('div', { className: 'dk-modal-actions' },
+            h('button', { type: 'button', className: 'dk-ghost', onClick: onClose }, '关闭'),
+            h('button', { type: 'button', onClick: doPrefill }, '生成预填并打开')),
         ),
       )
     }

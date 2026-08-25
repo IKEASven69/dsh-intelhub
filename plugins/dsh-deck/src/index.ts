@@ -25,7 +25,7 @@ import { KbIndex, nodeWalk } from './search.ts'
 import { adoptIdea, captureIdea, listIdeas, type IdeasFs } from './ideas.ts'
 import { ensureAgentsMd, makeCard, newTaskId, parseTaskDoc, setCardStatus, upsertCard, TASK_STATUSES, TASK_TYPES, type TaskCard, type TaskFs, type TaskStatus, type TaskType } from './tasks.ts'
 import { buildLessonsSection, parseResultDoc, parseWidgetJson } from './review.ts'
-import { ACCEPTANCE_BY_TYPE, createContent, listContent, setContentStatus, CONTENT_STATUSES, CONTENT_TYPES, type ContentFs, type ContentType, type ContentStatus } from './content.ts'
+import { ACCEPTANCE_BY_TYPE, appendPublishRow, buildPrefillText, createContent, listContent, PREFILL_TARGETS, setContentStatus, CONTENT_STATUSES, CONTENT_TYPES, type ContentFs, type ContentType, type ContentStatus } from './content.ts'
 import { execFile } from 'node:child_process'
 import { join as joinPath } from 'node:path'
 import z from 'schemastery'
@@ -342,6 +342,45 @@ export function apply(ctx: Context, config: Config): void {
       const launch = await launchZcode(contentRoot)
       sendJson(res, 200, { ok: true, card, ...launch })
     } catch (e) { sendJson(res, 400, { ok: false, error: e instanceof Error ? e.message : String(e) }) }
+  })
+
+  // ── D5：发布预填（意图链预填 + 剪贴板兜底，永远人工点发）+ 记录回写 ──
+  const findItem = (slug: unknown): { item: ReturnType<typeof listContent>[number] } | { item: undefined } => {
+    const it = listContent(contentFs, contentRoot).find((i) => i.slug === slug)
+    return { item: it }
+  }
+
+  reg('exact', '/api/deck/publish/prefill', (req, res) => {
+    if (!guard(req, res)) return
+    void (async () => {
+      const body = await readJsonBody(req, 16 * 1024)
+      if (body === null || typeof body !== 'object') { sendJson(res, 400, { ok: false, error: 'body 非法' }); return }
+      const { slug, platform } = body as Record<string, unknown>
+      const target = PREFILL_TARGETS[String(platform ?? '')]
+      const { item } = findItem(slug)
+      if (target === undefined) { sendJson(res, 400, { ok: false, error: `platform 必须是 ${Object.keys(PREFILL_TARGETS).join('|')}` }); return }
+      if (item === undefined) { sendJson(res, 404, { ok: false, error: `内容项不存在：${String(slug)}` }); return }
+      const text = buildPrefillText(contentFs, contentRoot, item, target.limit)
+      appendPublishRow(contentFs, contentRoot, item.slug, { date: new Date().toISOString().slice(0, 10), platform: target.name, result: '预填（未发）', note: '意图链预填，人工点发' })
+      if (item.status === 'idea' || item.status === 'drafting') setContentStatus(contentFs, contentRoot, item.slug, 'prefill')
+      sendJson(res, 200, { ok: true, url: target.intent(text), text, platform: target.name })
+    })()
+  })
+
+  reg('exact', '/api/deck/publish/record', (req, res) => {
+    if (!guard(req, res)) return
+    void (async () => {
+      const body = await readJsonBody(req, 16 * 1024)
+      if (body === null || typeof body !== 'object') { sendJson(res, 400, { ok: false, error: 'body 非法' }); return }
+      const { slug, platform, link } = body as Record<string, unknown>
+      const target = PREFILL_TARGETS[String(platform ?? '')]
+      const { item } = findItem(slug)
+      if (target === undefined || item === undefined) { sendJson(res, 400, { ok: false, error: 'slug/platform 非法' }); return }
+      const linkSafe = typeof link === 'string' ? link.replace(/[|\n\r]/g, ' ').slice(0, 200) : ''
+      appendPublishRow(contentFs, contentRoot, item.slug, { date: new Date().toISOString().slice(0, 10), platform: target.name, result: '已发布 ' + linkSafe, note: '人工点发' })
+      setContentStatus(contentFs, contentRoot, item.slug, 'published')
+      sendJson(res, 200, { ok: true })
+    })()
   })
 
   // ── D3下：审阅（读 RESULT/widget）+ 落库执行器（唯一写 LESSONS.md 的通道）──

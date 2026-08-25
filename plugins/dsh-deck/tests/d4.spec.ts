@@ -1,7 +1,7 @@
 /** D4 内容层单测：扫描/建项去重/三形态模板/状态流转。 */
 import { describe, expect, it } from 'vitest'
 import { join } from 'node:path'
-import { ACCEPTANCE_BY_TYPE, createContent, listContent, setContentStatus, templateFiles, type ContentFs, type ContentType } from '../src/content.ts'
+import { ACCEPTANCE_BY_TYPE, appendPublishRow, buildPrefillText, createContent, listContent, setContentStatus, templateFiles, type ContentFs, type ContentType } from '../src/content.ts'
 
 function memFs(files: Map<string, string>, dirs: Set<string> = new Set()): ContentFs {
   return {
@@ -85,5 +85,26 @@ describe('状态流转 + 模板完整性', () => {
       expect(ACCEPTANCE_BY_TYPE[t].length).toBeGreaterThanOrEqual(3)
       expect(Object.keys(templateFiles(t, 'T')).length).toBeGreaterThanOrEqual(1)
     }
+  })
+})
+
+describe('D5 发布预填', () => {
+  it('buildPrefillText 取形态正文、去 md 记号、超限截断', () => {
+    const fs = memFs(new Map())
+    const item = createContent(fs, ROOT, { title: '测试选题', type: 'article' }, new Date('2026-08-26T11:00:00Z'))
+    fs.write(join(ROOT, item.slug, '草稿.md'), '# 测试选题\n\n**加粗**和`代码`——正文内容若干。'.repeat(30))
+    const t = buildPrefillText(fs, ROOT, item, 120)
+    expect(t.startsWith('测试选题：')).toBe(true)
+    expect(t.length).toBeLessThanOrEqual(120)
+    expect(t).not.toContain('#')
+    expect(t).not.toContain('**')
+  })
+  it('appendPublishRow 表格追加 + 非法 slug 拒绝', () => {
+    const fs = memFs(new Map())
+    const item = createContent(fs, ROOT, { title: '记录测试', type: 'video' }, new Date('2026-08-26T12:00:00Z'))
+    expect(appendPublishRow(fs, ROOT, item.slug, { date: '2026-08-26', platform: '微博', result: '预填（未发）', note: 'x' })).toBe(true)
+    const raw = fs.read(join(ROOT, item.slug, '发布记录.md'))!
+    expect(raw.trimEnd().endsWith('| 2026-08-26 | 微博 | 预填（未发） | x |')).toBe(true)
+    expect(appendPublishRow(fs, ROOT, '../escape', { date: 'd', platform: 'p', result: 'r', note: 'n' })).toBe(false)
   })
 })
