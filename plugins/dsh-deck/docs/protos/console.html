@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>原型 3 · 控制室满血卡（三态/时长/预览/ack）</title>
+<style>
+  :root { --bg:#0e1015; --panel:#14161c; --panel2:#1b1e26; --line:#2a2e37; --ink:#e6e6e6; --accent:#5b6cff; }
+  * { box-sizing:border-box; margin:0; }
+  body { background:var(--bg); color:var(--ink); font:13px/1.65 system-ui,'Segoe UI',sans-serif; padding:18px; }
+  .bar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:14px; }
+  .note { opacity:.55; font-size:12px; }
+  .btn { background:var(--panel2); border:1px solid var(--line); color:var(--accent); border-radius:8px; padding:4px 12px; cursor:pointer; font-size:12px; }
+  .btn:hover { border-color:var(--accent); }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:12px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:13px 15px; cursor:pointer; position:relative; transition:border-color .15s; }
+  .card:hover { border-color:var(--accent); }
+  .head { display:flex; align-items:center; gap:9px; }
+  .ico { font-size:22px; }
+  .name { font-weight:650; font-size:13.5px; flex:1; }
+  .tag { font-size:11.5px; border-radius:999px; padding:1px 11px; border:1px solid; white-space:nowrap; }
+  .need { color:#fbbf24; border-color:#fbbf2444; background:#fbbf2411; }
+  .busy { color:#60a5fa; border-color:#60a5fa44; background:#60a5fa11; }
+  .done { color:#34d399; border-color:#34d39944; background:#34d39911; }
+  .idle { color:#8b90a0; border-color:var(--line); }
+  .rt { font-family:ui-monospace,monospace; font-size:11.5px; opacity:.65; margin-top:6px; }
+  .prev { margin-top:7px; font-size:12px; opacity:.72; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  .bind { margin-top:8px; font-size:11.5px; opacity:.6; }
+  .glow { animation:pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { box-shadow:0 0 0 0 transparent; } 50% { box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 45%,transparent); } }
+  .toast { position:fixed; left:50%; bottom:22px; transform:translateX(-50%); background:var(--panel2); border:1px solid var(--accent);
+    color:var(--ink); border-radius:10px; padding:8px 18px; font-size:12.5px; opacity:0; transition:opacity .2s; pointer-events:none; }
+  .toast.show { opacity:1; }
+</style>
+</head>
+<body>
+<div class="bar">
+  <span class="note">💬 控制室卡原型：三态判定 + 运行时长实时走 + 消息预览（零 token）+ 点击 ack 熄光；状态再变会重新亮。数据全部来自宿主会话快照订阅。</span>
+</div>
+<div class="bar">
+  <button class="btn" onclick="mutate('need')">模拟：需要你决定</button>
+  <button class="btn" onclick="mutate('busy')">模拟：开始工作</button>
+  <button class="btn" onclick="mutate('done')">模拟：任务完成</button>
+  <button class="btn" onclick="mutate('idle')">模拟：转空闲</button>
+  <button class="btn" onclick="ackAll()">✓ 全部已读（ack）</button>
+</div>
+<div class="grid" id="grid"></div>
+<div class="toast" id="toast"></div>
+<script>
+const META = { need:'🙋 待你决定', busy:'🏃 工作中', done:'✅ 已完成', idle:'💤 空闲' }
+let cards = [
+  { id:'kb', ico:'🧠', name:'知识调研台', bind:'安全审计', prev:'已完成并自动挂到「窗口1」，想调整直接说，我改完会自动更新', st:'done', rt:0, since:0 },
+  { id:'media', ico:'🎬', name:'自媒体台', bind:'coding', prev:'把 TASK.md 里 status: queued 的卡改成 running，然后按验收条目干活，结论带来源', st:'busy', rt:754, since:Date.now() - 754000 },
+  { id:'bench', ico:'🗂️', name:'周报试验台', bind:'', prev:'', st:'idle', rt:0, since:0 },
+  { id:'p2', ico:'🧪', name:'实验项目B', bind:'扫描插件清单', prev:'需要你确认：产物放 content/B/ 还是新建 content/exp-b/？', st:'need', rt:0, since:0 },
+]
+const acked = new Set()
+const fmt = (ms) => { const s = Math.floor(ms / 1000); return String(Math.floor(s / 60)).padStart(2,'0') + ':' + String(s % 60).padStart(2,'0') }
+function render() {
+  document.getElementById('grid').innerHTML = cards.map(c => `
+    <div class="card ${(!acked.has(c.id) && (c.st === 'need' || c.st === 'done')) ? 'glow' : ''}" onclick="openCard('${c.id}')">
+      <div class="head"><span class="ico">${c.ico}</span><span class="name">${c.name}</span><span class="tag ${c.st}">${META[c.st]}</span></div>
+      <div class="rt">${c.st === 'busy' ? '已运行 <span data-rt="' + c.id + '">' + fmt(c.rt) + '</span>' : (c.since ? '上次活跃 ' + new Date(c.since).toLocaleTimeString() : '')}</div>
+      ${c.prev ? `<div class="prev">${c.prev}</div>` : ''}
+      ${c.bind ? `<div class="bind">🔗 ${c.bind}</div>` : ''}
+    </div>`).join('')
+}
+setInterval(() => { cards.forEach(c => { if (c.st === 'busy') c.rt = Date.now() - c.since })
+  document.querySelectorAll('[data-rt]').forEach(el => { const c = cards.find(x => x.id === el.dataset.rt); if (c) el.textContent = fmt(c.rt) }) }, 1000)
+function openCard(id) { acked.add(id); render(); toast('打开 ' + cards.find(c => c.id === id).name + '（已 ack 熄光，状态再变会重新亮）') }
+function ackAll() { cards.forEach(c => acked.add(c.id)); render(); toast('全部已读') }
+function mutate(st) {
+  const c = cards.find(x => x.st !== st) || cards[0]
+  c.st = st; c.since = Date.now(); c.rt = 0
+  if (st === 'busy') c.prev = '正在按验收条目逐条干活；结论要带来源（URL 或文件路径）'
+  if (st === 'need') c.prev = '需要你确认：产物放哪个目录？'
+  if (st === 'done') c.prev = '已完成，widget-result.json 已写入，产物自动挂窗'
+  if (st === 'idle') c.prev = ''
+  acked.delete(c.id); render(); toast(c.name + ' → ' + META[st])
+}
+function toast(t) { const el = document.getElementById('toast'); el.textContent = t; el.classList.add('show'); clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove('show'), 1800) }
+render()
+</script>
+</body>
+</html>

@@ -6,6 +6,48 @@
 
 ---
 
+## ⚡ v2 质量整备计划（2026-08-26 起 · 用户实测反馈驱动 · 当前执行）
+
+> 用户实测反馈：二级页面全是简化版、样式潦草、浮窗/分格全无。以下按优先级执行，每项完成即勾。
+
+### P0 修复（已核实，立即）
+- [ ] F1 路径误杀：security.ts `startsWith('.')` 一刀切拒绝 `.git/.gitignore/.baoyu-skills`（穿越已由段级+包含性检查防住）→ 删前缀规则 + 单测（点段放行、`..`/`a/../b` 仍拦）
+- [ ] F2 「四库」改名「📚 文库」：层级标签白话化（① 采集原料 ② 事实核查 ③ 判断沉淀 ④ 方法论 ⑤ 点子池）+ 顶部一句说明
+- [ ] F3 启动器配置化（用户实测 zcode TUI 不可用；opencode 1.18.21 实测存活）：deck.json 存 launcher{cli: opencode|zcode|custom, customCmd, cwd}；「🚀 发给 agent」点开先弹启动器选择（CLI 单选 + 启动目录：项目夹/自定义 + 记住选择），默认 opencode；dispatch 按配置起终端
+
+### P1 悬浮窗口系统（核心新增，worktable 对齐+超越）
+- [ ] W1 浮窗引擎：DragLayer + Window 组件——标题栏拖动、右下角缩放、最小化/最大化/关闭、点击置顶（z-index 栈）、位置大小 localStorage 持久化（dsh-deck.windows.v1，重开恢复）。**worktable 实际没有自由浮窗（其 float 仅侧栏 dock），此项为超越点**
+- [ ] W2 窗口类型注册表：md 预览窗 / **编辑窗（md+html 可改可存，保存走 fs/write 原子写，预览/编辑双态——对齐 worktable TextViewer）** / html 产物窗（iframe）/ 浏览器窗（url 校验 /^(\/|https?:)/ + 地址栏，Enter 回写内容——对齐 BrowserPane）/ 任务卡窗
+- [ ] W3 接入点：文库文件→浮窗（预览+编辑切换）；内容详情文件 chips + 产物→浮窗；点子卡/内容卡详情→浮窗；发布预填→浮窗承载说明+链接+文本
+- [ ] W3b **对话右栏（worktable 同款路线）**：deck shell 从全屏盖死改为「左内容 + 右原生对话」——applyMargin 挤宿主会话视图到右侧（findConversationRoot 找 [data-phase] 根 + ResizeObserver/MutationObserver 重锚定），切会话不关工作台；右侧宽度可拖、可收起
+- [ ] W4 主区双栏 v1：列表左 320px / 右详情，可收起；<1100px 自动单栏。worktable 全套 dock 引擎（8 预设/跨窗拖标签/保活池）不抄，留 v0.2
+
+### P1b 派发双通道（源码核实后的路线修正，worktable 核心机制对齐）
+- [ ] D1 **宿主会话模式**（默认推荐）：任务文本 prompt 进绑定/新建 dsh 会话（promptIntoSession 三级降级：conversation.sendSession→session.prompt('queue')→scoped conversation.send）；任务文本模板=窗口/任务身份+项目文件夹硬约束+按类型选产出形式+**知识包**（deck 版：路由清单/皮肤说明/协议要点，免 agent 重新侦察）；新会话 ensureSessionPreset 防失效模型继承
+- [ ] D2 外置 CLI 模式（零 DS token）：opencode 默认（实测存活）/zcode/自定义命令+目录可选，配置存 deck.json
+- [ ] D3 **产物自动挂载闭环**（对齐 worktable applyWidgetManifest）：widget-result.json {window:'main'|'窗口N'|'float', kind, path|url|html} → 完成事件消费一次 + 5s 自愈扫描兜底 + 清单原文指纹去重（不覆盖用户手改）+ pendingMount localStorage 断点续挂
+- [ ] D4 **产物皮肤**：GET /api/deck/template/skin.css + skin.html 组件参考（esbuild text loader 嵌入分发），任务文本要求产物引用——agent 产物与宿主风格一致（worktable dshell 同思路）
+
+### P1c 控制室对齐 worktable 完整度
+- [ ] C1 会话卡三态判定：待你决定（pendingInteraction/会话 pending）> 已完成 > 工作中 > 空闲；运行时长（最早 running job startedAt）；点击 ack 熄光（localStorage notifyAck，状态转移自动重新亮）
+- [ ] C2 **消息预览**：内存快照 lastTextOf（零 token）+ 冷会话 face.history({maxMessages:6}) 预热（6s 防抖），cleanPreviewText 清代码块取 220 字
+- [ ] C3 会话分组列表（读宿主 workspace.json 按工作区分组，排除子代理/archived）用于绑定与派发选择
+
+### P1 台面补完（每个二级页做到「能用完整」）
+- [ ] T1 点子库→看板：三列 🌱种子/🥚孵化/✅已采纳；卡点开浮窗详情（全文/编辑正文/状态流转/→调研任务卡/→选题夹）；顶部快速捕获保留
+- [ ] T2 复盘台：左列 insights/*.md 文档清单 + 右正文渲染 + 过滤页签（全部/⚠️待验证/✅已验证）+ 「本次调研新落库」高亮最近 Deck 章节
+- [ ] T3 内容详情文件可编辑：全部文件 chips 浮窗化，md/html 均可编辑保存，PPT html 改完预览即时刷新
+- [ ] T4 选题创建重做：字段一句话说明+占位示例；平台输入改胶囊多选（公众号/微博/X/小红书/知乎/自定义）；创建成功直接打开详情并置 drafting
+- [ ] T5 发布弹窗重做：三档字号规范、按钮统一（实心=生成预填/描边=关闭）、步骤化（①选平台 ②生成并复制 ③人工发布 ④贴链接回写），杀小字鬼字
+- [ ] T6 全局小字下限 11.5px 清理（消灭 10/10.5px 残留）
+
+### P2 质量闸
+- [ ] Q1 Playwright 全量回归（scripts/e2e.cjs）：六台面×全部交互——建卡→派发（双 CLI）→审阅勾选落库→内容全周期（建/交/产/编/发预填/记录）→浮窗（开/拖/缩/存/复开）→双栏→文库点遍（含点目录）；产出 docs/e2e-report.md + 全截图
+- [ ] Q2 发布流程最终人工实测（用户点发微博/X）
+
+---
+
+
 ## 〇、交接必读清单（执行 agent 开工前按序读）
 
 1. `D:\coding\dsh-plugin\plugins\dsh-polymarket\DEV.md`（插件工程全流程先例）

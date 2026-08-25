@@ -44,6 +44,17 @@ describe('resolveWithinRoot（穿越全家桶）', () => {
     expect(resolveWithinRoot(ROOT, './a')).toBeNull()
     expect(resolveWithinRoot(ROOT, '')).toBeNull()
   })
+  it('点开头的合法段（.git/.gitignore/.env）放行；点穿越仍拦', () => {
+    expect(resolveWithinRoot(ROOT, '.git')).not.toBeNull()
+    expect(resolveWithinRoot(ROOT, '.git/objects/ab')).not.toBeNull()
+    expect(resolveWithinRoot(ROOT, '.gitignore')).not.toBeNull()
+    expect(resolveWithinRoot(ROOT, '.baoyu-skills/.env')).not.toBeNull()
+    expect(resolveWithinRoot(ROOT, '.')).toBeNull()
+    expect(resolveWithinRoot(ROOT, '..')).toBeNull()
+    expect(resolveWithinRoot(ROOT, 'a/../b')).toBeNull()
+    expect(resolveWithinRoot(ROOT, 'a/./b')).toBeNull()
+    expect(resolveWithinRoot(ROOT, 'a/.hidden')).not.toBeNull()
+  })
   it('resolve 后逃出根的变形路径被包含性复核拦下', () => {
     // Unicode 分隔符变形之类 resolve 后越界的，靠包含性检查兜底
     expect(resolveWithinRoot(ROOT, 'a/b')).not.toBeNull()

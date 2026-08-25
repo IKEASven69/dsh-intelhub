@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>原型 4 · 点子库看板</title>
+<style>
+  :root { --bg:#0e1015; --panel:#14161c; --panel2:#1b1e26; --line:#2a2e37; --ink:#e6e6e6; --accent:#5b6cff; }
+  * { box-sizing:border-box; margin:0; }
+  body { background:var(--bg); color:var(--ink); font:13px/1.65 system-ui,'Segoe UI',sans-serif; padding:18px; }
+  .cap { display:flex; gap:8px; max-width:640px; margin-bottom:14px; }
+  .cap input { flex:1; background:var(--panel); border:1px solid var(--line); border-radius:10px; color:var(--ink); padding:9px 12px; font:13px system-ui; outline:none; }
+  .cap input:focus { border-color:var(--accent); }
+  .cap button { background:var(--accent); color:#fff; border:none; border-radius:10px; padding:9px 20px; cursor:pointer; font-weight:600; }
+  .note { opacity:.55; font-size:12px; margin-bottom:10px; }
+  .board { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; align-items:start; }
+  .col { background:color-mix(in srgb,var(--panel) 55%,transparent); border:1px solid var(--line); border-radius:14px; padding:10px; min-height:220px; }
+  .colhead { font-size:12.5px; font-weight:650; opacity:.75; padding:2px 6px 8px; }
+  .icard { background:var(--panel); border:1px solid var(--line); border-radius:11px; padding:10px 12px; margin-bottom:8px; cursor:pointer; }
+  .icard:hover { border-color:var(--accent); }
+  .icard b { font-size:12.5px; display:block; }
+  .icard span { font-size:11.5px; opacity:.5; font-family:ui-monospace,monospace; }
+  .icard.picked { opacity:.55; }
+  .back { position:fixed; inset:0; background:rgba(0,0,0,.55); display:flex; align-items:center; justify-content:center; z-index:10; }
+  .back[hidden] { display:none; }
+  .modal { width:min(520px,92vw); background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:18px; display:flex; flex-direction:column; gap:10px; box-shadow:0 20px 60px rgba(0,0,0,.5); }
+  .modal h3 { font-size:15px; }
+  .modal textarea { background:var(--panel2); border:1px solid var(--line); border-radius:9px; color:var(--ink); padding:9px; font:12.5px/1.7 system-ui; min-height:110px; outline:none; resize:vertical; }
+  .acts { display:flex; gap:8px; flex-wrap:wrap; }
+  .btn { background:var(--panel2); border:1px solid var(--line); color:var(--accent); border-radius:8px; padding:5px 13px; cursor:pointer; font-size:12.5px; }
+  .btn:hover { border-color:var(--accent); }
+  .btn.pri { background:var(--accent); color:#fff; border:none; font-weight:600; }
+  .meta { font-size:11.5px; opacity:.55; font-family:ui-monospace,monospace; }
+</style>
+</head>
+<body>
+<div class="cap">
+  <input id="cap" placeholder="随手记一个点子…（首行会成为标题，回车记下）">
+  <button onclick="capture()">记下</button>
+</div>
+<div class="note">💡 点子库看板原型：点卡片开详情（编辑/状态流转/→ 调研任务卡 / → 选题夹）；漏斗：点子 → 调研或选题 → 生产/落库</div>
+<div class="board">
+  <div class="col"><div class="colhead">🌱 种子</div><div id="c-seed"></div></div>
+  <div class="col"><div class="colhead">🥚 孵化</div><div id="c-incubating"></div></div>
+  <div class="col"><div class="colhead">✅ 已采纳</div><div id="c-picked"></div></div>
+</div>
+<div class="back" id="back" hidden>
+  <div class="modal">
+    <h3 id="m-title"></h3>
+    <div class="meta" id="m-meta"></div>
+    <textarea id="m-body"></textarea>
+    <div class="acts">
+      <button class="btn pri" onclick="saveBody()">💾 保存正文</button>
+      <button class="btn" onclick="move('incubating')">🥚 → 孵化</button>
+      <button class="btn" onclick="move('picked')">✅ → 已采纳</button>
+      <button class="btn" onclick="adopt('research')">📋 → 调研任务卡</button>
+      <button class="btn" onclick="adopt('content')">🎬 → 选题夹</button>
+      <span style="flex:1"></span>
+      <button class="btn" onclick="closeM()">关闭</button>
+    </div>
+  </div>
+</div>
+<script>
+let ideas = [
+  { id:1, st:'seed', title:'把 LESSONS 做成周报自动摘要', body:'每周日自动把本周新增判断汇总成周报草稿，放进自媒体台待发列。', created:'2026-08-25' },
+  { id:2, st:'seed', title:'评论区高赞问题反哺选题', body:'抓取高赞评论里的问题，攒成「观众想看」选题池。', created:'2026-08-25' },
+  { id:3, st:'incubating', title:'预测市场中文科普系列', body:'流动性/做市商/长尾市场三个切面各出一期；先调研再定脚本。', created:'2026-08-24' },
+  { id:4, st:'picked', title:'一页看懂 dsh 插件开发（PPT）', body:'已采纳成 content/一页看懂-dsh-插件开发/。', created:'2026-08-24' },
+]
+let cur = null
+function render() {
+  for (const st of ['seed','incubating','picked']) {
+    document.getElementById('c-' + st).innerHTML = ideas.filter(i => i.st === st).map(i =>
+      `<div class="icard ${i.st === 'picked' ? 'picked' : ''}" onclick="openM(${i.id})"><b>${i.title}</b><span>${i.created}</span></div>`).join('')
+  }
+}
+function capture() {
+  const v = document.getElementById('cap').value.trim(); if (!v) return
+  const title = v.split('\n')[0].slice(0, 60)
+  ideas.unshift({ id:Date.now(), st:'seed', title, body:v, created:new Date().toISOString().slice(0,10) })
+  document.getElementById('cap').value = ''; render()
+}
+document.getElementById('cap').addEventListener('keydown', e => { if (e.key === 'Enter') capture() })
+function openM(id) {
+  cur = ideas.find(i => i.id === id)
+  document.getElementById('m-title').textContent = cur.title
+  document.getElementById('m-meta').textContent = 'ideas/ · ' + cur.created + ' · 状态 ' + cur.st
+  document.getElementById('m-body').value = cur.body
+  document.getElementById('back').hidden = false
+}
+function closeM() { document.getElementById('back').hidden = true }
+function saveBody() { cur.body = document.getElementById('m-body').value; closeM(); render() }
+function move(st) { cur.st = st; render(); closeM() }
+function adopt(to) {
+  cur.st = 'picked'; render()
+  alert('→ ' + (to === 'research' ? '已生成调研任务卡（TASK.md）✓ 实际实现：写入项目 TASK.md 队列' : '已生成选题夹（content/{slug}/）✓ 实际实现：建 meta.md + 选题.md + 模板'))
+  closeM()
+}
+render()
+</script>
+</body>
+</html>

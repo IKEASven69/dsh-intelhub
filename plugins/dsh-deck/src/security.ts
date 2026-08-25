@@ -68,19 +68,19 @@ export class RootRegistry {
 
 /**
  * 相对路径安全解析：POSIX 相对、无 .. 段、无反斜杠/盘符/NUL，resolve 后必须
- * 仍落在根内。返回绝对路径；任何违规返回 null。
+ * 仍落在根内。点开头的段（.git/.gitignore 等）合法——穿越由段级检查+包含性
+ * 复核负责，不靠前缀一刀切。
  */
 export function resolveWithinRoot(rootAbs: string, rel: string): string | null {
   if (typeof rel !== 'string' || rel.length === 0 || rel.length > 1024) return null
   if (rel.includes('\0')) return null
   if (rel.includes('\\')) return null
-  if (rel.startsWith('/') || rel.startsWith('.')) return null
-  if ( /^[a-zA-Z]:/.test(rel)) return null
+  if (rel.startsWith('/')) return null
+  if (/^[a-zA-Z]:/.test(rel)) return null
   const segments = rel.split('/')
   if (segments.some((s) => s === '' || s === '.' || s === '..')) return null
   const root = resolve(rootAbs)
   const abs = resolve(root, ...segments)
-  // resolve 后包含性复核（跨平台分隔符归一比较）
   const normAbs = abs.split(sep).join('/')
   const normRoot = root.split(sep).join('/')
   if (normAbs !== normRoot && !normAbs.startsWith(normRoot + '/')) return null

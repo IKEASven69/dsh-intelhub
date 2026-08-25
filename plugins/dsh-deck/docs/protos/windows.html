@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>原型 1 · 悬浮窗口系统</title>
+<style>
+  :root { --bg:#0e1015; --panel:#14161c; --panel2:#1b1e26; --line:#2a2e37; --ink:#e6e6e6; --accent:#5b6cff; }
+  * { box-sizing:border-box; margin:0; }
+  body { background:var(--bg); color:var(--ink); font:13px/1.65 system-ui,'Segoe UI',sans-serif; overflow:hidden; height:100vh; }
+  .hint { position:fixed; left:16px; top:14px; z-index:1; opacity:.6; font-size:12px; }
+  .win { position:fixed; min-width:260px; min-height:150px; background:var(--panel); border:1px solid var(--line);
+    border-radius:12px; box-shadow:0 16px 48px rgba(0,0,0,.45); display:flex; flex-direction:column; overflow:hidden; }
+  .win.focused { border-color:color-mix(in srgb,var(--accent) 55%,var(--line)); box-shadow:0 20px 60px rgba(0,0,0,.6); }
+  .win.min { height:38px !important; min-height:38px; }
+  .win.max { left:0 !important; top:0 !important; width:100vw !important; height:100vh !important; border-radius:0; }
+  .tbar { height:38px; flex-shrink:0; display:flex; align-items:center; gap:8px; padding:0 10px; cursor:grab;
+    background:var(--panel2); border-bottom:1px solid var(--line); user-select:none; }
+  .tbar:active { cursor:grabbing; }
+  .tbar .dot { width:10px; height:10px; border-radius:50%; background:var(--accent); opacity:.75; }
+  .tbar .title { font-weight:650; font-size:12.5px; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .tbar button { background:none; border:none; color:var(--ink); opacity:.55; cursor:pointer; font-size:13px; padding:3px 7px; border-radius:6px; }
+  .tbar button:hover { opacity:1; background:#262a34; }
+  .wbody { flex:1; overflow:auto; padding:12px; }
+  .rs { position:absolute; right:0; bottom:0; width:16px; height:16px; cursor:nwse-resize;
+    background:linear-gradient(135deg,transparent 50%,var(--accent) 50%); opacity:.5; }
+  .md h2 { margin:.4em 0 .3em; font-size:15px; }
+  .md p { margin:.35em 0; }
+  .md code { background:var(--panel2); border-radius:4px; padding:0 5px; font-family:ui-monospace,monospace; }
+  .md li { margin-left:1.3em; }
+  textarea { width:100%; height:100%; min-height:140px; background:var(--panel2); color:var(--ink); border:1px solid var(--line);
+    border-radius:8px; padding:9px; font:12.5px/1.6 ui-monospace,monospace; outline:none; resize:none; }
+  .urlbar { display:flex; gap:6px; padding:8px 10px; border-bottom:1px solid var(--line); }
+  .urlbar input { flex:1; background:var(--panel2); border:1px solid var(--line); border-radius:8px; color:var(--ink); padding:6px 10px; font:12.5px system-ui; outline:none; }
+  .urlbar button { background:var(--accent); color:#fff; border:none; border-radius:8px; padding:6px 14px; cursor:pointer; }
+  .frame { width:100%; height:100%; border:none; background:#fff; }
+  .btn { background:var(--panel2); border:1px solid var(--line); color:var(--accent); border-radius:8px; padding:3px 11px; cursor:pointer; font-size:12px; }
+  .btn:hover { border-color:var(--accent); }
+</style>
+</head>
+<body>
+<div class="hint">🪟 悬浮窗口原型：拖标题栏移动 · 右下角缩放 · 双击标题栏最大化 · — 最小化 · 点击任意处置顶 · 位置已持久化（刷新还原）</div>
+<div style="position:fixed;left:16px;bottom:16px;z-index:1;display:flex;gap:8px">
+  <button class="btn" onclick="restoreAll()">↺ 还原全部窗口</button>
+</div>
+
+<script>
+const LS = 'dk-proto-windows'
+const store = { load(){ try { return JSON.parse(localStorage.getItem(LS)) || {} } catch { return {} } },
+  save(s){ try { localStorage.setItem(LS, JSON.stringify(s)) } catch {} } }
+let zTop = 100
+let state = store.load()
+
+function makeWindow(cfg) {
+  const el = document.createElement('div')
+  el.className = 'win'
+  const st = state[cfg.id] || {}
+  const x = st.x ?? cfg.x, y = st.y ?? cfg.y, w = st.w ?? cfg.w, h = st.h ?? cfg.h
+  el.style.cssText = `left:${x}px;top:${y}px;width:${w}px;height:${h}px;z-index:${++zTop}`
+  el.innerHTML = `
+    <div class="tbar"><span class="dot"></span><span class="title">${cfg.title}</span>
+      <button data-a="min" title="最小化">—</button><button data-a="max" title="最大化">□</button><button data-a="close" title="关闭">×</button></div>
+    <div class="wbody"></div><div class="rs"></div>`
+  const body = el.querySelector('.wbody')
+  if (cfg.content) body.innerHTML = cfg.content
+  if (cfg.build) cfg.build(body)
+  document.body.appendChild(el)
+
+  const save = () => { const r = el.getBoundingClientRect(); state[cfg.id] = { x: r.left, y: r.top, w: r.width, h: el.classList.contains('min') ? (st.h ?? r.height) : r.height }; store.save(state) }
+  const focus = () => { document.querySelectorAll('.win').forEach(w => w.classList.remove('focused')); el.classList.add('focused'); el.style.zIndex = ++zTop }
+  el.addEventListener('pointerdown', focus)
+
+  // 拖动
+  const tbar = el.querySelector('.tbar')
+  tbar.addEventListener('pointerdown', (e) => {
+    if (e.target.tagName === 'BUTTON') return
+    if (el.classList.contains('max')) return
+    const r = el.getBoundingClientRect(), dx = e.clientX - r.left, dy = e.clientY - r.top
+    tbar.setPointerCapture(e.pointerId)
+    const move = (ev) => { el.style.left = Math.max(0, ev.clientX - dx) + 'px'; el.style.top = Math.max(0, ev.clientY - dy) + 'px' }
+    const up = () => { tbar.removeEventListener('pointermove', move); tbar.removeEventListener('pointerup', up); save() }
+    tbar.addEventListener('pointermove', move); tbar.addEventListener('pointerup', up)
+  })
+  tbar.addEventListener('dblclick', () => toggleMax())
+
+  // 缩放
+  const rs = el.querySelector('.rs')
+  rs.addEventListener('pointerdown', (e) => {
+    e.stopPropagation(); focus()
+    if (el.classList.contains('max')) return
+    const r = el.getBoundingClientRect(), sx = e.clientX, sy = e.clientY, sw = r.width, sh = el.classList.contains('min') ? (state[cfg.id].h ?? 300) : r.height
+    el.classList.remove('min')
+    rs.setPointerCapture(e.pointerId)
+    const move = (ev) => { el.style.width = Math.max(260, sw + ev.clientX - sx) + 'px'; el.style.height = Math.max(150, sh + ev.clientY - sy) + 'px' }
+    const up = () => { rs.removeEventListener('pointermove', move); rs.removeEventListener('pointerup', up); save() }
+    rs.addEventListener('pointermove', move); rs.addEventListener('pointerup', up)
+  })
+
+  const toggleMax = () => {
+    if (el.classList.contains('max')) { el.classList.remove('max'); const s = state[cfg.id] || {}; if (s.x !== undefined) el.style.cssText += `;left:${s.x}px;top:${s.y}px;width:${s.w}px;height:${s.h}px` }
+    else { const r = el.getBoundingClientRect(); state[cfg.id] = { x: r.left, y: r.top, w: r.width, h: r.height }; store.save(state); el.classList.add('max') }
+    save()
+  }
+  el.querySelector('[data-a=min]').onclick = () => { el.classList.toggle('min'); save() }
+  el.querySelector('[data-a=max]').onclick = toggleMax
+  el.querySelector('[data-a=close]').onclick = () => { el.style.display = 'none'; state[cfg.id].closed = true; store.save(state) }
+  if (st.closed) el.style.display = 'none'
+  focus()
+}
+function restoreAll() { state = {}; store.save(state); location.reload() }
+
+// ── 四种窗型 ──
+makeWindow({ id: 'md', title: '📄 md 预览窗 · LESSONS.md', x: 80, y: 90, w: 430, h: 320, content: `
+  <div class="md"><h2>九、Deck 落库（2026-08-25）</h2>
+  <p>1. GLM-5 舆论反馈以正面为主 <code>⚠️待验证</code></p>
+  <p>2. 开发者生态位是口碑护城河 <code>⚠️待验证</code></p>
+  <li>来源：X + 微博高互动帖 48h</li></div>` })
+
+makeWindow({ id: 'edit', title: '✏️ 编辑窗 · 脚本.md（预览⇄编辑）', x: 560, y: 130, w: 460, h: 340, build(body) {
+  let mode = 'edit'
+  const raw = '# 视频口播稿\n\n## 0:00 钩子\n\n你以为插件开发很难？\n\n## 0:20 论点\n\n- 两半结构：host 路由 + 静态客户端\n- 接单协议：TASK.md 一张卡的事\n\n## 1:40 收尾\n\n一周，你也能做出来。'
+  body.innerHTML = `<div style="height:100%;display:flex;flex-direction:column;gap:8px">
+    <div style="display:flex;gap:8px"><button class="btn" data-t="mode">👁 切到预览</button><button class="btn" data-t="save">💾 保存</button><span style="opacity:.5;font-size:11.5px;align-self:center" data-t="tip">编辑态</span></div>
+    <textarea data-t="ta"></textarea></div>`
+  const ta = body.querySelector('[data-t=ta]'), tip = body.querySelector('[data-t=tip]'), mb = body.querySelector('[data-t=mode]')
+  ta.value = raw
+  mb.onclick = () => {
+    if (mode === 'edit') { mode = 'view'; mb.textContent = '✏️ 切到编辑'; tip.textContent = '预览态（保存后生效）'
+      body.querySelector('[data-t=ta]').outerHTML = `<div class="md" data-t="ta">${ta.value.replace(/^##\s+(.+)$/gm,'<h2>$1</h2>').replace(/^#\s+(.+)$/gm,'<h1 style="font-size:17px">$1</h1>').replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/^-\s+(.+)$/gm,'<li>$1</li>').replace(/\n\n/g,'</p><p>').replace(/\n/g,'<br>')}</div>` }
+    else { mode = 'edit'; mb.textContent = '👁 切到预览'; tip.textContent = '编辑态'
+      const cur = body.querySelector('[data-t=ta]').textContent || ta.value
+      body.querySelector('[data-t=ta]').outerHTML = '<textarea data-t="ta"></textarea>'; body.querySelector('[data-t=ta]').value = ta.value }
+  }
+  body.querySelector('[data-t=save]').onclick = () => { ta.value = (body.querySelector('[data-t=ta]') || {}).value ?? ta.value; tip.textContent = '已保存 ✓（' + new Date().toLocaleTimeString() + '）' }
+} })
+
+makeWindow({ id: 'art', title: '📊 产物窗 · 情绪分布（iframe）', x: 300, y: 440, w: 480, h: 300, build(body) {
+  body.style.padding = '0'
+  body.innerHTML = `<iframe class="frame" sandbox srcdoc="<!doctype html><meta charset='utf-8'><body style='margin:0;font-family:system-ui;background:linear-gradient(135deg,#5b6cff22,#8b5cf622),#0e1015;color:#e6e6e6'><div style='padding:22px'><h3 style='margin:0 0 14px'>GLM-5 发布反馈 · 情绪分布</h3><div style='display:flex;gap:10px;align-items:flex-end;height:150px'><div style='width:70px;height:64%;background:#5b6cff;border-radius:6px 6px 0 0;display:flex;align-items:flex-end;justify-content:center;padding-bottom:4px'>正面 64%</div><div style='width:70px;height:24%;background:#5b6cff88;border-radius:6px 6px 0 0;display:flex;align-items:flex-end;justify-content:center;padding-bottom:4px'>中性 24%</div><div style='width:70px;height:12%;background:#5b6cff44;border-radius:6px 6px 0 0;display:flex;align-items:flex-end;justify-content:center;padding-bottom:4px'>负面 12%</div></div><p style='opacity:.6;font-size:12px;margin:12px 0 0'>n=87 · zcode 采集 · 点击窗口右下角可缩放</p></div></body>"></iframe>`
+} })
+
+makeWindow({ id: 'browser', title: '🌐 浏览器窗 · url', x: 850, y: 330, w: 440, h: 380, build(body) {
+  body.style.padding = '0'
+  body.innerHTML = `<div class="urlbar"><input value="https://example.com" spellcheck="false"><button>Go</button></div><iframe class="frame"></iframe>`
+  const inp = body.querySelector('input'), fr = body.querySelector('iframe'), go = () => { const u = inp.value.trim(); if (/^(https?:|\/)/.test(u)) fr.src = u }
+  body.querySelector('button').onclick = go
+  inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') go() })
+} })
+</script>
+</body>
+</html>
