@@ -25,6 +25,7 @@ import { KbIndex, nodeWalk } from './search.ts'
 import { adoptIdea, captureIdea, listIdeas, type IdeasFs } from './ideas.ts'
 import { ensureAgentsMd, makeCard, newTaskId, parseTaskDoc, setCardStatus, upsertCard, TASK_STATUSES, TASK_TYPES, type TaskCard, type TaskFs, type TaskStatus, type TaskType } from './tasks.ts'
 import { buildLessonsSection, parseResultDoc, parseWidgetJson } from './review.ts'
+import { ACCEPTANCE_BY_TYPE, createContent, listContent, setContentStatus, CONTENT_STATUSES, CONTENT_TYPES, type ContentFs, type ContentType, type ContentStatus } from './content.ts'
 import { execFile } from 'node:child_process'
 import { join as joinPath } from 'node:path'
 import z from 'schemastery'
@@ -249,13 +250,18 @@ export function apply(ctx: Context, config: Config): void {
     const f = projectFolder(String((body as Record<string, unknown>).project ?? ''))
     if (!f.ok) { sendJson(res, 400, { ok: false, error: f.error }); return }
     ensureAgentsMd(taskFs, f.folder)
+    sendJson(res, 200, await launchZcode(f.folder))
+  })
+
+  /** 起终端跑 zcode；失败降级为返回可复制命令。 */
+  async function launchZcode(folder: string): Promise<{ ok: boolean, mode: string, command: string, folder: string }> {
     const zcodeCli = resolve(config?.zcodeCli ?? ZCODE_CLI_DEFAULT)
     const zcmd = `"${process.execPath}" "${zcodeCli}"`
-    const command = `cd /d "${f.folder}" && ${zcmd}`
+    const command = `cd /d "${folder}" && ${zcmd}`
     let mode = 'clipboard'
     if (process.platform === 'win32') {
       try {
-        const line = `start "dsh-deck zcode" /D "${f.folder}" cmd /K ${zcmd}`
+        const line = `start "dsh-deck zcode" /D "${folder}" cmd /K ${zcmd}`
         const t0 = Date.now()
         const child = spawn('cmd.exe', ['/d', '/s', '/c', line], { detached: true, stdio: 'ignore' })
         child.on('error', (e) => { ctx.logger.warn(`dsh-deck dispatch child error: ${e.message}`) })
@@ -264,7 +270,78 @@ export function apply(ctx: Context, config: Config): void {
         mode = 'terminal'
       } catch (e) { ctx.logger.warn(`dsh-deck dispatch spawn threw: ${e instanceof Error ? e.message : String(e)}`) }
     }
-    sendJson(res, 200, { ok: true, mode, command, folder: f.folder })
+    return { ok: true, mode, command, folder }
+  }
+
+  // ── D4：自媒体台内容层 ──
+  const contentFs: ContentFs = {
+    list: (dir) => { try { return readdirSync(dir).slice(0, 500) } catch { return [] } },
+    isDir: (p) => { try { return statSync(p).isDirectory() } catch { return false } },
+    read: (p) => { try { return readFileSync(p, 'utf8') } catch { return null } },
+    write: (p, c) => { mkdirSync(dirnameOf(p), { recursive: true }); const t = p + '.tmp'; writeFileSync(t, c, 'utf8'); renameSync(t, p) },
+    mkdirs: (p) => { mkdirSync(p, { recursive: true }) },
+    exists: (p) => existsSync(p),
+  }
+
+  reg('exact', '/api/deck/content/list', (req, res) => {
+    if (!guard(req, res)) return
+    try { sendJson(res, 200, { ok: true, items: listContent(contentFs, contentRoot) }) }
+    catch (e) { sendJson(res, 500, { ok: false, error: e instanceof Error ? e.message : String(e) }) }
+  })
+
+  reg('exact', '/api/deck/content/create', (req, res) => {
+    if (!guard(req, res)) return
+    void (async () => {
+      const body = await readJsonBody(req, 64 * 1024)
+      if (body === null || typeof body !== 'object') { sendJson(res, 400, { ok: false, error: 'body 非法' }); return }
+      const { title, platforms } = body as Record<string, unknown>
+      const type = body !== null && (CONTENT_TYPES as readonly string[]).includes(String((body as Record<string, unknown>).type)) ? String((body as Record<string, unknown>).type) as ContentType : 'article'
+      if (typeof title !== 'string' || title.trim() === '' || title.length > 120) { sendJson(res, 400, { ok: false, error: 'title 必填（≤120 字符）' }); return }
+      try {
+        const item = createContent(contentFs, contentRoot, { title, type, platforms: typeof platforms === 'string' ? platforms.slice(0, 120) : '' }, new Date())
+        sendJson(res, 200, { ok: true, item })
+      } catch (e) { sendJson(res, 400, { ok: false, error: e instanceof Error ? e.message : String(e) }) }
+    })()
+  })
+
+  reg('exact', '/api/deck/content/status', (req, res) => {
+    if (!guard(req, res)) return
+    void (async () => {
+      const body = await readJsonBody(req, 16 * 1024)
+      if (body === null || typeof body !== 'object') { sendJson(res, 400, { ok: false, error: 'body 非法' }); return }
+      const { slug, status } = body as Record<string, unknown>
+      if (typeof slug !== 'string' || !(CONTENT_STATUSES as readonly string[]).includes(String(status))) {
+        sendJson(res, 400, { ok: false, error: `status 必须是 ${CONTENT_STATUSES.join('|')}` }); return
+      }
+      const item = setContentStatus(contentFs, contentRoot, slug, status as ContentStatus)
+      if (item === null) { sendJson(res, 404, { ok: false, error: `内容项不存在：${slug}` }); return }
+      sendJson(res, 200, { ok: true, item })
+    })()
+  })
+
+  /** 内容项交给 zcode：建任务卡（含类型验收）+ 起终端。 */
+  reg('exact', '/api/deck/content/handoff', async (req, res) => {
+    if (!guard(req, res)) return
+    const body = await readJsonBody(req, 16 * 1024)
+    if (body === null || typeof body !== 'object') { sendJson(res, 400, { ok: false, error: 'body 非法' }); return }
+    const slug = String((body as Record<string, unknown>).slug ?? '')
+    const items = listContent(contentFs, contentRoot)
+    const item = items.find((i) => i.slug === slug)
+    if (item === undefined) { sendJson(res, 404, { ok: false, error: `内容项不存在：${slug}` }); return }
+    try {
+      const taskPath = taskPathOf(contentRoot)
+      const card = makeCard({
+        id: newTaskId(new Date(), parseTaskDoc(taskFs.read(taskPath) ?? '').map((c) => c.id)),
+        title: `${item.type === 'ppt' ? 'PPT' : item.type === 'video' ? '视频' : '文章'}：${item.title}`,
+        type: item.type as TaskType,
+        acceptance: ACCEPTANCE_BY_TYPE[item.type],
+        body: `工作目录：content/${item.slug}/（读 选题.md 与模板文件，产物写在同目录）。完成后把 meta.md 的 status 改成 ready，任务卡改 review。`,
+      }, new Date())
+      taskFs.write(taskPath, upsertCard(taskFs.read(taskPath) ?? '', card))
+      ensureAgentsMd(taskFs, contentRoot)
+      const launch = await launchZcode(contentRoot)
+      sendJson(res, 200, { ok: true, card, ...launch })
+    } catch (e) { sendJson(res, 400, { ok: false, error: e instanceof Error ? e.message : String(e) }) }
   })
 
   // ── D3下：审阅（读 RESULT/widget）+ 落库执行器（唯一写 LESSONS.md 的通道）──

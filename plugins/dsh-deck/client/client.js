@@ -30,6 +30,10 @@ window.__ModuleLoader__.load({
       dispatch: (project) => post('/api/deck/task/dispatch', { project }),
       reviewResult: (project, id) => post('/api/deck/review/result', { project, id }),
       approve: (project, id, picks) => post('/api/deck/review/approve', { project, id, picks }),
+      contentList: () => post('/api/deck/content/list', {}),
+      contentCreate: (title, type, platforms) => post('/api/deck/content/create', { title, type, platforms }),
+      contentStatus: (slug, status) => post('/api/deck/content/status', { slug, status }),
+      contentHandoff: (slug) => post('/api/deck/content/handoff', { slug }),
       projectCreate: (input) => post('/api/deck/project/create', input),
       projectUpdate: (id, patch) => post('/api/deck/project/update', Object.assign({ id }, patch)),
     }
@@ -458,15 +462,143 @@ window.__ModuleLoader__.load({
       )
     }
 
+    // ── 自媒体台（D4）：内容项看板四列 + 选题创建 + 详情（文件/产物/交 zcode）──
+    const CONTENT_COLS = [
+      ['idea', '💡 选题', ['idea']],
+      ['drafting', '✍️ 创作', ['drafting']],
+      ['ready', '✅ 待发', ['ready', 'prefill']],
+      ['published', '📢 已发布', ['published']],
+    ]
+    const CTYPE = { article: ['📝', '文章'], video: ['🎬', '视频'], ppt: ['📊', 'PPT'] }
+    const NEXT_STATUS = { idea: 'drafting', drafting: 'ready', ready: 'prefill', prefill: 'published', published: null }
+
     function MediaDesk() {
+      const [tab, setTab] = useState('board')
       return h('div', { className: 'dk-desk' },
-        h('div', { className: 'dk-deskbar' }, h('button', { className: 'on' }, '📋 选题看板')),
+        h('div', { className: 'dk-deskbar' },
+          [['board', '📋 看板'], ['new', '➕ 选题'], ['files', '📚 文件'], ['tasks', '🧾 任务']].map(([id, label]) =>
+            h('button', { key: id, className: tab === id ? 'on' : '', onClick: () => setTab(id) }, label))),
         h('div', { className: 'dk-deskmain' },
-          h('div', { className: 'dk-empty' },
-            h('div', { className: 'dk-empty-icon' }, '🎬'),
-            h('div', { className: 'dk-empty-title' }, '自媒体台（D4）'),
-            h('div', { className: 'dk-empty-sub' }, '文章 / 视频 / PPT 三形态 · 选题看板 · 预填发布 · 账号 · 评论')),
+          tab === 'board' ? h(MediaBoard)
+          : tab === 'new' ? h(NewTopic, { onDone: () => setTab('board') })
+          : tab === 'files' ? h(FsBrowse, { root: 'content', base: '', layers: null })
+          : h(TaskBoard, { projectId: 'builtin-media' })),
+      )
+    }
+
+    function MediaBoard() {
+      const [items, setItems] = useState(null)
+      const [openSlug, setOpenSlug] = useState(null)
+      const [err, setErr] = useState(null)
+      const reload = () => API.contentList().then((j) => {
+        if (j.ok) { setItems(j.items); setErr(null) } else { setErr(j.error) }
+      }).catch((e) => setErr(String(e)))
+      useEffect(() => {
+        reload()
+        const t = setInterval(reload, 5000)
+        return () => { clearInterval(t) }
+      }, [])
+      const open = items !== null ? (items.find((i) => i.slug === openSlug) ?? null) : null
+      return h('div', { className: 'dk-col' },
+        err !== null ? h(Err, null, err) : null,
+        items === null && err === null ? h(Note, null, '加载内容项…') : null,
+        items !== null && items.length === 0 ? h(Note, null, 'content/ 还没有内容项——去「➕ 选题」建一个，或从知识台点子「→ 选题夹」') : null,
+        h('div', { className: 'dk-board media' },
+          CONTENT_COLS.map(([id, label, sts]) =>
+            h('div', { key: id, className: 'dk-board-col' },
+              h('div', { className: 'dk-board-colhead' }, label),
+              (items ?? []).filter((i) => sts.includes(i.status)).map((i) =>
+                h('button', { key: i.slug, className: 'dk-chip-task', onClick: () => setOpenSlug(i.slug) },
+                  h('span', { className: 'dk-chip-task-t' }, (CTYPE[i.type] ?? ['📄'])[0] + ' ' + i.title),
+                  h('span', { className: 'dk-chip-task-p' }, i.created + (i.platforms !== '' ? ' · ' + i.platforms : '')))))),
         ),
+        open !== null ? h(ContentDetail, { item: open, onClose: () => setOpenSlug(null), onChanged: reload }) : null,
+      )
+    }
+
+    function ContentDetail({ item, onClose, onChanged }) {
+      const [topicHtml, setTopicHtml] = useState(null)
+      const [msg, setMsg] = useState(null)
+      const [busy, setBusy] = useState(false)
+      const [widget, setWidget] = useState(null)
+      useEffect(() => {
+        let alive = true
+        API.read('content', item.slug + '/选题.md').then((j) => { if (alive) { setTopicHtml(j.ok ? mdToHtml(j.content) : '<p>（无选题.md）</p>') } }).catch(() => {})
+        API.read('content', item.slug + '/widget-result.json').then((j) => {
+          if (!alive) return
+          try { setWidget(j.ok ? JSON.parse(j.content) : null) } catch { setWidget(null) }
+        }).catch(() => {})
+        return () => { alive = false }
+      }, [item.slug])
+      const advance = () => {
+        const next = NEXT_STATUS[item.status]
+        if (next === null) return
+        API.contentStatus(item.slug, next).then((j) => { if (j.ok) { onChanged(); setMsg('状态 → ' + next) } else { setMsg('失败：' + j.error) } })
+      }
+      const handoff = () => {
+        setBusy(true)
+        API.contentHandoff(item.slug).then((j) => {
+          setBusy(false)
+          if (!j.ok) { setMsg('失败：' + j.error); return }
+          window.__deckLastCmd = j.command
+          setMsg(j.mode === 'terminal' ? '已建任务卡 ' + j.card.id + ' 并开终端跑 zcode ✓' : '已建任务卡，终端拉起失败——复制命令手动跑')
+        }).catch((e) => { setBusy(false); setMsg(String(e)) })
+      }
+      const htmlFiles = item.files.filter((f) => f.endsWith('.html'))
+      const next = NEXT_STATUS[item.status]
+      return h('div', { className: 'dk-modal-back', onClick: (e) => { if (e.target.className === 'dk-modal-back') onClose() } },
+        h('div', { className: 'dk-modal wide' },
+          h('div', { className: 'dk-modal-title' }, (CTYPE[item.type] ?? ['📄'])[0] + ' ' + item.title),
+          h('div', { className: 'dk-card-sub' }, 'content/' + item.slug + '/ · ' + item.status + (item.platforms !== '' ? ' · ' + item.platforms : '')),
+          msg !== null ? h(Note, null, msg, window.__deckLastCmd !== undefined && msg !== null && msg.includes('复制')
+            ? h('button', { className: 'dk-mini', style: { marginLeft: 8 }, onClick: async () => { try { await navigator.clipboard.writeText(window.__deckLastCmd); setMsg('命令已复制 ✓') } catch {} } }, '复制命令') : null) : null,
+          topicHtml !== null ? h('div', { className: 'dk-md', style: { maxHeight: 200, overflowY: 'auto', border: '1px solid var(--color-border-1,#2a2e37)', borderRadius: 10, padding: '8px 12px' }, dangerouslySetInnerHTML: { __html: topicHtml } }) : null,
+          h('div', { className: 'dk-field-label' }, '文件'),
+          h('div', { className: 'dk-filechips' },
+            item.files.map((f) => h('button', {
+              key: f, className: 'dk-chip', title: f,
+              onClick: () => { API.read('content', item.slug + '/' + f).then((j) => { if (j.ok) setTopicHtml(mdToHtml(f.endsWith('.json') ? '```json\n' + j.content + '\n```' : j.content)) }) },
+            }, f))),
+          widget !== null && widget.windows
+            ? h('div', null, h('div', { className: 'dk-field-label' }, '产物（widget-result.json）'),
+              h(WidgetViews, { widget, root: 'content', base: item.slug }))
+            : null,
+          htmlFiles.length > 0
+            ? h('div', null, h('div', { className: 'dk-field-label' }, 'HTML 产物'),
+              htmlFiles.map((f) => h(FileWidget, { key: f, path: f, root: 'content', base: item.slug })))
+            : null,
+          h('div', { className: 'dk-modal-actions' },
+            h('button', { type: 'button', className: 'dk-ghost', onClick: onClose }, '关闭'),
+            next !== null ? h('button', { type: 'button', className: 'dk-ghost', onClick: advance }, '状态 → ' + next) : null,
+            h('button', { type: 'button', disabled: busy, onClick: handoff }, '🚀 交给 zcode')),
+        ),
+      )
+    }
+
+    function NewTopic({ onDone }) {
+      const [title, setTitle] = useState('')
+      const [type, setType] = useState('article')
+      const [platforms, setPlatforms] = useState('')
+      const [msg, setMsg] = useState(null)
+      const submit = (e) => {
+        e.preventDefault()
+        if (title.trim() === '') { setMsg('标题必填'); return }
+        API.contentCreate(title, type, platforms).then((j) => {
+          if (!j.ok) { setMsg('失败：' + j.error); return }
+          setMsg('已建 ✓ content/' + j.item.slug + '/（含' + (CTYPE[type][1]) + '模板）')
+          setTitle(''); setPlatforms('')
+          setTimeout(onDone, 600)
+        })
+      }
+      return h('form', { className: 'dk-taskform', onSubmit: submit, style: { maxWidth: 560 } },
+        h('input', { value: title, onChange: (e) => setTitle(e.target.value), placeholder: '选题标题（将建 content/{slug}/ 一整套文件夹）', autoFocus: true }),
+        h('div', { className: 'dk-taskform-row' },
+          h('select', { value: type, onChange: (e) => setType(e.target.value) },
+            Object.keys(CTYPE).map((t) => h('option', { key: t, value: t }, CTYPE[t][0] + ' ' + CTYPE[t][1]))),
+          h('input', { value: platforms, onChange: (e) => setPlatforms(e.target.value), placeholder: '目标平台（可空，如 公众号/微博/X）', style: { flex: 1 } })),
+        h('div', { className: 'dk-taskform-row' },
+          h('button', { type: 'submit' }, '建选题'),
+          msg !== null ? h('span', { className: 'dk-fine', style: { alignSelf: 'center' } }, msg) : null),
       )
     }
 
@@ -947,6 +1079,7 @@ window.__ModuleLoader__.load({
 .dk-modal-back{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:70;display:flex;align-items:center;justify-content:center;}
 .dk-modal{width:min(440px,92vw);background:var(--color-bg-1,#14161c);border:1px solid var(--color-border-1,#2a2e37);
   border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:10px;box-shadow:0 20px 60px rgba(0,0,0,.5);}
+.dk-modal.wide{width:min(720px,94vw);max-height:88vh;overflow-y:auto;}
 .dk-modal-title{font-weight:700;font-size:14px;}
 .dk-field{display:flex;flex-direction:column;gap:4px;font-size:12px;}
 .dk-field label{opacity:.6;}
@@ -959,6 +1092,8 @@ window.__ModuleLoader__.load({
 .dk-modal-actions button[type=submit]{background:var(--dk-accent,#5b6cff);color:#fff;border:none;border-radius:10px;
   padding:8px 20px;cursor:pointer;font:inherit;font-weight:600;}
 .dk-board{display:grid;grid-template-columns:repeat(4,minmax(180px,1fr));gap:10px;align-items:start;}
+.dk-board.media{grid-template-columns:repeat(auto-fit,minmax(200px,1fr));}
+.dk-filechips{display:flex;flex-wrap:wrap;gap:6px;}
 .dk-board-col{background:color-mix(in srgb,var(--color-bg-1,#14161c) 60%,transparent);border:1px solid var(--color-border-1,#2a2e37);
   border-radius:12px;padding:8px;display:flex;flex-direction:column;gap:6px;min-height:140px;}
 .dk-board-colhead{font-size:12px;font-weight:600;opacity:.7;padding:2px 4px 4px;}
@@ -973,6 +1108,9 @@ window.__ModuleLoader__.load({
       el.textContent = css
       document.head.appendChild(el)
     }
+
+    // 调试后门：本地渲染台/回归脚本直接渲染各台面（只读）
+    try { window.__dkDebug = { MediaDesk, KnowledgeDesk, ControlRoom, ReviewFlow, TaskBoard } } catch {}
 
     const inject = ['slots', 'sessions']
     function apply(ctx) {
