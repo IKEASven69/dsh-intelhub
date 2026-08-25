@@ -75,6 +75,25 @@ window.__ModuleLoader__.load({
       }
     }
 
+    // 官网详情页同款元数据：描述 / 结算来源 / 结束时间 / 流动性 / 涨跌 / 分周期量。
+    // Gamma 搜索响应里都有，之前只在 marketSides 里取了价格与标签，这些全被丢了。
+    function marketMeta(m) {
+      const num = (v) => (v === undefined || v === null || v === '' ? null : Number(v))
+      const fin = (v) => { const n = num(v); return Number.isFinite(n) ? n : null }
+      return {
+        description: m.description || '',
+        resolutionSource: m.resolutionSource || '',
+        endDateIso: m.endDateIso || '',
+        liquidity: fin(m.liquidity ?? m.liquidityClob) ?? 0,
+        v1w: fin(m.volume1wk) ?? 0,
+        v1mo: fin(m.volume1mo) ?? 0,
+        v1y: fin(m.volume1yr) ?? 0,
+        chg1w: fin(m.oneWeekPriceChange),
+        chg1mo: fin(m.oneMonthPriceChange),
+        chg1y: fin(m.oneYearPriceChange),
+      }
+    }
+
     const cut = (s, n) => (s && s.length > n ? s.slice(0, n) + '…' : s || '')
 
     function fmtPct(v) {
@@ -89,6 +108,49 @@ window.__ModuleLoader__.load({
       if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M'
       if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K'
       return String(Math.round(n))
+    }
+
+    // 涨跌幅：Gamma 返回的 oneWeek/Month/YearPriceChange 是相对当前价的百分比变化量
+    function fmtChg(v) {
+      if (v === null || v === undefined || !Number.isFinite(Number(v))) return null
+      const n = Number(v) * 100
+      const sign = n > 0 ? '+' : ''
+      return { sign: n > 0 ? 1 : n < 0 ? -1 : 0, text: sign + n.toFixed(1) + '%' }
+    }
+
+    // ISO 时间 → 「2026年1月3日」；无值返回 null
+    function fmtDate(iso) {
+      if (!iso) return null
+      const d = new Date(iso)
+      if (Number.isNaN(d.getTime())) return null
+      return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`
+    }
+
+    // 单个统计格：标题 + 值
+    function statTile(k, v) {
+      return h('div', { className: 'dsh-poly-stat-tile' },
+        h('div', { className: 'dsh-poly-stat-v' }, v),
+        h('div', { className: 'dsh-poly-stat-k' }, k))
+    }
+
+    // 涨跌三列：1周 / 1月 / 1年，▲ 绿 / ▼ 红，无数据显示 —
+    function changeRow(market) {
+      const cells = [
+        ['1周', market.chg1w],
+        ['1月', market.chg1mo],
+        ['1年', market.chg1y],
+      ]
+      const any = cells.some(([, v]) => fmtChg(v) !== null)
+      if (!any) return null
+      return h('div', { className: 'dsh-poly-stats-row dsh-poly-chg-row' },
+        cells.map(([label, v]) => {
+          const c = fmtChg(v)
+          return h('div', { className: 'dsh-poly-stat-tile' },
+            h('div', {
+              className: 'dsh-poly-stat-v ' + (c ? (c.sign > 0 ? 'up' : c.sign < 0 ? 'down' : 'flat') : ''),
+            }, c ? (c.sign > 0 ? '▲ ' : c.sign < 0 ? '▼ ' : '') + c.text : '—'),
+            h('div', { className: 'dsh-poly-stat-k' }, label))
+        }))
     }
 
     // 事件内挑「值得看」的市场：跳过已结算（closed 或价格 <2%/>98%），
@@ -110,6 +172,7 @@ window.__ModuleLoader__.load({
             yes: s.p0,
             volume: m.volume ?? 0,
             v24: m.volume24hr ?? 0,
+            ...marketMeta(m),
             closed: s.closed,
           }
         })
@@ -328,6 +391,24 @@ window.__ModuleLoader__.load({
             })),
           h('div', { className: 'dsh-poly-vol' },
             state.mid != null ? `中间价 · 买一 ${fmtPct(bestBid)} · 卖一 ${fmtPct(bestAsk)} · 盘口 ${bidDepth}/${askDepth} 档` : ''),
+          // 市场数据块：官网详情页同款字段（量 / 流动性 / 涨跌 / 结束时间 / 结算来源）
+          h('div', { className: 'dsh-poly-stats' },
+            h('div', { className: 'dsh-poly-stats-row' },
+              statTile('24h 量', (market.v24 || market.volume) ? fmtVol(market.v24 || market.volume) : '?'),
+              statTile('总成交量', market.volume ? fmtVol(market.volume) : '?'),
+              statTile('流动性', market.liquidity ? fmtVol(market.liquidity) : '?'),
+              statTile('结束时间', fmtDate(market.endDateIso) || '—')),
+            changeRow(market),
+            market.resolutionSource
+              ? h('div', { className: 'dsh-poly-stat-line' },
+                  h('span', { className: 'dsh-poly-stat-k' }, '结算来源'),
+                  h('span', { className: 'dsh-poly-stat-v' }, cut(market.resolutionSource, 60)))
+              : null,
+            market.description
+              ? h('div', { className: 'dsh-poly-stat-line dsh-poly-stat-desc' },
+                  h('span', { className: 'dsh-poly-stat-k' }, '描述'),
+                  h('span', { className: 'dsh-poly-stat-v' }, market.description))
+              : null),
           h('div', { className: 'dsh-poly-win', role: 'tablist', 'aria-label': '走势时间窗' },
             Object.keys(WIN_FID).map((w) =>
               h('button', {
@@ -414,6 +495,11 @@ window.__ModuleLoader__.load({
                 condition_id: m.condition_id, question: m.question || '', slug: m.slug || '',
                 label0: m.label0 || '', label1: m.label1 || '', tid0: m.tid0 || '', img: m.img || '',
                 p0: Number.isFinite(m.p0) ? m.p0 : m.yes, p1: m.p1,
+                volume: m.volume ?? 0, v24: m.v24 ?? 0,
+                description: m.description || '', resolutionSource: m.resolutionSource || '',
+                endDateIso: m.endDateIso || '', liquidity: m.liquidity ?? 0,
+                v1w: m.v1w ?? 0, v1mo: m.v1mo ?? 0, v1y: m.v1y ?? 0,
+                chg1w: m.chg1w ?? null, chg1mo: m.chg1mo ?? null, chg1y: m.chg1y ?? null,
               }]
           lsSet(LS_WATCH, JSON.stringify(next))
           return next
@@ -441,6 +527,7 @@ window.__ModuleLoader__.load({
                 yes: s.p0,
                 volume: m.volume ?? 0,
                 v24: m.volume24hr ?? 0,
+                ...marketMeta(m),
                 closed: s.closed,
               }
             }).filter((m) => m.condition_id && !m.closed),
@@ -551,12 +638,23 @@ window.__ModuleLoader__.load({
             fetchJson(`${GAMMA}/markets?condition_ids=${encodeURIComponent(v.cid)}`)
               .then((data) => {
                 const m = Array.isArray(data) ? data[0] : null
-                setDetail({
-                  question: (m && m.question) || ('condition ' + v.cid.slice(0, 12) + '…'),
-                  condition_id: v.cid,
-                  slug: (m && m.slug) || '',
-                  yes: m ? yesPrice(m) : NaN,
-                })
+                if (m) {
+                  const s = marketSides(m)
+                  setDetail({
+                    question: m.question || '',
+                    condition_id: m.conditionId || m.condition_id || v.cid,
+                    slug: m.slug || '',
+                    img: m.image || '',
+                    label0: s.l0, label1: s.l1, p0: s.p0, p1: s.p1,
+                    yes: s.p0,
+                    volume: m.volume ?? 0,
+                    v24: m.volume24hr ?? 0,
+                    ...marketMeta(m),
+                    closed: s.closed,
+                  })
+                } else {
+                  setDetail({ question: 'condition ' + v.cid.slice(0, 12) + '…', condition_id: v.cid, slug: '', yes: NaN })
+                }
               })
               .catch(() => setDetail({ question: 'condition ' + v.cid.slice(0, 12) + '…', condition_id: v.cid, slug: '', yes: NaN }))
           }
@@ -792,6 +890,20 @@ window.__ModuleLoader__.load({
 .dsh-poly-link{display:inline-block;margin-top:8px;color:var(--dsh-poly-accent,#1652F0);
   text-decoration:none;font-size:12px;}
 .dsh-poly-link:hover{text-decoration:underline;}
+.dsh-poly-stats{margin:8px 0;padding:8px;border-radius:8px;
+  background:var(--color-bg-2,#1b1e26);border:1px solid var(--color-border-1,#2a2e37);}
+.dsh-poly-stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;}
+.dsh-poly-stat-tile{min-width:0;}
+.dsh-poly-stat-v{font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.dsh-poly-stat-k{font-size:10px;opacity:.55;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.dsh-poly-stat-v.up{color:var(--dsh-poly-up,#34d399);}
+.dsh-poly-stat-v.down{color:var(--dsh-poly-down,#f87171);}
+.dsh-poly-stat-v.flat{opacity:.6;}
+.dsh-poly-chg-row{margin-top:8px;padding-top:8px;border-top:1px solid var(--color-border-1,#2a2e37);}
+.dsh-poly-stat-line{display:flex;gap:8px;margin-top:8px;padding-top:8px;border-top:1px solid var(--color-border-1,#2a2e37);font-size:12px;}
+.dsh-poly-stat-line .dsh-poly-stat-k{flex-shrink:0;width:56px;margin-top:0;font-size:11px;}
+.dsh-poly-stat-line .dsh-poly-stat-v{font-size:12px;font-weight:400;white-space:normal;line-height:1.5;}
+.dsh-poly-stat-desc .dsh-poly-stat-v{opacity:.8;}
 .dsh-poly-detail-head-r{display:flex;align-items:center;gap:6px;}
 .dsh-poly-drag{position:absolute;left:-3px;top:0;bottom:0;width:7px;cursor:col-resize;z-index:2;}
 .dsh-poly-drag:hover,.dsh-poly-drag:active{background:linear-gradient(90deg,transparent,var(--dsh-poly-accent,#1652F0),transparent);opacity:.6;}

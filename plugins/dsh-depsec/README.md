@@ -1,51 +1,59 @@
-# dsh-depsec
+# dsh-trust-list
 
-DeepSeek Harness（dsh）依赖安全审计插件：**漏洞 / 投毒 / 密钥 / SAST 四合一**。
+Dependency trust list for DeepSeek Harness — when `pnpm install` blocks an install script, `dsh-trust-list` audits every script in the block, grades them PASS/WARN/BLOCK with file-line evidence, and rewrites `pnpm.onlyBuiltDependencies` (and bun `trustedDependencies`) with only the packages whose scripts are verifiably safe. One click, no `pnpm audit` raw-output reading.
 
-对当前工作区项目做就地一站式安全体检，结果在 Web 设置页展示，完成后弹 Windows 原生通知，安装依赖时自动值守。
+`pnpm` ≥ 10 and `npm` ≥ 12 block install scripts by default — that's good, but the user is left staring at `ERR_PNPM_IGNORED_BUILDS: esbuild, koffi` with no idea which of those is safe to approve. `dsh-trust-list` is the answer: scan, read the actual script, decide.
 
-## 能力
+## What it does
 
-| 模式 | 检测内容 |
+- **`vuln`** — run `npm/pnpm/yarn audit`, `pip-audit`, `cargo audit`, or `govulncheck` against the project; surface CVE/GHSA hits with severity and fix-availability; one-click `audit fix` for npm-family.
+- **`trust-list`** — read every install script in the block; grade each with **PASS / WARN / BLOCK**; show the script content and the exact file:line evidence; one-click rewrite of `pnpm.onlyBuiltDependencies` and `trustedDependencies` with only the PASS-graded packages.
+- **`secrets`** — high-confidence regex + Shannon entropy + last 20 git commits; `.depsecignore` honored.
+- **`sast`** — base rule set (eval / command injection / innerHTML / `shell=True` / weak hashes / deserialization); for depth, wire in `semgrep` separately.
+- **`plugin roster`** — audit every bundle installed in the current profile; per-plugin PASS/WARN/BLOCK summary; SARIF export for CI.
+
+Plus: Windows notification on new high-severity hits; baseline diff so the 200th audit only shows what's *new*; click-to-open in VS Code (falls back to Explorer).
+
+## Install
+
+```sh
+dsh plugin --profile web add dsh-trust-list
+```
+
+Settings → **Trust List** → pick a mode → **Run**. Leave the path empty to scan the current workspace.
+
+## How the trust-list mode decides PASS / WARN / BLOCK
+
+| Verdict | Trigger |
 |---|---|
-| `vuln` 漏洞 | 官方审计查已知 CVE/GHSA/OSV（npm/pnpm/yarn/pip/cargo/go，全部含结果解析与严重度汇总），npm 系支持一键 `audit fix` |
-| `supply-chain` 投毒 | **install 脚本内容审查（证据分级 PASS/WARN/BLOCK + 脚本引用文件深挖）** + typosquatting 近名 + npm registry 联网信誉（发布时间/下载量/仓库） |
-| `secrets` 密钥 | 高置信正则 + 香农熵 + git 历史，含 `.depsecignore` 白名单 |
-| `sast` 代码 | 危险代码模式（eval/命令注入/XSS/弱哈希/反序列化等） |
+| **PASS** | Script matches known-good patterns (node-gyp / prebuild-install / husky / pure local file ops / pure echo). |
+| **WARN** | Script touches shell or environment in unfamiliar ways; or there is a typosquat candidate (Levenshtein 1–2 against an 80-name popular-packages list, **not exhaustive**); or registry shows <30 days old or <100 downloads. |
+| **BLOCK** | Script does `curl … | sh` to an IP or unknown host, prints env vars to a network sink, decodes a base64/encoded payload into a shell or node, or posts to a paste/discord/telegram webhook. |
 
-- 🟢/🟡/🔴 判定横幅 + 危险度筛选 + 只看新增（基线 diff；基线持久化在 `<root>/.depsec-baseline.json`，每次审计后自动更新，建议加入 .gitignore）
-- 点击告警跳转打开源文件（VS Code goto，回退资源管理器）
-- 导出 SARIF 2.1.0（可进 GitHub Code Scanning / CI 门禁）
-- Windows 原生通知（静默，仅新高危弹窗）
-- 安装依赖自动值守（监听 install/add 命令，自动投毒扫描）
-- **一键写回放行清单**：仅「脚本全 PASS 且无近名/信誉中高危」的依赖写入 `pnpm.onlyBuiltDependencies` 与 `trustedDependencies`（bun）；pnpm 11 `approvedBuilds` / npm v12 opt-in 键名以官方文档为准，需手动同步。npm v12 / pnpm 10+ 默认拦截安装脚本后，这是「有证据的放行」，对抗无脑 approve
+Evidence is shown as a redacted snippet plus file:line. Anything that fails this check is never written into `onlyBuiltDependencies` by the one-click rewite.
 
-## 安装
+## Honest limits
 
-```sh
-dsh plugin --profile web add dsh-depsec
-```
+- `typosquatting` checks against a hand-curated list of 80 popular package names — typos outside that list are not detected. This is a triage signal, not a registry integrity proof.
+- `sast` ships 9 base rules. Depth and dataflow analysis are not in scope; for serious code-audit work, wire in `semgrep` or `codeql`.
+- `secrets` regex + entropy is a triage signal. The same shape a real key uses is also what high-entropy placeholders look like — expect false positives on test fixtures; use `.depsecignore` for them.
+- `onlyBuiltDependencies` is the pnpm 10+ / npm 12+ way to allow install scripts. pnpm 11 also exposes `approvedBuilds` and npm v12 has its own opt-in — both are documented in their respective changelogs. `dsh-trust-list` writes the supported one(s); other opt-ins need manual sync.
+- `plugin roster` audits by walking the profile directory — it sees what pnpm has materialized. Plugins installed via `link:` (local source), `file:`, or `git:` are scanned against their on-disk tree; a fresh source clone with a build step that pnpm already gated is graded against the **source** state, not the built artifact.
 
-## 使用
+## Building from source
 
-设置 → 依赖安全审计 → 选模式 → 点「运行」（可填目录，留空=当前工作区）。
-
-白名单：在工作区根目录放 `.depsecignore`，每行一个子串（文件路径/包名），命中即忽略，`#` 开头为注释。作用于 supply-chain / secrets / sast 三模式；vuln 模式不套用（结果直接来自官方审计器）。
-
-## 开发 / 构建
-
-本包为标准 Cordis 插件（host `TypertRemoteService` + client `dsh.client` 双面）。
+Standard Cordis plugin (host `TypertRemoteService` + client `dsh.client`).
 
 ```sh
-pnpm install         # 仅本机构建/测试依赖（peer 由 dsh 宿主运行时注入）
-pnpm test            # vitest：脚本静态分析语料 + 三语言审计输出解析（35 例）
-node .build-tools/build.cjs   # 本机验证构建：SWC(stage-3 装饰器)+esbuild，产出 lib/index.js + lib/client.js
+pnpm install            # only build/test deps — peers are injected by the dsh runtime
+pnpm test               # vitest: install-script corpus + 4 audit-output parsers (35 cases)
+node .build-tools/build.cjs   # local verification build: SWC (stage-3 decorators) + esbuild
 ```
 
-正式构建走 tsdown（需 harness 工具链；装饰器转译等价性见 `.build-tools/build.cjs` 头注）。`@deepseek-ai/*` 一律不进 devDependencies——其传递依赖有未公开发布的包（如 dsh-type-meta），整树安装会 404。
+`@deepseek-ai/*` is never a devDependency here — its transitive deps include unpublished packages and the whole tree 404s on install.
 
-`cordis.patch.yml`（经 package.json 的 `dsh.bundle.patch` 声明）把 host 服务插入 profile 合成；浏览器半由 `dsh.client` manifest + `exports["./client"]` 提供。
+`cordis.patch.yml` (referenced via `dsh.bundle.patch`) inserts the host service into profile composition; the browser half ships via the `dsh.client` manifest + `exports["./client"]`.
 
-## 免责声明
+## Disclaimer
 
-自研正则密钥/SAST 是启发式分诊，召回与精度不如 gitleaks/semgrep；深度数据流分析建议接 semgrep。安装第三方插件即在本机运行第三方代码，风险自担。
+Self-rolled regex for secrets and SAST is a triage heuristic — recall and precision trail `gitleaks` and `semgrep`. For depth dataflow analysis, wire in `semgrep`. Installing a third-party plugin runs third-party code on your machine; the trust list tells you which scripts are *evidently* safe, not which plugins are *trustworthy*.

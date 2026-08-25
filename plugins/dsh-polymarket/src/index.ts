@@ -71,6 +71,40 @@ async function fetchJson(base: string, path: string, timeoutMs: number): Promise
   return res.json() as Promise<unknown>
 }
 
+/** 带 UA 与超时的 JSON POST；非 2xx 抛错。用于 CLOB /midpoints 批量拉实时价。 */
+async function postJson(base: string, path: string, body: unknown, timeoutMs: number): Promise<unknown> {
+  const url = base + path
+  let res: Response
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'user-agent': 'dsh-polymarket/0.1.0' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(timeoutMs),
+    })
+  } catch (err) {
+    const reason = err instanceof Error ? `${err.name}: ${err.message}` : String(err)
+    throw new Error(`Polymarket API 请求失败 ${url}: ${reason}（受限网络需配置代理，参见 DEV.md「网络前提」）`)
+  }
+  if (!res.ok) {
+    const text = (await res.text()).slice(0, 300)
+    throw new Error(`Polymarket API ${res.status} ${url}: ${text}`)
+  }
+  return res.json() as Promise<unknown>
+}
+
+/** Gamma 搜索结果的 clobTokenIds（字符串数组或 JSON 字符串）规整为数组。 */
+function parseClobTokenIds(v: string | string[] | undefined): string[] {
+  if (Array.isArray(v)) return v.filter((x): x is string => typeof x === 'string' && x.length > 0)
+  if (typeof v === 'string' && v.length > 0) {
+    try {
+      const parsed: unknown = JSON.parse(v)
+      if (Array.isArray(parsed)) return parsed.filter((x): x is string => typeof x === 'string' && x.length > 0)
+    } catch { /* 非 JSON，视为无 token */ }
+  }
+  return []
+}
+
 /** CLOB /markets/{conditionId} 的 tokens 形态（只取需要字段）。 */
 interface ClobToken {
   token_id: string
@@ -155,21 +189,89 @@ export function apply(ctx: Context, config: Config): void {
           markets?: Array<{
             conditionId?: string
             question?: string
+            slug?: string
+            image?: string
+            description?: string
+            resolutionSource?: string
+            endDateIso?: string
+            liquidity?: number | string
             outcomePrices?: string
+            clobTokenIds?: string | string[]
             volume?: number
+            volume24hr?: number
+            volume1wk?: number
+            volume1mo?: number
+            volume1yr?: number
+            oneWeekPriceChange?: number
+            oneMonthPriceChange?: number
+            oneYearPriceChange?: number
+            lastTradePrice?: number
+            bestBid?: number
+            bestAsk?: number
+            spread?: number
+            active?: boolean
+            closed?: boolean
           }>
         }>
       }
       const events = data.events ?? []
+      // 批量拉实时中点价：Gamma outcomePrices 是缓存价会滞后官网，官方口径是 CLOB 中点。
+      const tid2side = new Map<string, { cid: string; side: number }>()
+      for (const e of events) {
+        for (const m of e.markets ?? []) {
+          const cid = m.conditionId ?? ''
+          if (!cid) continue
+          const tids = parseClobTokenIds(m.clobTokenIds)
+          tids.forEach((tid, side) => tid2side.set(tid, { cid, side }))
+        }
+      }
+      const livePrices: Record<string, Array<string | null>> = {}
+      if (tid2side.size > 0) {
+        try {
+          const mids = (await postJson(clobBase, '/midpoints',
+            [...tid2side.keys()].slice(0, 60).map((token_id) => ({ token_id })), timeoutMs)) as Record<string, string>
+          for (const [tid, mid] of Object.entries(mids)) {
+            const info = tid2side.get(tid)
+            if (info === undefined) continue
+            const arr = livePrices[info.cid] ?? [null, null]
+            arr[info.side] = mid
+            livePrices[info.cid] = arr
+          }
+        } catch { /* 实时价拉取失败则回退缓存价 */ }
+      }
       const summary = events.map((e) => ({
         title: e.title ?? '',
         event_id: e.id ?? '',
-        markets: (e.markets ?? []).map((m) => ({
-          condition_id: m.conditionId ?? '',
-          question: m.question ?? '',
-          outcome_prices: m.outcomePrices ?? '',
-          volume: m.volume ?? 0,
-        })),
+        markets: (e.markets ?? []).map((m) => {
+          const cid = m.conditionId ?? ''
+          const live = livePrices[cid]
+          return {
+            condition_id: cid,
+            question: m.question ?? '',
+            slug: m.slug ?? '',
+            image: m.image ?? '',
+            description: m.description ?? '',
+            resolution_source: m.resolutionSource ?? '',
+            end_date_iso: m.endDateIso ?? '',
+            liquidity: m.liquidity ?? 0,
+            live_prices: live && live.some((x) => x !== null) ? live : null,
+            outcome_prices: m.outcomePrices ?? '',
+            volume: m.volume ?? 0,
+            volume_24hr: m.volume24hr ?? 0,
+            volume_1wk: m.volume1wk ?? 0,
+            volume_1mo: m.volume1mo ?? 0,
+            volume_1yr: m.volume1yr ?? 0,
+            price_change_1wk: m.oneWeekPriceChange ?? null,
+            price_change_1mo: m.oneMonthPriceChange ?? null,
+            price_change_1yr: m.oneYearPriceChange ?? null,
+            last_trade_price: m.lastTradePrice ?? null,
+            best_bid: m.bestBid ?? null,
+            best_ask: m.bestAsk ?? null,
+            spread: m.spread ?? null,
+            active: m.active ?? null,
+            closed: m.closed ?? null,
+          }
+        }),
       }))
       return JSON.stringify({ query: args.q, count: events.length, events: summary }, null, 2)
     },

@@ -1,0 +1,362 @@
+/*
+ * dsh-trust-list settings panel styles.
+ *
+ * M0：保持全局 `.da-*` 命名空间（避免破坏现有构建管线），
+ * 但颜色 / 间距全部换成 `var(--dsw-*)` token，跟宿主主题对齐；
+ * 拆"挤在一起"的层级；主按钮化（写入放行清单 = 主操作）；每条
+ * 告警加"建议动作"按钮。
+ *
+ * token 命名参考 deepseek-harness/packages/client/ui-theme/src/styles/design-platform.css
+ */
+
+.da-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 8px 0;
+  font-family: var(--dsw-font-family, inherit);
+  color: var(--dsw-alias-label-primary);
+}
+
+/* 头部：标题 + 模式 tabs + 自动监控状态 */
+.da-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.da-title { font-weight: 700; font-size: 14px; color: var(--dsw-alias-label-primary); }
+.da-monitor {
+  font-size: 12px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* 操作区：输入 + 运行（次要）+ 修复（次要）+ 写回放行清单（主）+ 导出 SARIF */
+.da-actionBar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.da-input {
+  flex: 1;
+  min-width: 200px;
+  font-size: 13px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--dsw-alias-border-l3);
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font-family: inherit;
+}
+.da-input:focus { outline: none; border-color: var(--dsw-alias-brand-primary); }
+
+/* 模式 tabs（次要操作组） */
+.da-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.da-tab {
+  cursor: pointer;
+  border: 1px solid var(--dsw-alias-border-l3);
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-family: inherit;
+}
+.da-tab:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.tabOn {
+  background: var(--dsw-alias-button-primary-fill);
+  color: var(--dsw-alias-label-primary-foreground);
+  border-color: transparent;
+}
+
+/* 次要按钮（运行 / 修复 / 导出 SARIF） */
+.da-btnSecondary {
+  cursor: pointer;
+  border: 1px solid var(--dsw-alias-border-l3);
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-family: inherit;
+  white-space: nowrap;
+}
+.da-btnSecondary:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+.da-btnSecondary:disabled { opacity: 0.55; cursor: default; }
+
+/* 主按钮：写回放行清单（PASS-grades → onlyBuiltDependencies） */
+.da-btnPrimary {
+  cursor: pointer;
+  border: none;
+  background: var(--dsw-alias-button-primary-fill);
+  color: var(--dsw-alias-label-primary-foreground);
+  border-radius: 6px;
+  padding: 8px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  white-space: nowrap;
+}
+.da-btnPrimary:hover:not(:disabled) {
+  background: var(--dsw-alias-button-primary-hover);
+}
+.da-btnPrimary:disabled { opacity: 0.55; cursor: default; }
+
+/* 危险按钮：写回放行清单但有 BLOCK 警告时（强制要求 dry-run 后再确认） */
+.da-btnDanger {
+  cursor: pointer;
+  border: 1px solid var(--dsw-alias-state-error-primary);
+  background: transparent;
+  color: var(--dsw-alias-state-error-primary);
+  border-radius: 6px;
+  padding: 8px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  white-space: nowrap;
+}
+.da-btnDanger:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover-danger);
+}
+
+/* 提示 / 元信息 */
+.da-hint {
+  font-size: 12px;
+  color: var(--dsw-alias-label-secondary);
+  line-height: 1.5;
+}
+.da-muted {
+  font-size: 12px;
+  color: var(--dsw-alias-label-tertiary);
+  word-break: break-all;
+}
+.da-note {
+  font-size: 12px;
+  color: var(--dsw-alias-state-warn-label);
+}
+
+/* 结果容器 */
+.da-box {
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--dsw-alias-bg-layer-1);
+}
+.da-boxError {
+  border-color: var(--dsw-alias-state-error-primary);
+  background: var(--dsw-alias-interactive-bg-hover-danger);
+}
+
+.da-boxTitle {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--dsw-alias-label-primary);
+}
+
+/* 判定横幅：PASS / WARN / BLOCK 三档 */
+.da-verdict {
+  font-weight: 700;
+  font-size: 13px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+}
+.da-verdictPass {
+  color: var(--dsw-alias-state-success-primary);
+  background: var(--dsw-alias-state-success-tertiary);
+  border: 1px solid var(--dsw-alias-state-success-primary);
+}
+.da-verdictWarn {
+  color: var(--dsw-alias-state-warn-label);
+  background: var(--dsw-alias-state-warn-tertiary);
+  border: 1px solid var(--dsw-alias-state-warn-primary);
+}
+.da-verdictBlock {
+  color: var(--dsw-alias-state-error-primary);
+  background: var(--dsw-alias-interactive-bg-hover-danger);
+  border: 1px solid var(--dsw-alias-state-error-primary);
+}
+
+/* 严重度徽章 */
+.da-badges { display: flex; flex-wrap: wrap; gap: 6px; }
+.badge {
+  font-size: 11px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  color: var(--dsw-alias-label-primary-foreground);
+  font-weight: 500;
+}
+.da-badgeCritical, .da-badgeHigh {
+  background: var(--dsw-alias-state-error-primary);
+}
+.da-badgeModerate, .da-badgeMedium {
+  background: var(--dsw-alias-state-warn-primary);
+  color: var(--dsw-alias-label-primary);
+}
+.da-badgeLow {
+  background: var(--dsw-alias-button-info-fill);
+}
+.da-badgeInfo {
+  background: var(--dsw-alias-state-business-primary);
+}
+.da-badgeUnknown {
+  background: var(--dsw-alias-label-tertiary);
+}
+
+/* 新增标记 */
+.da-isNew {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--dsw-alias-state-success-primary);
+  color: var(--dsw-alias-label-primary-foreground);
+  flex: none;
+  margin-right: 4px;
+}
+
+/* 总数 / 统计行 */
+.da-total {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary);
+}
+
+/* 筛选 chips */
+.da-filters { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.da-chip {
+  cursor: pointer;
+  border: 1px solid var(--dsw-alias-border-l3);
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 11px;
+  font-family: inherit;
+}
+.da-chipOn {
+  background: var(--dsw-alias-button-primary-fill);
+  color: var(--dsw-alias-label-primary-foreground);
+  border-color: transparent;
+}
+
+/* 告警列表 */
+.da-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 440px;
+  overflow: auto;
+}
+.da-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-bg-layer-1);
+}
+.da-rowClick { cursor: pointer; }
+.da-rowClick:hover { background: var(--dsw-alias-interactive-bg-hover); }
+
+/* 严重度色块 */
+.da-sev {
+  font-size: 10px;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--dsw-alias-label-primary-foreground);
+  min-width: 56px;
+  text-align: center;
+  flex: none;
+  font-weight: 600;
+}
+.da-sevCritical, .da-sevHigh { background: var(--dsw-alias-state-error-primary); }
+.da-sevModerate, .da-sevMedium { background: var(--dsw-alias-state-warn-primary); color: var(--dsw-alias-label-primary); }
+.da-sevLow { background: var(--dsw-alias-button-info-fill); }
+.da-sevInfo { background: var(--dsw-alias-state-business-primary); }
+.da-sevUnknown { background: var(--dsw-alias-label-tertiary); }
+
+.da-cell { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
+.da-name {
+  font-size: 13px;
+  font-weight: 600;
+  word-break: break-all;
+  color: var(--dsw-alias-label-primary);
+}
+.da-detail {
+  font-size: 12px;
+  color: var(--dsw-alias-label-secondary);
+  word-break: break-word;
+}
+
+/* 每条告警的"建议动作"区 */
+.da-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+}
+.da-actionBtn {
+  cursor: pointer;
+  border: 1px solid var(--dsw-alias-border-l3);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-family: inherit;
+}
+.da-actionBtn:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+/* 文件链接 */
+.da-open {
+  font-size: 12px;
+  color: var(--dsw-alias-brand-primary);
+  cursor: pointer;
+  word-break: break-all;
+  text-decoration: underline;
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+}
+
+/* pre 块（命令输出 / 脚本内容） */
+.da-pre {
+  white-space: pre-wrap;
+  font-size: 11px;
+  max-height: 160px;
+  overflow: auto;
+  background: var(--dsw-alias-markdown-code-block);
+  color: var(--dsw-alias-label-primary);
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+/* 副标题 / 章节小标题 */
+.da-subhead {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--dsw-alias-label-tertiary);
+}

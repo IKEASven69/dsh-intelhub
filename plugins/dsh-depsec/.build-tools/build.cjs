@@ -62,12 +62,26 @@ esbuild.buildSync({
   outfile: path.join(__dirname, 'tmp-client.cjs'),
 })
 const cjsBody = fs.readFileSync(path.join(__dirname, 'tmp-client.cjs'), 'utf8')
+
+// client.css → inline <style> 注入。M0 用纯字符串替换：build 时直接读 CSS
+// 文件内容，escape 反引号/反斜杠/$，拼到 factory 顶部。runtime 第一次执行
+// 时把 <style> append 到 document.head，浏览器自然应用。
+const cssPath = path.join(root, 'src', 'client.css')
+const cssText = fs.existsSync(cssPath) ? fs.readFileSync(cssPath, 'utf8') : ''
+const cssInjected = cssText.length === 0 ? '' :
+  `\t\tif (typeof document !== 'undefined' && !document.getElementById('dsh-trust-list-css')) {\n` +
+  `\t\t\tvar s = document.createElement('style');\n` +
+  `\t\t\ts.id = 'dsh-trust-list-css';\n` +
+  `\t\t\ts.textContent = ${JSON.stringify(cssText)};\n` +
+  `\t\t\tdocument.head.appendChild(s);\n` +
+  `\t\t}\n`
+
 const clientWrapped = `window.__ModuleLoader__.load({
-\tid: "dsh-depsec",
+\tid: "dsh-trust-list",
 \tfactory: (require) => {
 \t\tvar module = { exports: {} };
 \t\tvar exports = module.exports;
-${cjsBody
+${cssInjected}${cjsBody
   .split('\n')
   .map((l) => (l.length === 0 ? '' : '\t\t' + l))
   .join('\n')}

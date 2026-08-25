@@ -1,8 +1,9 @@
-# dsh-depsec bundle patch：把依赖安全审计插件插入 profile 合成。
-# host 半是 TypertRemoteService（Client→Host RPC：audit/audit-fix/export-sarif/
-# monitor-status/open-file），并在 Service.init 里注册 dep_audit 模型工具。
-# 浏览器半由 package.json 的 dsh.client 声明 + exports["./client"] 提供。
+# dsh-trust-list bundle patch: insert the dependency trust list plugin into
+# profile composition. host half is a TypertRemoteService (Client→Host RPC:
+# audit/audit-fix/export-sarif/monitor-status/open-file/scan-installed-plugins);
+# dep_audit model tool is registered in Service.init. Browser half ships via
+# dsh.client manifest + exports["./client"].
 
 - insert:
-    - id: depsec
-      name: 'dsh-depsec'
+    - id: trust-list
+      name: 'dsh-trust-list'

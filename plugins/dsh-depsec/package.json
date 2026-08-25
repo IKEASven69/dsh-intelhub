@@ -1,7 +1,7 @@
 {
-  "name": "dsh-depsec",
-  "description": "依赖安全审计：漏洞 / 投毒 / 密钥 / SAST 四合一，含危险度筛选、点击跳转源文件、Windows 原生通知、安装依赖自动值守",
-  "version": "0.2.0",
+  "name": "dsh-trust-list",
+  "description": "Dependency trust list for DeepSeek Harness: when pnpm blocks an install script, audit every script, grade PASS/WARN/BLOCK with file-line evidence, and rewrite onlyBuiltDependencies / trustedDependencies with verifiably-safe packages.",
+  "version": "0.3.0",
   "publishConfig": {
     "access": "public"
   },

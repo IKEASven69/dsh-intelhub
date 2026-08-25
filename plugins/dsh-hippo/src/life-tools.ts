@@ -174,4 +174,59 @@ export function registerLifeTools(ctx: Context): void {
       }
     },
   })), 'dsh-hippo: create_resident')
+
+  // 居民协作：让频道内居民接力对话（引擎选下一个人+上下文，这边调 LLM 生成）
+  ctx.effect(() => ctx.tools.register(defineTool({
+    name: 'relay_residents',
+    description: '让频道内的居民们接力对话（多居民协作讨论）。引擎自动轮转选下一个居民，把频道近况注入上下文，LLM 生成回复。用户说"让他们聊聊/讨论一下"时调用。',
+    parameters: {
+      channel: { type: 'string', required: true, description: '频道 id' },
+      topic: { type: 'string', description: '本轮话题提示（可选，默认延续最近对话）' },
+      rounds: { type: 'number', description: '接力轮数，1-5（默认 1）' },
+    },
+    output: { schema: { type: 'string' }, render: renderText },
+    async execute(args: { channel?: string; topic?: string; rounds?: number }) {
+      const channelId = (args.channel ?? '').trim()
+      if (channelId === '') return 'channel 不能为空'
+      const rounds = Math.min(Math.max(1, Number(args.rounds) || 1), 5)
+      const results: string[] = []
+
+      for (let i = 0; i < rounds; i++) {
+        const resp = await fetch(`http://127.0.0.1:8139/api/life/channels/${channelId}/relay/next`, { method: 'POST' })
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({ error: resp.statusText }))
+          results.push(`[接力失败] ${(err as { error?: string }).error}`)
+          break
+        }
+        const relay = await resp.json() as {
+          next: { name: string; persona: string }
+          context: Array<{ author: string; kind: string; text: string }>
+          channelTopic: string
+        }
+        const contextText = relay.context.length > 0
+          ? '\n\n--- 频道近况 ---\n' + relay.context.map(m => `${m.author}(${m.kind}): ${m.text}`).join('\n')
+          : ''
+        const systemPrompt = `${relay.next.persona}\n\n你是「${relay.next.name}」，住在 hippo 频道「${relay.channelTopic}」里。频道里还有其他居民，你们在协作讨论。用你的语气说话（1-3 句），可以对其他居民的话回应或补充。` + contextText
+        const userPrompt = (args.topic ?? '').trim() !== '' ? args.topic.trim() : '继续频道讨论（对最近的消息做出回应）'
+
+        const llm = (ctx as Context & { llm?: { generate: (opts: Record<string, unknown>) => Promise<{ text?: string }> } }).llm
+        if (llm === undefined) { results.push(`[${relay.next.name}] （LLM 服务不可用）`); break }
+
+        try {
+          const result = await llm.generate({ messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt },
+          ] })
+          const reply = typeof result.text === 'string' && result.text !== '' ? result.text : '……'
+          const { appendMessage } = await import('hippo-mind')
+          appendMessage(channelId, { kind: 'resident', name: relay.next.name }, reply)
+          results.push(`[${relay.next.name}] ${reply}`)
+        } catch (e) {
+          results.push(`[${relay.next.name}] （生成失败：${e instanceof Error ? e.message : String(e)}）`)
+          break
+        }
+      }
+      return results.join('\n')
+    },
+  }), 'dsh-hippo: relay_residents')
 }

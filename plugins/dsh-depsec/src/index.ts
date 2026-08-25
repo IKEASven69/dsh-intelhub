@@ -14,6 +14,7 @@ import type { FsTarget } from '@deepseek-ai/dsh-fs'
 import type { SandboxExecutionPolicy } from '@deepseek-ai/dsh-sandbox-policy'
 import type {
   AuditRequest,
+  BlockVerdict,
   DepsecFinding,
   DepsecResult,
   DepsecScope,
@@ -23,6 +24,8 @@ import type {
   FixResult,
   MonitorState,
   OpenFileRequest,
+  PluginRosterEntry,
+  PluginRosterResult,
   SarifResult,
   WriteApprovalsRequest,
   WriteApprovalsResult,
@@ -130,6 +133,18 @@ function verdictOf(summary?: DepsecSummary): DepsecResult['verdict'] {
   if ((summary.critical ?? 0) > 0 || (summary.high ?? 0) > 0) return 'critical'
   if ((summary.total ?? 0) > 0) return 'warning'
   return 'clean'
+}
+
+/**
+ * 三档闸门语义：与 dsh-market / dsh-plugin-gate 对齐。
+ * 任何 critical 或 high 都升档为 block；中/低/未知为 warn；没有任何信号为 pass。
+ * 旧 verdict 字段保留以兼容既有基线和告警 UI 文本；新 UI 与 SARIF 优先消费此字段。
+ */
+function blockVerdictOf(summary?: DepsecSummary): BlockVerdict {
+  if (!summary) return 'pass'
+  if ((summary.critical ?? 0) > 0 || (summary.high ?? 0) > 0) return 'block'
+  if ((summary.total ?? 0) > 0) return 'warn'
+  return 'pass'
 }
 
 function shannonEntropy(s: string): number {
@@ -274,6 +289,76 @@ export class DepsecService extends TypertRemoteService {
     return this.monitoringState
   }
 
+  @Remote('scan-installed-plugins')
+  async scanInstalledPlugins(request: { profile?: string }): Promise<PluginRosterResult> {
+    // 优先用 client 显式传过来的 profile 路径——这是 dsh sandbox workspace-write
+    // 模式下唯一可靠的入口（plugin 不能主动访问 ~/.dsh，因为它不在 workspace 根下）。
+    // fallback：defaultProfileRoot()（也可能被 sandbox 拦）→ currentRoot()（workspace 根）。
+    //
+    // 背景：currentRoot() 给的是 dsh workspace 根（用户当前项目），不是 profile 根
+    // （`~/.dsh/profiles/<name>` 是装插件的地方）。直接用 workspaceRoot 会扫不到任何
+    // 已装插件——profile 和 workspace 是两棵不同的目录树。
+    let root = request.profile
+    if (root === undefined || root === '') {
+      root = await this.defaultProfileRoot()
+    }
+    if (root === undefined) {
+      root = this.currentRoot()
+    }
+    if (root === undefined) {
+      return { ok: false, scope: 'plugin-roster', profile: '', total: 0, plugins: [], error: '无法确定 profile 根目录（请在输入框里填 ~/.dsh/profiles/<name>）' }
+    }
+    // 调试：把推断过程写到 monitoringState + note 里
+    const env = process.env as Record<string, string | undefined>
+    const dbg = `cwd=${process.cwd()} USERPROFILE=${env.USERPROFILE ?? 'undef'} DSH_HOME=${env.DSH_HOME ?? 'undef'} HOME=${env.HOME ?? 'undef'} HOMEDRIVE=${env.HOMEDRIVE ?? 'undef'} HOMEPATH=${env.HOMEPATH ?? 'undef'} request=${JSON.stringify(request.profile)} default=${JSON.stringify(await this.defaultProfileRoot())} current=${JSON.stringify(this.currentRoot())} resolved=${root}`
+    this.monitoringState = {
+      at: Date.now(),
+      scope: 'plugin-roster',
+      note: dbg,
+    }
+    const bundles = await this.listProfileBundles(root)
+    const plugins: PluginRosterEntry[] = []
+    for (const b of bundles) {
+      // 每个插件跑 supply-chain + secrets + sast（vuln 跳过——插件的依赖不一定
+      // 在 npm 体系下管理；直接跑它的 node_modules 意义不大）
+      const sc = await this.runSupplyChain(b.dir)
+      const secrets = await this.runSecrets(b.dir)
+      const sast = await this.runSast(b.dir)
+      const findings: DepsecFinding[] = []
+      for (const f of sc.findings ?? []) findings.push(f)
+      for (const f of secrets.findings ?? []) findings.push(f)
+      for (const f of sast.findings ?? []) findings.push(f)
+      plugins.push({
+        name: b.name,
+        version: b.version,
+        dir: b.dir,
+        manager: b.manager,
+        verdicts: {
+          supplyChain: (sc.blockVerdict ?? 'pass'),
+          secrets: (secrets.blockVerdict ?? 'pass'),
+          sast: (sast.blockVerdict ?? 'pass'),
+        },
+        findings,
+        note: `supply-chain ${sc.blockVerdict ?? 'pass'} / secrets ${secrets.blockVerdict ?? 'pass'} / sast ${sast.blockVerdict ?? 'pass'}`,
+      })
+    }
+    // 排序：block 优先，warn 次之，pass 末尾
+    const rank = (v: BlockVerdict): number => v === 'block' ? 0 : v === 'warn' ? 1 : 2
+    plugins.sort((a, b) => {
+      const wa = Math.min(rank(a.verdicts.supplyChain), rank(a.verdicts.secrets), rank(a.verdicts.sast))
+      const wb = Math.min(rank(b.verdicts.supplyChain), rank(b.verdicts.secrets), rank(b.verdicts.sast))
+      return wa - wb
+    })
+    return {
+      ok: true,
+      scope: 'plugin-roster',
+      profile: root,
+      total: plugins.length,
+      plugins,
+      note: `已扫描 ${plugins.length} 个 bundle；按最严重维度排序（block > warn > pass）\ndebug: ${dbg}`,
+    }
+  }
+
   @Remote('open-file')
   async openFile(request: OpenFileRequest): Promise<{ ok: boolean; via?: string; error?: string }> {
     const path = request?.path
@@ -306,6 +391,119 @@ export class DepsecService extends TypertRemoteService {
   private rootFor(path: string | undefined): string | undefined {
     if (typeof path === 'string' && path.length > 0) return path
     return this.currentRoot()
+  }
+
+  /**
+   * 默认 profile 根路径：尝试从 $DSH_HOME/profiles/$DSH_PROFILE 推断。
+   * dsh web 进程通常会透传这两个环境变量；如果都没有，回退到 $HOME/.dsh/profiles/web
+   * （最常见的默认 profile 名）。
+   */
+  private async defaultProfileRoot(): Promise<string | undefined> {
+    const env = process.env as Record<string, string | undefined>
+    const candidates: string[] = []
+    if (env.DSH_HOME !== undefined && env.DSH_HOME.length > 0) candidates.push(env.DSH_HOME)
+    if (env.USERPROFILE !== undefined) candidates.push(`${env.USERPROFILE}/.dsh`)
+    if (env.HOME !== undefined) candidates.push(`${env.HOME}/.dsh`)
+    if (env.HOMEDRIVE !== undefined && env.HOMEPATH !== undefined) candidates.push(`${env.HOMEDRIVE}${env.HOMEPATH}/.dsh`)
+    const profileName = env.DSH_PROFILE ?? 'web'
+    const tried: string[] = []
+    let lastErr = ''
+    let hit: string | undefined
+    for (const home of candidates) {
+      const normalizedHome = home.replace(/\\/g, '/').replace(/[\\/]+$/, '')
+      const profileDir = `${normalizedHome}/profiles/${profileName}`
+      tried.push(profileDir)
+      try {
+        // 走 dsh 自己的 fs 抽象（this.ctx.fs），遵循 sandbox policy；
+        // 比 require('node:fs') 稳。
+        const target = await this.ctx.fs.resolve(profileDir)
+        const info = await this.ctx.fs.stat(target)
+        if (info !== undefined && info.type === 'directory') {
+          tried[tried.length - 1] = `${profileDir} (EXISTS, type=${info.type})`
+          hit = profileDir
+          break
+        }
+        tried[tried.length - 1] = `${profileDir} (not dir, info=${info?.type ?? 'undef'})`
+      } catch (e) {
+        lastErr = e instanceof Error ? e.message : String(e)
+        tried[tried.length - 1] = `${profileDir} (err: ${lastErr.slice(0, 80)})`
+      }
+    }
+    this.monitoringState = {
+      at: Date.now(),
+      scope: 'plugin-roster',
+      note: `defaultProfileRoot tried: ${tried.join(' | ')} | err: ${lastErr || 'none'} | hit: ${hit ?? 'none'}`,
+    }
+    return hit
+  }
+
+  /**
+   * 列出 profile 里"装了的有 dsh bundle 的包"。
+   *
+   * 不依赖 cordis loader API（loader 不属于对外契约），用最朴素的策略：
+   * 读 profile 的 node_modules/ 顶层，过滤出 package.json 声明了 dsh.bundle 的项。
+   * pnpm 的 .pnpm/ 嵌套目录会被平展成包名（去掉平台前缀）；link:/file:/git: 源
+   * 链接在 node_modules 里也是普通包目录，按相同规则扫描。
+   *
+   * @param root - profile root (通常来自 sandboxPolicy.workspaceRoot)
+   * @returns 列表 [{ name, version, dir, manager }]
+   */
+  private async listProfileBundles(root: string): Promise<Array<{ name: string; version: string; dir: string; manager: PluginRosterResult['plugins'][number]['manager'] }>> {
+    const out: Array<{ name: string; version: string; dir: string; manager: PluginRosterResult['plugins'][number]['manager'] }> = []
+    let entries: Array<{ name: string; type?: string }> = []
+    try {
+      entries = await this.ctx.fs.listDir(await this.ctx.fs.resolve(root + '/node_modules'))
+    } catch {
+      return out
+    }
+    // 检测包管理器
+    let manager: PluginRosterResult['plugins'][number]['manager'] = 'unknown'
+    try {
+      const det = await this.detectManager(root)
+      manager = det.manager === 'npm' || det.manager === 'pnpm' || det.manager === 'yarn' || det.manager === 'bun'
+        ? det.manager : 'unknown'
+    } catch { /* keep unknown */ }
+
+    const seen = new Set<string>()
+    for (const e of entries) {
+      if (e.name.startsWith('.')) continue
+      // 处理 @scope/name
+      if (e.name.startsWith('@')) {
+        let sub: Array<{ name: string; type?: string }> = []
+        try {
+          sub = await this.ctx.fs.listDir(await this.ctx.fs.resolve(`${root}/node_modules/${e.name}`))
+        } catch { continue }
+        for (const se of sub) {
+          const fullName = `${e.name}/${se.name}`
+          if (seen.has(fullName)) continue
+          seen.add(fullName)
+          const pkg = await this.readJson(`${root}/node_modules/${fullName}/package.json`)
+          if (pkg === null) continue
+          const hasBundle = pkg.dsh !== undefined && typeof (pkg.dsh as Record<string, unknown>).bundle === 'object'
+          if (!hasBundle) continue
+          out.push({
+            name: fullName,
+            version: (pkg.version as string) ?? '',
+            dir: `${root}/node_modules/${fullName}`,
+            manager,
+          })
+        }
+        continue
+      }
+      if (seen.has(e.name)) continue
+      seen.add(e.name)
+      const pkg = await this.readJson(`${root}/node_modules/${e.name}/package.json`)
+      if (pkg === null) continue
+      const hasBundle = pkg.dsh !== undefined && typeof (pkg.dsh as Record<string, unknown>).bundle === 'object'
+      if (!hasBundle) continue
+      out.push({
+        name: e.name,
+        version: (pkg.version as string) ?? '',
+        dir: `${root}/node_modules/${e.name}`,
+        manager,
+      })
+    }
+    return out
   }
 
   private rootOfAgent(agent: Agent | undefined): string | undefined {
@@ -730,10 +928,10 @@ export class DepsecService extends TypertRemoteService {
   private async runSupplyChain(root: string): Promise<DepsecResult> {
     const det = await this.detectManager(root)
     if (!['npm', 'pnpm', 'yarn', 'bun'].includes(det.manager)) {
-      return { ok: false, scope: 'supply-chain', root, manager: det.manager, verdict: 'clean', message: '供应链/投毒扫描当前支持 npm 系项目（需 package.json）' }
+      return { ok: false, scope: 'supply-chain', root, manager: det.manager, verdict: 'clean', blockVerdict: 'pass', message: '供应链/投毒扫描当前支持 npm 系项目（需 package.json）' }
     }
     const pkg = await this.readJson(this.joinPath(root, 'package.json'))
-    if (pkg === null) return { ok: false, scope: 'supply-chain', root, manager: det.manager, verdict: 'clean', message: '无法读取 package.json' }
+    if (pkg === null) return { ok: false, scope: 'supply-chain', root, manager: det.manager, verdict: 'clean', blockVerdict: 'pass', message: '无法读取 package.json' }
     const depMap = { ...(pkg.dependencies as object ?? {}), ...(pkg.devDependencies as object ?? {}) }
     const depNames = Object.keys(depMap)
     const projScripts = this.scriptsOf(pkg)
@@ -796,7 +994,7 @@ export class DepsecService extends TypertRemoteService {
     for (const f of findings) counts[f.severity] = (counts[f.severity] ?? 0) + 1
     const summary: DepsecSummary = { total: findings.length, high: counts.high, medium: counts.medium, low: counts.low, info: counts.info, newCount }
     return {
-      ok: true, scope: 'supply-chain', root, manager: det.manager, verdict: verdictOf(summary),
+      ok: true, scope: 'supply-chain', root, manager: det.manager, verdict: verdictOf(summary), blockVerdict: blockVerdictOf(summary),
       project: { name: (pkg.name as string) ?? '', version: (pkg.version as string) ?? '', depCount: depNames.length },
       summary, findings: findings.slice(0, 200),
       approvals,
@@ -819,24 +1017,24 @@ export class DepsecService extends TypertRemoteService {
 
   private async runVuln(root: string): Promise<DepsecResult> {
     let det
-    try { det = await this.detectManager(root) } catch (e) { return { ok: false, detected: false, scope: 'vuln', manager: null, root, verdict: 'clean', error: e instanceof Error ? e.message : String(e) } }
-    if (det.manager === 'unknown') return { ok: false, detected: false, scope: 'vuln', manager: null, root, verdict: 'clean', message: '未检测到受支持的包管理器清单' }
+    try { det = await this.detectManager(root) } catch (e) { return { ok: false, detected: false, scope: 'vuln', manager: null, root, verdict: 'clean', blockVerdict: 'pass', error: e instanceof Error ? e.message : String(e) } }
+    if (det.manager === 'unknown') return { ok: false, detected: false, scope: 'vuln', manager: null, root, verdict: 'clean', blockVerdict: 'pass', message: '未检测到受支持的包管理器清单' }
     const command = COMMANDS[det.manager]
-    if (command === null || command === undefined) return { ok: false, detected: true, scope: 'vuln', manager: det.manager, root, verdict: 'clean', message: 'bun 暂无官方 audit 命令' }
+    if (command === null || command === undefined) return { ok: false, detected: true, scope: 'vuln', manager: det.manager, root, verdict: 'clean', blockVerdict: 'pass', message: 'bun 暂无官方 audit 命令' }
     const run = await this.runCommand(command, root)
     const parsed = this.parseResult(det.manager, run.stdout)
     if (parsed === null) {
       const needle = run.stderr + ' ' + run.stdout
       const toolMissing = /not found|not recognized|无法识别|command not found|No such file|ENOENT/i.test(needle) || (run.exitCode !== 0 && run.stdout.trim().length === 0)
       return {
-        ok: false, detected: true, scope: 'vuln', manager: det.manager, root, verdict: 'clean', command, exitCode: run.exitCode,
+        ok: false, detected: true, scope: 'vuln', manager: det.manager, root, verdict: 'clean', blockVerdict: 'pass', command, exitCode: run.exitCode,
         error: toolMissing ? `审计工具未安装或不可用：请确认 \`${command.split(' ')[0]}\` 已安装并位于 PATH 中。` : `未能解析审计输出（退出码 ${run.exitCode}）。`,
         stderrTail: run.stderr.slice(0, 2000), stdoutTail: run.stdout.slice(0, 2000),
       }
     }
     const newCount = await this.markNew('vuln', parsed.list, root)
     const summary: DepsecSummary = { total: parsed.total, critical: parsed.critical, high: parsed.high, moderate: parsed.moderate, low: parsed.low, info: parsed.info, newCount }
-    return { ok: true, detected: true, scope: 'vuln', manager: det.manager, root, verdict: verdictOf(summary), command, exitCode: run.exitCode, timedOut: run.timedOut, summary, vulnerabilities: parsed.list, note: run.timedOut ? '审计超时（命令超过 120 秒被终止），结果可能不完整。' : '' }
+    return { ok: true, detected: true, scope: 'vuln', manager: det.manager, root, verdict: verdictOf(summary), blockVerdict: blockVerdictOf(summary), command, exitCode: run.exitCode, timedOut: run.timedOut, summary, vulnerabilities: parsed.list, note: run.timedOut ? '审计超时（命令超过 120 秒被终止），结果可能不完整。' : '' }
   }
 
   private async runSecrets(root: string): Promise<DepsecResult> {
@@ -848,7 +1046,7 @@ export class DepsecService extends TypertRemoteService {
     const counts: Record<string, number> = { high: 0, medium: 0, low: 0, info: 0 }
     for (const f of findings) counts[f.severity] = (counts[f.severity] ?? 0) + 1
     const summary: DepsecSummary = { total: findings.length, high: counts.high, medium: counts.medium, low: counts.low, info: counts.info, newCount }
-    return { ok: true, scope: 'secrets', root, verdict: verdictOf(summary), summary, findings: findings.slice(0, 200), stats: { filesScanned: wt.scanned, historyCommits: hist.commits }, note: [wt.skipped, hist.note].filter(Boolean).join('；') }
+    return { ok: true, scope: 'secrets', root, verdict: verdictOf(summary), blockVerdict: blockVerdictOf(summary), summary, findings: findings.slice(0, 200), stats: { filesScanned: wt.scanned, historyCommits: hist.commits }, note: [wt.skipped, hist.note].filter(Boolean).join('；') }
   }
 
   private async runSast(root: string): Promise<DepsecResult> {
@@ -859,7 +1057,7 @@ export class DepsecService extends TypertRemoteService {
     const counts: Record<string, number> = { high: 0, medium: 0, low: 0, info: 0 }
     for (const f of findings) counts[f.severity] = (counts[f.severity] ?? 0) + 1
     const summary: DepsecSummary = { total: findings.length, high: counts.high, medium: counts.medium, low: counts.low, info: counts.info, newCount }
-    return { ok: true, scope: 'sast', root, verdict: verdictOf(summary), summary, findings: findings.slice(0, 200), stats: { filesScanned: wt.scanned }, note: wt.skipped }
+    return { ok: true, scope: 'sast', root, verdict: verdictOf(summary), blockVerdict: blockVerdictOf(summary), summary, findings: findings.slice(0, 200), stats: { filesScanned: wt.scanned }, note: wt.skipped }
   }
 
   private async runScope(root: string, scope: DepsecScope): Promise<DepsecResult> {
@@ -902,34 +1100,53 @@ export class DepsecService extends TypertRemoteService {
   }
 
   private async smartNotify(r: DepsecResult): Promise<void> {
-    if (!r.ok || r.verdict !== 'critical') return
+    // 仅 BLOCK 状态下弹通知；WARN/PASS 静默（避免噪声）。自动值守场景下，
+    // 一次完整扫描可能在 pnpm install 之后才完成；通知只在"真的有高危"时出现。
+    if (!r.ok) return
+    if (r.blockVerdict !== 'block') return
     const s = r.summary
-    await this.notifyWindows('依赖安全审计', `发现 ${(s?.critical ?? 0) + (s?.high ?? 0)} 个高危问题（${r.scope}）`)
+    const newTxt = s?.newCount ? `（新增 ${s.newCount}）` : ''
+    await this.notifyWindows('依赖信任清单', `🔴 BLOCK：新装依赖里有 ${(s?.high ?? 0)} 个 install 脚本被高危阻断${newTxt}`)
   }
 
   private async notifyFor(r: DepsecResult): Promise<void> {
     const s = r.summary
     const newTxt = s?.newCount ? `（新增 ${s.newCount}）` : ''
-    const label = r.scope === 'supply-chain' ? '投毒扫描' : r.scope === 'secrets' ? '密钥扫描' : r.scope === 'sast' ? '代码扫描' : '漏洞审计'
-    if (!r.ok) { await this.notifyWindows('依赖安全审计', `${label}未完成：${r.message ?? r.error ?? '未知错误'}`); return }
-    const verdictTxt = r.verdict === 'critical' ? '🔴 ' : r.verdict === 'warning' ? '🟡 ' : '🟢 '
-    await this.notifyWindows('依赖安全审计', `${verdictTxt}${label}：${s?.total ?? 0} 个${newTxt}`)
+    const label = r.scope === 'supply-chain' ? '信任清单扫描' : r.scope === 'secrets' ? '密钥扫描' : r.scope === 'sast' ? '代码扫描' : '漏洞审计'
+    if (!r.ok) { await this.notifyWindows('依赖信任清单', `${label}未完成：${r.message ?? r.error ?? '未知错误'}`); return }
+    // 手动触发的 runAudit 仍按 verdict 给完整通知；自动值守走 smartNotify
+    const verdictTxt = r.blockVerdict === 'block' ? '🔴 BLOCK ' : r.blockVerdict === 'warn' ? '🟡 WARN ' : '🟢 PASS '
+    await this.notifyWindows('依赖信任清单', `${verdictTxt}${label}：${s?.total ?? 0} 个${newTxt}`)
   }
 
+  /**
+   * 监听 bash/pwsh 工具结果后调扫描。延迟 30 秒，避免 pnpm install 还没装完就
+   * 触发扫描（节点数错 + 误报），也避免 agent 装依赖的同一秒被扫描阻塞。
+   * 节流 60 秒（连续多个 install 命令不重复扫）。
+   */
+  private autoScanTimer: ReturnType<typeof setTimeout> | null = null
   private async autoScanAfterInstall(agent: Agent | undefined): Promise<void> {
     const now = Date.now()
-    if (now - this.lastAutoAt < 15000) return
+    if (now - this.lastAutoAt < 60000) {
+      // 还在节流窗口内；不重置 lastAutoAt（避免被持续 install 命令延后到永远不触发）
+      return
+    }
     this.lastAutoAt = now
+    if (this.autoScanTimer !== null) clearTimeout(this.autoScanTimer)
     const root = this.rootOfAgent(agent)
     if (root === undefined) return
-    const result = await this.runSupplyChain(root)
-    this.monitoringState = { at: now, scope: 'supply-chain', verdict: result.verdict, total: result.summary?.total, high: result.summary?.high }
-    await this.smartNotify(result)
+    this.autoScanTimer = setTimeout(() => {
+      void (async () => {
+        const result = await this.runSupplyChain(root)
+        this.monitoringState = { at: Date.now(), scope: 'supply-chain', verdict: result.verdict, blockVerdict: result.blockVerdict, total: result.summary?.total, high: result.summary?.high }
+        await this.smartNotify(result)
+      })()
+    }, 30000)
   }
 
   private async runAudit(path: string | undefined, scope: DepsecScope): Promise<DepsecResult> {
     const root = this.rootFor(path)
-    if (root === undefined) return { ok: false, detected: false, manager: null, verdict: 'clean', error: '无法确定工作区根目录（sandboxPolicy 服务不可用）' }
+    if (root === undefined) return { ok: false, detected: false, manager: null, verdict: 'clean', blockVerdict: 'pass', error: '无法确定工作区根目录（sandboxPolicy 服务不可用）' }
     const result = await this.runScope(root, scope)
     await this.notifyFor(result)
     return result

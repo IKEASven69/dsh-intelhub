@@ -64,13 +64,41 @@ return {
     /** cloneJson 拒绝 undefined，统一规整为 null。 */
     const clean = (v) => (v === undefined ? null : v)
 
-    // 1) 搜索市场（Gamma /public-search）
+    // 1) 搜索市场（Gamma /public-search + 实时中点价）
     harness.handle('polymarket_search_markets', async (args = {}) => {
       const q = String(args.q ?? '')
       const limit = Number(args.limit ?? 5)
       if (!q) throw new Error('polymarket_search_markets 需要非空 q')
       const data = await fetchJson(GAMMA_BASE, `/public-search?q=${encodeURIComponent(q)}&limit=${limit}`)
       const events = Array.isArray(data?.events) ? data.events : []
+      // 实时中点价：Gamma outcomePrices 是缓存价会滞后官网；ctx.web.fetch 仅 GET，
+      // 逐市场 /midpoint 拉（限前 20 个），失败回退缓存价。
+      const parseTids = (v) => {
+        if (Array.isArray(v)) return v.filter((x) => typeof x === 'string' && x.length > 0)
+        if (typeof v === 'string' && v.length > 0) {
+          try {
+            const p = JSON.parse(v)
+            return Array.isArray(p) ? p.filter((x) => typeof x === 'string' && x.length > 0) : []
+          } catch { return [] }
+        }
+        return []
+      }
+      const live = {}
+      let budget = 20
+      for (const e of events) {
+        for (const m of Array.isArray(e?.markets) ? e.markets : []) {
+          if (budget <= 0) break
+          const cid = clean(m?.conditionId)
+          const tids = parseTids(m?.clobTokenIds)
+          if (!cid || tids.length === 0) continue
+          budget--
+          try {
+            const mp = await fetchJson(CLOB_BASE, `/midpoint?token_id=${tids[0]}`)
+            const v = Number(mp?.mid)
+            if (Number.isFinite(v)) live[cid] = v
+          } catch { /* 失败回退缓存价 */ }
+        }
+      }
       return {
         query: q,
         count: events.length,
@@ -78,12 +106,16 @@ return {
           title: clean(e?.title),
           event_id: clean(e?.id),
           markets: Array.isArray(e?.markets)
-            ? e.markets.map((m) => ({
-                condition_id: clean(m?.conditionId),
-                question: clean(m?.question),
-                outcome_prices: clean(m?.outcomePrices),
-                volume: clean(m?.volume),
-              }))
+            ? e.markets.map((m) => {
+                const cid = clean(m?.conditionId)
+                return {
+                  condition_id: cid,
+                  question: clean(m?.question),
+                  live_price: cid !== null && live[cid] !== undefined ? live[cid] : null,
+                  outcome_prices: clean(m?.outcomePrices),
+                  volume: clean(m?.volume),
+                }
+              })
             : [],
         })),
       }

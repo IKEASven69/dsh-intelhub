@@ -9,6 +9,13 @@ export type DepsecScope = 'vuln' | 'supply-chain' | 'secrets' | 'sast'
 /** 判定：干净 / 有告警 / 有高危。 */
 export type DepsecVerdict = 'clean' | 'warning' | 'critical'
 
+/**
+ * 三档闸门语义，与 dsh-market / dsh-plugin-gate 对齐。
+ * 与 {@link DepsecVerdict} 并行：旧字段保留以兼容既有基线与 UI 文本；
+ * 新 UI 与 SARIF 输出优先消费 `blockVerdict`。
+ */
+export type BlockVerdict = 'pass' | 'warn' | 'block'
+
 /** 一条文件级发现（密钥 / SAST / 投毒）。 */
 export interface DepsecFinding {
   kind?: string
@@ -52,6 +59,13 @@ export interface DepsecResult {
   root?: string
   manager?: string | null
   verdict?: DepsecVerdict
+  /**
+   * 三档闸门语义：与 verdict 并行；新 UI 与 SARIF 优先消费此字段。
+   * - pass：无高/中危信号
+   * - warn：有中危或低危，需要人工看
+   * - block：有高危或 install 脚本被 block，**不能放行**
+   */
+  blockVerdict?: BlockVerdict
   summary?: DepsecSummary
   vulnerabilities?: DepsecVulnerability[]
   findings?: DepsecFinding[]
@@ -126,6 +140,36 @@ export interface MonitorState {
   at?: number
   scope?: DepsecScope
   verdict?: DepsecVerdict
+  blockVerdict?: BlockVerdict
   total?: number
   high?: number
+}
+
+/** 已安装插件审查：单个插件的逐维度 verdict。 */
+export interface PluginRosterEntry {
+  name: string
+  version: string
+  dir: string
+  manager: 'npm' | 'pnpm' | 'yarn' | 'bun' | 'link' | 'file' | 'git' | 'unknown'
+  /** 每个维度单独给一档闸门：pass / warn / block；未跑的维度为 'pass' 表示"未发现问题"。 */
+  verdicts: {
+    supplyChain: BlockVerdict
+    secrets: BlockVerdict
+    sast: BlockVerdict
+  }
+  findings: DepsecFinding[]
+  note?: string
+  error?: string
+}
+
+/** scan-installed-plugins RPC 结果。 */
+export interface PluginRosterResult {
+  ok: boolean
+  scope: 'plugin-roster'
+  profile: string
+  total: number
+  /** 按聚合 verdict（block > warn > pass）排序的插件列表。 */
+  plugins: PluginRosterEntry[]
+  error?: string
+  note?: string
 }
