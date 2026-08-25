@@ -422,7 +422,11 @@ window.__ModuleLoader__.load({
         .filter(Boolean)
         .sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')))
         .slice(0, 10)
-      const bind = (sid) => { API.projectUpdate(project.id, { bindSession: sid }); openSession(sid); onDone() }
+      const bind = (sid) => {
+        API.projectUpdate(project.id, { bindSession: sid }).then(() => { loadState() }).catch(() => {})
+        openSession(sid)
+        onDone()
+      }
       const fresh = async () => {
         try {
           const sid = await createSessionFor(project.folder)
@@ -453,15 +457,15 @@ window.__ModuleLoader__.load({
       useEffect(() => {
         if (folder === '' && rootsStore.map !== null) {
           const c = rootsStore.map.content
-          if (c) setFolder(c.replace(/\/+$/, '') + '/bench')
+          if (c) setFolder(c.replace(/\\+$/, '').replace(/\\/g, '/') + '/bench')
         }
       }, [rootsStore.map])
       const slug = () => name.trim().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'bench'
-      const suggest = () => { if (rootsStore.map !== null) setFolder(rootsStore.map.content.replace(/\/+$/, '') + '/' + slug()) }
+      const suggest = () => { if (rootsStore.map !== null) setFolder(rootsStore.map.content.replace(/\\+$/, '').replace(/\\/g, '/') + '/' + slug()) }
       const submit = (e) => {
         e.preventDefault()
         if (name.trim() === '') { setMsg('名称必填'); return }
-        API.projectCreate({ name, icon, folder, template }).then((j) => {
+        API.projectCreate({ name, icon, folder: folder.replace(/\\/g, '/'), template }).then((j) => {
           if (!j.ok) { setMsg('失败：' + j.error); return }
           loadState()
           onCreated(j.project)
@@ -548,8 +552,8 @@ window.__ModuleLoader__.load({
                     h('div', { className: 'dk-card-actions' },
                       h('button', { className: 'dk-mini', onClick: () => { goProject(p.id) } }, '打开 →'),
                       p.id.startsWith('builtin-')
-                        ? null
-                        : h('button', { className: 'dk-mini', onClick: () => { API.projectUpdate(p.id, { hidden: !p.hidden }); setTimeout(loadState, 300) } }, p.hidden ? '取消隐藏' : '隐藏')),
+                        ? h('button', { className: 'dk-mini', onClick: () => { API.projectUpdate(p.id, { hidden: !p.hidden }); setTimeout(loadState, 300) } }, p.hidden ? '取消隐藏' : '隐藏')
+                        : h('button', { className: 'dk-mini danger', onClick: () => { if (window.confirm('删除工作台「' + p.name + '」？（只解除注册，不动磁盘文件）')) post('/api/deck/project/delete', { id: p.id }).then(() => { loadState() }) } }, '删除')),
                   )),
                 h('div', { className: 'dk-card room add', role: 'button', tabIndex: 0, onClick: () => setWizard(true) },
                   h('div', { className: 'dk-room-icon' }, '＋'),
@@ -656,7 +660,7 @@ window.__ModuleLoader__.load({
           ? h('button', { className: 'dk-tile', title: '展开工作台', onClick: () => setOpen(true) }, '🗂️')
           : null
       }
-      const proj = app.startsWith('p:') ? stateStore.projects.find((p) => p.id === app.slice(2)) : null
+      const proj = app.startsWith('p:') ? (stateStore.projects.find((p) => p.id === app.slice(2)) ?? null) : null
       return h('div', { className: 'dk-shell' },
         h(Rail, { app, setApp }),
         h('div', { className: 'dk-main' },
@@ -724,6 +728,8 @@ window.__ModuleLoader__.load({
 .dk-mini{background:var(--color-bg-2,#1b1e26);color:var(--dk-accent,#5b6cff);border:1px solid var(--color-border-1,#2a2e37);
   border-radius:8px;font:11.5px/1.6 system-ui;cursor:pointer;padding:2px 10px;}
 .dk-mini:hover{border-color:var(--dk-accent,#5b6cff);}
+.dk-mini.danger{color:#f87171;}
+.dk-mini.danger:hover{border-color:#f87171;}
 .dk-ghost{background:none;border:1px solid var(--color-border-1,#2a2e37);color:inherit;border-radius:10px;
   font:inherit;cursor:pointer;padding:9px 16px;}
 .dk-ghost:hover{border-color:var(--dk-accent,#5b6cff);color:var(--dk-accent,#5b6cff);}

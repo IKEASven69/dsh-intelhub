@@ -207,7 +207,8 @@ export function registerLifeTools(ctx: Context): void {
           ? '\n\n--- 频道近况 ---\n' + relay.context.map(m => `${m.author}(${m.kind}): ${m.text}`).join('\n')
           : ''
         const systemPrompt = `${relay.next.persona}\n\n你是「${relay.next.name}」，住在 hippo 频道「${relay.channelTopic}」里。频道里还有其他居民，你们在协作讨论。用你的语气说话（1-3 句），可以对其他居民的话回应或补充。` + contextText
-        const userPrompt = (args.topic ?? '').trim() !== '' ? args.topic.trim() : '继续频道讨论（对最近的消息做出回应）'
+        const topicText = typeof args.topic === 'string' ? args.topic.trim() : ''
+        const userPrompt = topicText !== '' ? topicText : '继续频道讨论（对最近的消息做出回应）'
 
         const llm = (ctx as Context & { llm?: { generate: (opts: Record<string, unknown>) => Promise<{ text?: string }> } }).llm
         if (llm === undefined) { results.push(`[${relay.next.name}] （LLM 服务不可用）`); break }
@@ -228,5 +229,5 @@ export function registerLifeTools(ctx: Context): void {
       }
       return results.join('\n')
     },
-  }), 'dsh-hippo: relay_residents')
+  })), 'dsh-hippo: relay_residents')
 }
