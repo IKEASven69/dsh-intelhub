@@ -15,7 +15,7 @@ dsh-plugin/
 │   ├── dsh-hippo/         # 跨 agent 记忆桥（组合式：记忆迁移/团队记忆/生活流居民；已实现 H0-H4+）
 │   ├── dsh-team-memory/   # 团队记忆蒸馏（已并入 dsh-hippo 组合，本包只剩路由桥，见 ARCHIVED.md）
 │   ├── dsh-deck/          # 知识调研台（FTS 搜索/四库/点子/复盘；D1-D2 进行中）
-│   └── dsh-opencli/       # 浏览器代理（登录态 Chrome + 179 适配器；仅 PLAN，未开工）
+│   └── dsh-opencli/       # 浏览器代理（登录态 Chrome + 176 适配器 + 自创作；O1-O3 已实现待发布）
 ├── vendor/      # 别人开发的插件（clone 下来参考/使用；嵌套 git 仓库不入库，仅本机存在）
 └── docs/        # dsh 相关资料（awesome-dsh 中文版、UI 调试快照）
 ```
