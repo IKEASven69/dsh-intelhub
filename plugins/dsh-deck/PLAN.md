@@ -87,8 +87,8 @@ plugins/dsh-deck/
 - [x] D1下 环境前置检查 → ✅ 2026-08-24 结果：bun✓ npx✓ **Chrome✓（已装，CDP 可行——此前"无 Chrome"判断有误）** kb-git✓（工作树干净）FTS 计时✓（5487 md / 5.2MB 全扫 2.4s → FTS5+mtime 增量方案绿灯，无需降级）。**两个待用户解锁**：①公众号凭据链空（EXTEND.md/env/.baoyu-skills/.env 全无）→ 草稿 API 验证挂起，需 AppID/AppSecret 或改浏览器模式；②APIFY_TOKEN 无 → D6 海外数据回流挂起。CDP 预填实测顺延 D5（本就要登录态）
 - [x] D2上 FTS 查询路由+知识台读侧（移植 panel-src）+ 点子 tab → ✅ 2026-08-24 完成：FTS5 trigram 索引 5486 篇（2.4s 全量+5min TTL 增量）；搜索/四库浏览/md 预览/insights 复盘/点子捕获全通；vitest 20/20 绿。commit 见 D2下
 - [x] D2下 md 预览+insights 复盘+搜索联调+点子捕获/流转 → ✅ 2026-08-25 完成：**响应"这啥啊"差评，弃 440px 侧条，重构为全屏工作台壳**（dk-shell 左栏+台面标签+卡片网格+控制室 v0），agent-browser 回归搜索 20 条/181ms（<100ms 阈值偶尔超但可接受，P95 需 D7 调优）；点子→TASK.md 采纳链路实测过
-- [ ] D3上 任务卡协议+「发给 zcode」+AGENTS.md 接单+绑定+容器侧栏/向导/tile
-- [ ] D3下 watch+挂载器+审阅区+落库执行器+控制室卡片墙+统一看板 → 一题 queued→zcode→勾选落库零 DS token；看板正确聚合多项目
+- [x] D3上 任务卡协议+「发给 zcode」+AGENTS.md 接单+绑定+容器侧栏/向导/tile → ✅ 2026-08-25 完成：TASK.md 多卡协议（frontmatter+`---`分隔，acceptance fm；分号或 body checkbox 双解析，8 单测）；host 路由 tasks/task/create|status|dispatch+roots；派发=起 cmd 新窗口跑 zcode（80ms 实测，降级 clipboard+复制按钮）；新建向导（名称/图标/文件夹/模板，脚手架自动写 AGENTS.md+README.md）；项目↔会话绑定（ctx.sessions.list 快照+订阅，picker 选现有/新建 cwd 会话，openSession 切换，bindSession 落 deck.json）；容器侧栏（用户项目进左栏）+删除按钮+收起 tile；**控制室卡片墙（任务计数）+统一看板（跨项目四列聚合，提前完成 D3下 一部分）**。两个坑：①rolldown(tsdown 0.22) 会把某个 void(async IIFE) 路由体摇掉→handler 改 async 形式；②client 静态模块改完必须重启 web 才生效（服务端缓存 bundle）；③cordis ctx 属性要 inject:['sessions'] 声明才能访问。vitest 28/28
+- [ ] D3下 watch+挂载器+审阅区+落库执行器+控制室卡片墙+统一看板 → 一题 queued→zcode→勾选落库零 DS token；看板正确聚合多项目（卡片墙/看板已提前在 D3上落地，剩：RESULT/watch 自动状态推进+审阅区 candidates 勾选→insights/LESSONS.md 落库执行器）
 - [ ] D4上 内容 schema+看板四列+三形态模板　D4下 PPT 实测一单+产物挂载 → 一篇内容全周期
 - [ ] D5上 公众号草稿队列+发布记录回写　D5下 微博/X 预填实测【用户配合：登录+人工点发】+账号面板 → 三平台预填一单
 - [ ] D6上 评论收件箱薄版+AI 起草　D6下 审阅发送【用户配合】+数据回流 → 评论起草到发出；数据回填一篇
