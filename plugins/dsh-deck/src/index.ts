@@ -24,6 +24,8 @@ import { createProject, deleteProject, updateProject, type DeckState, type Proje
 import { KbIndex, nodeWalk } from './search.ts'
 import { adoptIdea, captureIdea, listIdeas, type IdeasFs } from './ideas.ts'
 import { ensureAgentsMd, makeCard, newTaskId, parseTaskDoc, setCardStatus, upsertCard, TASK_STATUSES, TASK_TYPES, type TaskCard, type TaskFs, type TaskStatus, type TaskType } from './tasks.ts'
+import { buildLessonsSection, parseResultDoc, parseWidgetJson } from './review.ts'
+import { execFile } from 'node:child_process'
 import { join as joinPath } from 'node:path'
 import z from 'schemastery'
 
@@ -263,6 +265,70 @@ export function apply(ctx: Context, config: Config): void {
       } catch (e) { ctx.logger.warn(`dsh-deck dispatch spawn threw: ${e instanceof Error ? e.message : String(e)}`) }
     }
     sendJson(res, 200, { ok: true, mode, command, folder: f.folder })
+  })
+
+  // ── D3下：审阅（读 RESULT/widget）+ 落库执行器（唯一写 LESSONS.md 的通道）──
+  const resultFilesOf = (folder: string) => ({
+    result: taskFs.read(joinPath(folder, 'RESULT.md')),
+    widget: taskFs.read(joinPath(folder, 'widget-result.json')),
+  })
+
+  reg('exact', '/api/deck/review/result', (req, res) => {
+    if (!guard(req, res)) return
+    void (async () => {
+      const body = await readJsonBody(req, 16 * 1024)
+      if (body === null || typeof body !== 'object') { sendJson(res, 400, { ok: false, error: 'body 非法' }); return }
+      const f = projectFolder(String((body as Record<string, unknown>).project ?? ''))
+      if (!f.ok) { sendJson(res, 400, { ok: false, error: f.error }); return }
+      const files = resultFilesOf(f.folder)
+      if (files.result === null) { sendJson(res, 404, { ok: false, error: 'RESULT.md 不存在（zcode 还没交活或没按协议写）' }); return }
+      const parsed = parseResultDoc(files.result)
+      sendJson(res, 200, { ok: true, result: parsed, widget: parseWidgetJson(files.widget) })
+    })()
+  })
+
+  reg('exact', '/api/deck/review/approve', async (req, res) => {
+    if (!guard(req, res)) return
+    const body = await readJsonBody(req, 64 * 1024)
+    if (body === null || typeof body !== 'object') { sendJson(res, 400, { ok: false, error: 'body 非法' }); return }
+    const { project, id, picks } = body as Record<string, unknown>
+    const f = projectFolder(String(project ?? ''))
+    if (!f.ok) { sendJson(res, 400, { ok: false, error: f.error }); return }
+    if (typeof id !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(id)) { sendJson(res, 400, { ok: false, error: 'id 非法' }); return }
+    if (!Array.isArray(picks) || picks.length === 0 || picks.length > 50 || !picks.every((n) => Number.isInteger(n) && n >= 0)) {
+      sendJson(res, 400, { ok: false, error: 'picks 必须是非空判断下标数组' }); return
+    }
+    const files = resultFilesOf(f.folder)
+    if (files.result === null) { sendJson(res, 404, { ok: false, error: 'RESULT.md 不存在' }); return }
+    const parsed = parseResultDoc(files.result)
+    const maxIdx = parsed.judgments.length - 1
+    const picked = [...new Set(picks as number[])].sort((a, b) => a - b)
+    if (picked.some((n) => n > maxIdx)) { sendJson(res, 400, { ok: false, error: `picks 越界（0..${maxIdx}）` }); return }
+    const cards = readCards(f.folder)
+    const card = cards.find((c) => c.id === id)
+    if (card === undefined) { sendJson(res, 404, { ok: false, error: `任务卡不存在：${id}` }); return }
+    try {
+      const lessonsPath = joinPath(kbRoot, 'insights', 'LESSONS.md')
+      const lessons = taskFs.read(lessonsPath) ?? ''
+      const date = new Date().toISOString().slice(0, 10)
+      const section = buildLessonsSection(lessons, picked.map((n) => parsed.judgments[n]!), { taskId: card.id, taskTitle: card.title, date })
+      taskFs.write(lessonsPath, lessons + section)
+      // 任务卡 → done
+      const taskPath = taskPathOf(f.folder)
+      const next = setCardStatus(taskFs.read(taskPath) ?? '', card.id, 'done')
+      if (next !== null) taskFs.write(taskPath, next)
+      // 知识库 git 提交（失败不阻断落库，仅回报）
+      let gitMsg = ''
+      await new Promise<void>((done) => {
+        execFile('git', ['add', 'insights/LESSONS.md'], { cwd: kbRoot, windowsHide: true }, () => {
+          execFile('git', ['commit', '-m', `deck: 判断落库 ${card.id}（${picked.length} 条）`, '--no-verify'], { cwd: kbRoot, windowsHide: true }, (err, _so, se) => {
+            gitMsg = err === null ? '已 git 提交' : `git 提交失败（${String(se).slice(0, 120)}）`
+            done()
+          })
+        })
+      })
+      sendJson(res, 200, { ok: true, count: picked.length, section: section.trimStart().split('\n')[0] ?? '', git: gitMsg })
+    } catch (e) { sendJson(res, 500, { ok: false, error: `落库失败：${e instanceof Error ? e.message : String(e)}` }) }
   })
 
   const fsRoute = (op: 'list' | 'read' | 'write' | 'mkdir') => (req: any, res: any): void => {

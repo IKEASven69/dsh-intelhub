@@ -67,7 +67,10 @@ export function parseWidgetJson(text: string | null): { task: string; windows: W
         ...(typeof w.url === 'string' ? { url: w.url } : {}),
         ...(typeof w.html === 'string' ? { html: w.html } : {}),
       }))
+    if (windows.length === 0) return null
     return { task: typeof j.task === 'string' ? j.task : '', windows }
+  } catch { return null }
+}
 
 const CN = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十']
 

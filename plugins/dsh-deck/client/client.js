@@ -28,6 +28,8 @@ window.__ModuleLoader__.load({
       taskCreate: (project, title, type, acceptance, body) => post('/api/deck/task/create', { project, title, type, acceptance, body }),
       taskStatus: (project, id, status) => post('/api/deck/task/status', { project, id, status }),
       dispatch: (project) => post('/api/deck/task/dispatch', { project }),
+      reviewResult: (project, id) => post('/api/deck/review/result', { project, id }),
+      approve: (project, id, picks) => post('/api/deck/review/approve', { project, id, picks }),
       projectCreate: (input) => post('/api/deck/project/create', input),
       projectUpdate: (id, patch) => post('/api/deck/project/update', Object.assign({ id }, patch)),
     }
@@ -243,7 +245,7 @@ window.__ModuleLoader__.load({
     }
     const TYPE_LABEL = { research: '调研', article: '文章', video: '视频', ppt: 'PPT' }
 
-    function TaskBoard({ projectId }) {
+    function TaskBoard({ projectId, onGoReview }) {
       const [cards, setCards] = useState(null)
       const [msg, setMsg] = useState(null)
       const [title, setTitle] = useState('')
@@ -310,7 +312,11 @@ window.__ModuleLoader__.load({
               h('div', { className: 'dk-card-actions' },
                 c.status === 'queued' ? h('button', { className: 'dk-mini', onClick: dispatch }, '🚀 发给 zcode') : null,
                 c.status === 'running' ? h('span', { className: 'dk-fine' }, 'zcode 工作中…') : null,
-                c.status === 'review' ? h('button', { className: 'dk-mini', onClick: () => markDone(c.id) }, '✔ 审毕标完成') : null,
+                c.status === 'review'
+                  ? (onGoReview !== undefined
+                      ? h('button', { className: 'dk-mini', onClick: onGoReview }, '🧾 去审阅')
+                      : h('button', { className: 'dk-mini', onClick: () => markDone(c.id) }, '✔ 审毕标完成'))
+                  : null,
                 h('button', { className: 'dk-mini', onClick: reload }, '↻'),
               ))
           }),
@@ -318,7 +324,124 @@ window.__ModuleLoader__.load({
       )
     }
 
-    const KB_TABS = [['search', '🔍 搜索'], ['browse', '📚 四库'], ['ideas', '💡 点子'], ['tasks', '📋 任务'], ['review', '🔁 复盘']]
+    // ── 审阅台（D3下）：review 状态卡 → RESULT.md → 勾选判断 → 落库 LESSONS ──
+    function ReviewFlow({ projectId, root, base }) {
+      const [cards, setCards] = useState(null)
+      const [openId, setOpenId] = useState(null)
+      const [data, setData] = useState(null)
+      const [err, setErr] = useState(null)
+      const [picked, setPicked] = useState({})
+      const [msg, setMsg] = useState(null)
+      const [busy, setBusy] = useState(false)
+      const reload = () => API.tasks(projectId).then((j) => {
+        const list = j.ok ? j.cards.filter((c) => c.status === 'review') : []
+        setCards(list)
+        if (openId !== null && !list.some((c) => c.id === openId)) setOpenId(null)
+      }).catch(() => setCards([]))
+      useEffect(() => {
+        reload()
+        const t = setInterval(reload, 5000)
+        return () => { clearInterval(t) }
+      }, [projectId])
+      useEffect(() => {
+        if (openId === null) { setData(null); setErr(null); setPicked({}); return }
+        let alive = true
+        setData(null); setErr(null); setPicked({})
+        API.reviewResult(projectId, openId).then((j) => {
+          if (!alive) return
+          if (j.ok) { setData({ result: j.result, widget: j.widget }) } else { setErr(j.error) }
+        }).catch((e) => { if (alive) setErr(String(e)) })
+        return () => { alive = false }
+      }, [projectId, openId])
+      const toggle = (i) => setPicked((p) => { const n = Object.assign({}, p); if (n[i]) { delete n[i] } else { n[i] = true } return n })
+      const approve = () => {
+        const picks = Object.keys(picked).map(Number).sort((a, b) => a - b)
+        if (picks.length === 0) return
+        setBusy(true)
+        API.approve(projectId, openId, picks).then((j) => {
+          setBusy(false)
+          setMsg(j.ok ? `已落库 ${j.count} 条 → ${j.section}（${j.git}）` : '失败：' + j.error)
+          if (j.ok) { setOpenId(null); reload() }
+        }).catch((e) => { setBusy(false); setMsg(String(e)) })
+      }
+      if (openId !== null) {
+        const r = data !== null ? data.result : null
+        return h('div', { className: 'dk-col' },
+          h('div', { className: 'dk-toolbar' },
+            h('button', { className: 'dk-back', onClick: () => setOpenId(null) }, '‹ 返回审阅列表'),
+            msg !== null ? h('span', { className: 'dk-fine' }, msg) : null),
+          err !== null ? h(Err, null, err) : null,
+          r === null && err === null ? h(Note, null, '读取 RESULT.md…') : null,
+          r !== null ? h('div', { className: 'dk-reviewbox' },
+            h('div', { className: 'dk-card-title' }, r.summary || '（无摘要）'),
+            h('div', { className: 'dk-card-sub' }, `task ${r.task || openId}${r.type !== '' ? ' · ' + r.type : ''}`),
+            (r.judgments ?? []).length > 0
+              ? h('div', { className: 'dk-field-label' }, '判断（勾选要落库的条目）')
+              : h(Note, null, 'RESULT.md 没有「## 判断」小节——无法结构化勾选，可让 zcode 按协议重写'),
+            h('div', null, (r.judgments ?? []).map((j, i) =>
+              h('label', { key: i, className: 'dk-check' + (picked[i] ? ' on' : '') },
+                h('input', { type: 'checkbox', checked: !!picked[i], onChange: () => toggle(i) }),
+                h('span', null, j)))),
+            (r.sources ?? []).length > 0
+              ? h('div', null, h('div', { className: 'dk-field-label' }, '来源'),
+                h('ul', { className: 'dk-task-acc' }, r.sources.map((s, i) => h('li', { key: i }, s))))
+              : null,
+            data.widget !== null && data.widget !== undefined
+              ? h('div', null, h('div', { className: 'dk-field-label' }, '产物（widget-result.json）'),
+                h(WidgetViews, { widget: data.widget, root, base }))
+              : null,
+            h('details', { className: 'dk-details' }, h('summary', null, 'RESULT.md 全文'),
+              h('div', { className: 'dk-md', dangerouslySetInnerHTML: { __html: mdToHtml(r.body) } })),
+            h('div', { className: 'dk-card-actions' },
+              h('button', { className: 'dk-mini', disabled: busy || Object.keys(picked).length === 0, onClick: approve },
+                `📥 落库选中（${Object.keys(picked).length}）`),
+              h('span', { className: 'dk-fine' }, '落库=追加 LESSONS.md 新章节 + git 提交 + 任务卡置 done')),
+          ) : null,
+        )
+      }
+      return h('div', { className: 'dk-col' },
+        msg !== null ? h(Note, null, msg) : null,
+        cards === null ? h(Note, null, '加载中…') : null,
+        cards !== null && cards.length === 0 ? h(Note, null, '没有待审阅的任务（zcode 交活后卡会变 👀 待审阅）') : null,
+        h('div', { className: 'dk-grid' },
+          (cards ?? []).map((c) =>
+            h('div', { key: c.id, className: 'dk-card task rev', role: 'button', tabIndex: 0, onClick: () => setOpenId(c.id) },
+              h('div', { className: 'dk-card-title' }, c.title),
+              h('div', { className: 'dk-card-sub' }, c.id + ' · ' + (TYPE_LABEL[c.type] ?? c.type)),
+              h('span', { className: 'dk-badge rev' }, '👀 待审阅')))),
+        )
+    }
+
+    function WidgetViews({ widget, root, base }) {
+      return h('div', { className: 'dk-widgets' },
+        widget.windows.map((w, i) => {
+          if (w.kind === 'html') return h('div', { key: i, className: 'dk-widget' }, h('iframe', { sandbox: '', srcDoc: w.html, className: 'dk-frame' }))
+          if (w.kind === 'url') return h('div', { key: i, className: 'dk-widget' }, h('iframe', { sandbox: '', src: w.url, className: 'dk-frame' }))
+          return h(FileWidget, { key: i, path: w.path, root, base })
+        }),
+      )
+    }
+
+    function FileWidget({ path, root, base }) {
+      const [html, setHtml] = useState(null)
+      const [err, setErr] = useState(null)
+      useEffect(() => {
+        let alive = true
+        const rel = String(path ?? '').replace(/^\.\//, '').replace(/^\/+/, '')
+        const full = base !== undefined && base !== '' ? base + '/' + rel : rel
+        API.read(root, full).then((j) => {
+          if (!alive) return
+          if (j.ok) { setHtml(j.content) } else { setErr(j.error) }
+        }).catch((e) => { if (alive) setErr(String(e)) })
+        return () => { alive = false }
+      }, [path])
+      return h('div', { className: 'dk-widget' },
+        err !== null ? h(Note, null, '📄 ' + path + '（读取失败：' + err + '）')
+        : html === null ? h(Note, null, '📄 ' + path)
+        : h('iframe', { sandbox: '', srcDoc: html, className: 'dk-frame' }))
+    }
+
+    const KB_TABS = [['search', '🔍 搜索'], ['browse', '📚 四库'], ['ideas', '💡 点子'], ['tasks', '📋 任务'], ['review', '🧾 审阅'], ['lessons', '🔁 复盘']]
 
     function KnowledgeDesk() {
       const [tab, setTab] = useState('search')
@@ -329,7 +452,8 @@ window.__ModuleLoader__.load({
           tab === 'search' ? h(KbSearch)
           : tab === 'browse' ? h(FsBrowse, { root: 'kb', base: '', layers: LAYERS })
           : tab === 'ideas' ? h(KbIdeas)
-          : tab === 'tasks' ? h(TaskBoard, { projectId: 'builtin-kb' })
+          : tab === 'tasks' ? h(TaskBoard, { projectId: 'builtin-kb', onGoReview: () => setTab('review') })
+          : tab === 'review' ? h(ReviewFlow, { projectId: 'builtin-kb', root: 'kb' })
           : h(KbReview)),
       )
     }
@@ -582,18 +706,21 @@ window.__ModuleLoader__.load({
       )
     }
 
-    // ── 通用项目台面（自定义工作台：任务 + 文件）──
+    // ── 通用项目台面（自定义工作台：任务 + 审阅 + 文件）──
     function GenericDesk({ project }) {
       const [tab, setTab] = useState('tasks')
       const loc = resolveAlias(project.folder)
       return h('div', { className: 'dk-desk' },
         h('div', { className: 'dk-deskbar' },
           h('button', { className: tab === 'tasks' ? 'on' : '', onClick: () => setTab('tasks') }, '📋 任务'),
+          h('button', { className: tab === 'review' ? 'on' : '', onClick: () => setTab('review') }, '🧾 审阅'),
           h('button', { className: tab === 'files' ? 'on' : '', onClick: () => setTab('files') }, '📚 文件'),
-          loc === null ? h('span', { className: 'dk-fine', style: { alignSelf: 'center', marginLeft: 6 } }, '⚠ 文件夹不在注册根内，文件页不可用') : null),
+          loc === null ? h('span', { className: 'dk-fine', style: { alignSelf: 'center', marginLeft: 6 } }, '⚠ 文件夹不在注册根内，文件/审阅产物不可用') : null),
         h('div', { className: 'dk-deskmain' },
           tab === 'tasks'
-            ? h(TaskBoard, { projectId: project.id })
+            ? h(TaskBoard, { projectId: project.id, onGoReview: () => setTab('review') })
+          : tab === 'review'
+            ? (loc !== null ? h(ReviewFlow, { projectId: project.id, root: loc.root, base: loc.rel }) : h(Note, null, '此项目文件夹不在注册根内，无法审阅'))
             : loc !== null ? h(FsBrowse, { root: loc.root, base: loc.rel, layers: null })
               : h(Note, null, '此项目文件夹不在 kb/content 根内，无法浏览')),
       )
@@ -804,6 +931,19 @@ window.__ModuleLoader__.load({
 .dk-task-acc{margin:6px 0 0;padding-left:1.3em;font-size:11.5px;opacity:.7;}
 .dk-task-acc li{margin:1px 0;}
 .dk-card.task{cursor:default;}
+.dk-reviewbox{background:var(--color-bg-1,#14161c);border:1px solid var(--color-border-1,#2a2e37);border-radius:12px;
+  padding:14px 16px;max-width:860px;display:flex;flex-direction:column;gap:10px;}
+.dk-field-label{font-size:12px;font-weight:600;opacity:.7;}
+.dk-check{display:flex;gap:8px;align-items:flex-start;padding:7px 10px;border:1px solid var(--color-border-1,#2a2e37);
+  border-radius:10px;cursor:pointer;font-size:12.5px;margin:3px 0;}
+.dk-check:hover{border-color:var(--dk-accent,#5b6cff);}
+.dk-check.on{border-color:var(--dk-accent,#5b6cff);background:color-mix(in srgb,var(--dk-accent,#5b6cff) 8%,transparent);}
+.dk-check input{margin-top:3px;accent-color:var(--dk-accent,#5b6cff);}
+.dk-widgets{display:flex;flex-direction:column;gap:8px;}
+.dk-widget{border:1px solid var(--color-border-1,#2a2e37);border-radius:10px;overflow:hidden;}
+.dk-frame{width:100%;height:280px;border:none;background:#fff;}
+.dk-details summary{cursor:pointer;font-size:12px;opacity:.6;}
+.dk-details[open] summary{margin-bottom:6px;}
 .dk-modal-back{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:70;display:flex;align-items:center;justify-content:center;}
 .dk-modal{width:min(440px,92vw);background:var(--color-bg-1,#14161c);border:1px solid var(--color-border-1,#2a2e37);
   border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:10px;box-shadow:0 20px 60px rgba(0,0,0,.5);}
