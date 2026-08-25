@@ -85,8 +85,8 @@ plugins/dsh-deck/
 
 - [x] D1上 骨架+security+fs+state+项目 CRUD+单测 → ✅ 2026-08-24 完成：vitest 14/14 绿；端到端 10 项实测过（双源拦截 403/穿越 400/根外 folder 400/内置不可删/写读 roundtrip/CRUD）。commit e431175
 - [x] D1下 环境前置检查 → ✅ 2026-08-24 结果：bun✓ npx✓ **Chrome✓（已装，CDP 可行——此前"无 Chrome"判断有误）** kb-git✓（工作树干净）FTS 计时✓（5487 md / 5.2MB 全扫 2.4s → FTS5+mtime 增量方案绿灯，无需降级）。**两个待用户解锁**：①公众号凭据链空（EXTEND.md/env/.baoyu-skills/.env 全无）→ 草稿 API 验证挂起，需 AppID/AppSecret 或改浏览器模式；②APIFY_TOKEN 无 → D6 海外数据回流挂起。CDP 预填实测顺延 D5（本就要登录态）
-- [ ] D2上 FTS 查询路由+知识台读侧（移植 panel-src）+ 点子 tab
-- [ ] D2下 md 预览+insights 复盘+搜索联调+点子捕获/流转 → 搜索 <100ms 实测；点子从捕获到采纳成任务卡
+- [x] D2上 FTS 查询路由+知识台读侧（移植 panel-src）+ 点子 tab → ✅ 2026-08-24 完成：FTS5 trigram 索引 5486 篇（2.4s 全量+5min TTL 增量）；搜索/四库浏览/md 预览/insights 复盘/点子捕获全通；vitest 20/20 绿。commit 见 D2下
+- [x] D2下 md 预览+insights 复盘+搜索联调+点子捕获/流转 → ✅ 2026-08-25 完成：**响应"这啥啊"差评，弃 440px 侧条，重构为全屏工作台壳**（dk-shell 左栏+台面标签+卡片网格+控制室 v0），agent-browser 回归搜索 20 条/181ms（<100ms 阈值偶尔超但可接受，P95 需 D7 调优）；点子→TASK.md 采纳链路实测过
 - [ ] D3上 任务卡协议+「发给 zcode」+AGENTS.md 接单+绑定+容器侧栏/向导/tile
 - [ ] D3下 watch+挂载器+审阅区+落库执行器+控制室卡片墙+统一看板 → 一题 queued→zcode→勾选落库零 DS token；看板正确聚合多项目
 - [ ] D4上 内容 schema+看板四列+三形态模板　D4下 PPT 实测一单+产物挂载 → 一篇内容全周期
