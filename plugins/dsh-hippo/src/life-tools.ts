@@ -230,4 +230,69 @@ export function registerLifeTools(ctx: Context): void {
       return results.join('\n')
     },
   })), 'dsh-hippo: relay_residents')
+
+  // K1.5 居民干活：给居民一个任务 → 召回记忆 → LLM 干活 → 产出+入库
+  ctx.effect(() => ctx.tools.register(defineTool({
+    name: 'task_resident',
+    description: '给一位居民分配工作任务（居民用记忆+人格完成任务并产出结果）。用户说"让 XX 干/做/写/查"时调用。区别于 summon（闲聊）和 relay（多居民讨论），这是单居民产出。',
+    parameters: {
+      name: { type: 'string', required: true, description: '居民名' },
+      task: { type: 'string', required: true, description: '任务描述（要做什么、产出什么）' },
+      channel: { type: 'string', description: '可选：结果记入的频道 id' },
+    },
+    output: { schema: { type: 'string' }, render: renderText },
+    async execute(args: { name?: string; task?: string; channel?: string }) {
+      const name = (args.name ?? '').trim()
+      const task = (args.task ?? '').trim()
+      if (name === '' || task === '') return 'name 和 task 不能为空'
+      const resident = getResident(name)
+      if (resident === null) return `居民「${name}」不存在`
+
+      // 召回相关记忆（与任务相关的项目偏好/坑/决策）
+      let memoryContext = ''
+      try {
+        const { withEngine } = await import('hippo-mind')
+        memoryContext = await withEngine(async ({ engine }) => {
+          const hits = await engine.recall(task, { project: 'global', limit: 3 })
+          return hits.length > 0 ? '\n\n--- 相关记忆 ---\n' + hits.map((h: { type: string; text: string }) => `[${h.type}] ${h.text.slice(0, 100)}`).join('\n') : ''
+        }).catch(() => '')
+      } catch { /* 引擎不可用不阻断 */ }
+
+      const systemPrompt = `${resident.persona}
+
+你是「${name}」，接到一项工作任务。用你的专业能力完成它，输出实际结果（不是"我会做"而是做了什么）。` + memoryContext
+      const llm = (ctx as Context & { llm?: { generate: (opts: Record<string, unknown>) => Promise<{ text?: string }> } }).llm
+      if (llm === undefined) return `[${name}] （LLM 服务不可用）`
+
+      try {
+        const result = await llm.generate({ messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: task },
+        ] })
+        const output = typeof result.text === 'string' && result.text !== '' ? result.text : '（空产出）'
+
+        // 记入频道（可选）
+        const chId = (args.channel ?? '').trim()
+        if (chId !== '') {
+          const { appendMessage } = await import('hippo-mind')
+          appendMessage(chId, { kind: 'resident', name }, `[任务] ${task}
+${output}`)
+        }
+
+        // K2 蒸馏：任务+产出入库为记忆（"干了什么"）
+        try {
+          const { withEngine } = await import('hippo-mind')
+          void withEngine(async ({ engine }) => {
+            await engine.remember(`任务完成（${name}）：${task.slice(0, 80)} → 产出：${output.slice(0, 120)}`, {
+              type: 'fact', project: 'life:tasks', agent: 'life',
+            })
+          }).catch(() => {})
+        } catch { /* 尽力 */ }
+
+        return `[${name}] ${output}`
+      } catch (e) {
+        return `[${name}] （任务失败：${e instanceof Error ? e.message : String(e)}）`
+      }
+    },
+  })), 'dsh-hippo: task_resident')
 }

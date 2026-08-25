@@ -120,25 +120,51 @@ export function makeCard(input: { id: string; title: string; type?: TaskType; ac
   }
 }
 
-export const AGENTS_MD = `# zcode 接单规则（dsh-deck 自动写入）
+export const AGENTS_MD = `# zcode 接单规则（dsh-deck 自动写入 · v2）
+
+<!-- deck:agents:v2 -->
 
 开工前必读，按顺序执行：
 
 1. 读本目录 TASK.md，找 frontmatter 里 \`status: queued\` 的卡（一次只接一张）。
 2. 把该卡的 status 改成 \`running\`（只改这一个词，别动其他内容）。
 3. 按卡内 acceptance（验收）逐条干活；结论要带来源（URL 或文件路径）。
-4. 完成后在项目根写 RESULT.md：frontmatter 写 task/type/summary，正文写过程与来源。
+4. 完成后在项目根写 RESULT.md，格式必须如下（审阅台按它解析）：
+   \`\`\`
+   ---
+   task: <卡id>
+   type: research
+   summary: 一句话结论
+   ---
+
+   # <卡题目>
+
+   ## 判断
+   - 每条一行、一句话能复述的判断（审阅台勾选这些落库，写清楚写扎实）
+   - ……
+
+   ## 来源
+   - https://… 或 文件路径 —— 一句话说明
+
+   ## 过程（可选）
+   干了什么、跳过了什么。
+   \`\`\`
    如有可视化产物，另写 widget-result.json：
-   \`{"task":"<卡id>","windows":[{"target":"main","kind":"html|url|file","path|url|html":"..."}],"generatedAt":"..."}\`
+   \`{"task":"<卡id>","windows":[{"target":"main","kind":"html|url|file","path|url|html":"…"}],"generatedAt":"…"}\`
 5. 把该卡 status 改成 \`review\`，停下等人工审阅落库（落库由人勾选，不要代劳）。
 
 失败处理：status 改 \`failed\`，并在 RESULT.md 写明原因。
 红线：不要改 knowledge-base 其他文件；不要自动发布任何内容。
 `
 
+/** 已是我们生成的旧版（无 v2 标记）→ 自动升级；用户改过（标题不符）→ 不动。 */
 export function ensureAgentsMd(fs: TaskFs, root: string): boolean {
   const p = join(root, 'AGENTS.md')
-  if (fs.exists(p)) return false
+  const existing = fs.read(p)
+  if (existing !== null) {
+    if (existing.includes('deck:agents:v2')) return false
+    if (!existing.includes('zcode 接单规则（dsh-deck 自动写入')) return false
+  }
   fs.mkdirs(root)
   fs.write(p, AGENTS_MD)
   return true
