@@ -762,6 +762,7 @@ window.__ModuleLoader__.load({
       const [boards, setBoards] = useState(null)
       const [wizard, setWizard] = useState(false)
       const [picking, setPicking] = useState(null)
+      const [editing, setEditing] = useState(null)
       const [msg, setMsg] = useState(null)
       useEffect(() => {
         if (!stateStore.loaded) loadState()
@@ -780,13 +781,15 @@ window.__ModuleLoader__.load({
       return h('div', { className: 'dk-desk' },
         h('div', { className: 'dk-deskbar' },
           h('button', { className: tab === 'projects' ? 'on' : '', onClick: () => setTab('projects') }, '🗂️ 项目'),
-          h('button', { className: tab === 'board' ? 'on' : '', onClick: () => setTab('board') }, '📊 统一看板')),
+          h('button', { className: tab === 'board' ? 'on' : '', onClick: () => setTab('board') }, '📊 统一看板'),
+          h('button', { className: tab === 'sessions' ? 'on' : '', onClick: () => setTab('sessions') }, '💬 会话镜像')),
         h('div', { className: 'dk-deskmain' },
           msg !== null ? h(Note, null, msg) : null,
           tab === 'projects'
             ? h('div', { className: 'dk-grid wide' },
-                projects.map((p) =>
-                  h('div', { key: p.id, className: 'dk-card room' + (p.hidden ? ' hidden' : '') },
+                projects.map((p) => {
+                  const bound = p.bindSession !== undefined && sessionsStore.byId[p.bindSession] !== undefined ? sessionsStore.byId[p.bindSession] : null
+                  return h('div', { key: p.id, className: 'dk-card room' + (p.hidden ? ' hidden' : '') },
                     h('div', { className: 'dk-room-head' },
                       h('span', { className: 'dk-room-icon' }, p.icon || '📁'),
                       h('span', { className: 'dk-card-title' }, p.name),
@@ -799,7 +802,7 @@ window.__ModuleLoader__.load({
                       h('span', null, '✅ ' + countsOf(p.id, 'done'))),
                     p.bindSession
                       ? h('button', { className: 'dk-bind cur', title: '点按切换到该会话', onClick: () => openSession(p.bindSession) },
-                          '🔗 ' + sessTitle(sessionsStore.byId[p.bindSession]))
+                          '🔗 ' + (bound !== null && bound.running ? '🏃 ' : '') + sessTitle(bound !== null ? bound : { id: p.bindSession }))
                       : h('button', { className: 'dk-bind', onClick: () => setPicking(picking === p.id ? null : p.id) }, '🔗 绑定会话'),
                     picking === p.id ? h(SessionPicker, {
                       project: p,
@@ -807,19 +810,78 @@ window.__ModuleLoader__.load({
                     }) : null,
                     h('div', { className: 'dk-card-actions' },
                       h('button', { className: 'dk-mini', onClick: () => { goProject(p.id) } }, '打开 →'),
+                      h('button', { className: 'dk-mini', onClick: () => setEditing(p) }, '✏️'),
                       p.id.startsWith('builtin-')
                         ? h('button', { className: 'dk-mini', onClick: () => { API.projectUpdate(p.id, { hidden: !p.hidden }); setTimeout(loadState, 300) } }, p.hidden ? '取消隐藏' : '隐藏')
                         : h('button', { className: 'dk-mini danger', onClick: () => { if (window.confirm('删除工作台「' + p.name + '」？（只解除注册，不动磁盘文件）')) post('/api/deck/project/delete', { id: p.id }).then(() => { loadState() }) } }, '删除')),
-                  )),
+                  )
+                }),
                 h('div', { className: 'dk-card room add', role: 'button', tabIndex: 0, onClick: () => setWizard(true) },
                   h('div', { className: 'dk-room-icon' }, '＋'),
                   h('div', { className: 'dk-card-title' }, '新建工作台'),
                   h('div', { className: 'dk-card-sub' }, '名称/图标/文件夹/模板')))
-            : h(BoardView, { boards: boards ?? [] }),
+          : tab === 'board'
+            ? h(BoardView, { boards: boards ?? [] })
+          : h(SessionMirror),
           wizard ? h(NewProjectWizard, {
             onClose: () => setWizard(false),
             onCreated: (p) => { setWizard(false); setMsg('已创建 ✓ ' + p.name + '（脚手架已写入）'); goProject(p.id) },
           }) : null,
+          editing !== null ? h(EditProject, {
+            project: editing,
+            onClose: () => setEditing(null),
+            onSaved: () => { setEditing(null); setMsg('已保存 ✓'); loadState() },
+          }) : null,
+        ),
+      )
+    }
+
+    // 会话实时镜像（worktable 精华）：宿主快照订阅驱动，零轮询零 token
+    function SessionMirror() {
+      const rows = sessionsStore.ids.map((id) => sessionsStore.byId[id]).filter(Boolean)
+      const running = rows.filter((s) => s.running === true)
+      const pending = rows.filter((s) => s.running !== true && s.pendingInteraction)
+      const rest = rows.filter((s) => s.running !== true && !s.pendingInteraction).slice(0, 12)
+      const col = (list) => list.map((s) =>
+        h('button', { key: s.id, className: 'dk-sesscard' + (s.id === sessionsStore.current ? ' cur' : ''), onClick: () => openSession(s.id), title: s.cwd || '' },
+          h('span', { className: 'dk-sessrow-t' }, sessTitle(s)),
+          h('span', { className: 'dk-sessrow-c' }, (s.cwd || '').split(/[\\/]/).pop() || '')))
+      return h('div', { className: 'dk-col' },
+        h(Note, null, '宿主会话快照订阅镜像（零轮询）· 共 ' + rows.length + ' 条 · 当前：' + (sessionsStore.current ? sessTitle(sessionsStore.byId[sessionsStore.current] || { id: sessionsStore.current }) : '无')),
+        h('div', { className: 'dk-board' },
+          h('div', { className: 'dk-board-col' }, h('div', { className: 'dk-board-colhead' }, '🏃 工作中 · ' + running.length), col(running.slice(0, 10))),
+          h('div', { className: 'dk-board-col' }, h('div', { className: 'dk-board-colhead' }, '🙋 待你决定 · ' + pending.length), col(pending.slice(0, 10))),
+          h('div', { className: 'dk-board-col' }, h('div', { className: 'dk-board-colhead' }, '💤 空闲'), col(rest)),
+        ),
+      )
+    }
+
+    function EditProject({ project, onClose, onSaved }) {
+      const [name, setName] = useState(project.name)
+      const [icon, setIcon] = useState(project.icon || '📁')
+      const [order, setOrder] = useState(String(project.order))
+      const [msg, setMsg] = useState(null)
+      const submit = (e) => {
+        e.preventDefault()
+        const o = Number(order)
+        if (name.trim() === '') { setMsg('名称必填'); return }
+        if (!Number.isFinite(o)) { setMsg('排序必须是数字'); return }
+        API.projectUpdate(project.id, { name: name.trim(), icon, order: o }).then((j) => {
+          if (!j.ok) { setMsg('失败：' + j.error); return }
+          onSaved()
+        }).catch((e2) => setMsg(String(e2)))
+      }
+      return h('div', { className: 'dk-modal-back', onClick: (e) => { if (e.target.className === 'dk-modal-back') onClose() } },
+        h('form', { className: 'dk-modal', onSubmit: submit },
+          h('div', { className: 'dk-modal-title' }, '编辑工作台'),
+          h('div', { className: 'dk-field-row' },
+            h('div', { className: 'dk-field' }, h('label', null, '图标'), h('input', { value: icon, onChange: (e) => setIcon(e.target.value), size: 4 })),
+            h('div', { className: 'dk-field' }, h('label', null, '排序（小→前）'), h('input', { value: order, onChange: (e) => setOrder(e.target.value), size: 6 }))),
+          h('div', { className: 'dk-field' }, h('label', null, '名称'), h('input', { value: name, onChange: (e) => setName(e.target.value), autoFocus: true })),
+          msg !== null ? h(Err, null, msg) : null,
+          h('div', { className: 'dk-modal-actions' },
+            h('button', { type: 'button', className: 'dk-ghost', onClick: onClose }, '取消'),
+            h('button', { type: 'submit' }, '保存')),
         ),
       )
     }
@@ -864,6 +926,9 @@ window.__ModuleLoader__.load({
     function goProject(id) {
       if (!isOpen()) setOpen(true)
       if (navigateApp !== null) navigateApp(id === 'builtin-kb' ? 'kb' : id === 'builtin-media' ? 'media' : 'p:' + id)
+      // 打开项目 → 自动切到其绑定的会话（worktable 行为对齐）
+      const p = stateStore.projects.find((x) => x.id === id)
+      if (p !== undefined && p.bindSession !== undefined) openSession(p.bindSession)
     }
 
     let openState = null
@@ -1015,6 +1080,10 @@ window.__ModuleLoader__.load({
 .dk-sessrow.cur{box-shadow:inset 0 0 0 1px var(--dk-accent,#5b6cff);}
 .dk-sessrow-t{font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .dk-sessrow-c{font-size:10.5px;opacity:.45;font-family:ui-monospace,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.dk-sesscard{display:flex;flex-direction:column;gap:2px;background:var(--color-bg-1,#14161c);border:1px solid var(--color-border-1,#2a2e37);
+  border-radius:10px;color:inherit;text-align:left;font:inherit;cursor:pointer;padding:7px 10px;}
+.dk-sesscard:hover{border-color:var(--dk-accent,#5b6cff);}
+.dk-sesscard.cur{box-shadow:inset 0 0 0 1px var(--dk-accent,#5b6cff);}
 .dk-note{opacity:.6;font-size:12.5px;padding:2px 2px;}
 .dk-err{color:#f87171;opacity:1;}
 .dk-preview{display:flex;flex-direction:column;gap:8px;max-width:860px;}
