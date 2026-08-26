@@ -2,12 +2,12 @@
 <html lang="zh">
 <head>
 <meta charset="utf-8">
-<title>dsh-deck · 工作台 v2（右栏多会话 + 总台分带 + 单件流）</title>
+<title>dsh-deck · 工作台 v2（主线原型 · 全动线可操作）</title>
 <style>
-/* 复用 workbench 的霓虹玻璃变量（v1 深空青为主皮） */
 * { box-sizing:border-box; margin:0; }
 html,body { height:100%; }
-body { font:16px/1.7 system-ui,'Segoe UI',sans-serif; --bg:#050a18; --panel:rgba(120,190,255,.06); --panel2:rgba(120,190,255,.10);
+body { font:16px/1.7 system-ui,'Segoe UI',sans-serif;
+  --bg:#050a18; --panel:rgba(120,190,255,.06); --panel2:rgba(120,190,255,.10);
   --line:rgba(140,200,255,.16); --line2:rgba(140,200,255,.30); --ink:#e3f0ff; --ink2:#8fa8cc;
   --acc:#2dd4ff; --acc2:#6366f1; --grad:linear-gradient(135deg,#2dd4ff,#6366f1);
   --ok:#34d399; --warn:#fbbf24; --busy:#60a5fa; color:var(--ink); background:var(--bg); overflow:hidden; }
@@ -21,22 +21,21 @@ body { font:16px/1.7 system-ui,'Segoe UI',sans-serif; --bg:#050a18; --panel:rgba
 .glass { position:relative; background:linear-gradient(160deg,rgba(255,255,255,.05),rgba(255,255,255,.015)),var(--panel); border:1px solid var(--line); border-radius:18px; backdrop-filter:blur(18px); box-shadow:0 14px 44px rgba(0,0,0,.45); }
 .app { position:relative; z-index:1; display:flex; height:100vh; }
 .btn-pri { background:var(--grad); color:#fff; border:none; border-radius:11px; padding:10px 24px; font:700 15px system-ui; cursor:pointer; box-shadow:0 5px 18px rgba(45,212,255,.3); }
+.btn-pri:disabled { opacity:.45; cursor:not-allowed; box-shadow:none; }
+.btn-gho { background:none; border:1px solid var(--line2); color:var(--ink); border-radius:11px; padding:10px 22px; font:15px system-ui; cursor:pointer; }
 .btn-mini { background:var(--panel2); border:1px solid var(--line); color:var(--acc); border-radius:8px; padding:5px 13px; font-size:13px; cursor:pointer; }
 .h1 { font-size:21px; font-weight:750; } .hint { font-size:13px; color:var(--ink2); }
 
-/* 左栏 */
 .rail { width:84px; background:linear-gradient(180deg,rgba(255,255,255,.03),transparent),var(--panel); border-right:1px solid var(--line); backdrop-filter:blur(18px); display:flex; flex-direction:column; align-items:center; gap:6px; padding:14px 0; }
 .rail .brand { font-weight:800; font-size:12px; letter-spacing:3px; background:var(--grad); -webkit-background-clip:text; background-clip:text; color:transparent; padding:8px 0 14px; }
-.rbtn { width:60px; padding:9px 0 7px; display:flex; flex-direction:column; align-items:center; background:none; border:none; border-radius:14px; color:var(--ink); opacity:.5; cursor:pointer; }
+.rbtn { width:60px; padding:9px 0 7px; display:flex; flex-direction:column; align-items:center; background:none; border:none; border-radius:14px; color:var(--ink); opacity:.5; cursor:pointer; position:relative; }
 .rbtn:hover { opacity:.9; background:var(--panel); }
 .rbtn.on { opacity:1; background:var(--panel2); box-shadow:inset 0 0 0 1px var(--line2), 0 0 18px rgba(45,212,255,.18); }
 .rbtn .i { font-size:22px; } .rbtn .t { font-size:11.5px; }
+.rbadge { position:absolute; top:4px; right:4px; background:#ff3d5e; color:#fff; font-size:10px; border-radius:999px; padding:0 6px; font-weight:700; }
 
-/* 主区 */
 .main { flex:1; min-width:0; display:flex; flex-direction:column; padding:18px 24px 16px; }
 .bar { display:flex; align-items:center; gap:12px; margin-bottom:14px; }
-
-/* ═══ 总台：分带 + 单件流 ═══ */
 .zone { flex:1; min-height:0; overflow:auto; display:flex; flex-direction:column; gap:18px; padding-bottom:20px; }
 .band { display:flex; flex-direction:column; gap:10px; }
 .bhead { display:flex; align-items:center; gap:10px; font-size:14.5px; font-weight:700; }
@@ -46,41 +45,62 @@ body { font:16px/1.7 system-ui,'Segoe UI',sans-serif; --bg:#050a18; --panel:rgba
 .todo-card .ico { font-size:26px; }
 .todo-card .nm { font-size:16.5px; font-weight:700; }
 .todo-card .pv { flex:1; font-size:14.5px; color:var(--ink2); border-left:2px solid var(--line); padding-left:16px; }
-/* 单件流步进条 */
 .flows { display:grid; grid-template-columns:repeat(auto-fill,minmax(420px,1fr)); gap:12px; }
 .flow { padding:14px 18px; }
 .flow .ft { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
 .flow .ft b { font-size:15px; }
-.flow .stp { display:flex; align-items:center; }
-.flow .s { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--ink2); white-space:nowrap; }
-.flow .s i { width:18px; height:18px; border-radius:50%; border:1.5px solid var(--line2); display:flex; align-items:center; justify-content:center; font-style:normal; font-size:10px; }
-.flow .s.done i { border-color:var(--ok); color:var(--ok); }
-.flow .s.now { color:var(--acc); font-weight:650; }
-.flow .s.now i { background:var(--grad); color:#fff; border-color:transparent; box-shadow:0 0 10px rgba(45,212,255,.5); }
-.flow .ln { flex:1; height:1px; background:var(--line); margin:0 7px; min-width:14px; }
-.flow .ln.done { background:var(--ok); }
-/* 灵感横向流 */
+.flow.done-card { opacity:.6; }
+.stp { display:flex; align-items:center; }
+.s { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--ink2); white-space:nowrap; }
+.s i { width:18px; height:18px; border-radius:50%; border:1.5px solid var(--line2); display:flex; align-items:center; justify-content:center; font-style:normal; font-size:10px; }
+.s.done i { border-color:var(--ok); color:var(--ok); }
+.s.now { color:var(--acc); font-weight:650; }
+.s.now i { background:var(--grad); color:#fff; border-color:transparent; box-shadow:0 0 10px rgba(45,212,255,.5); }
+.ln { flex:1; height:1px; background:var(--line); margin:0 7px; min-width:14px; }
+.ln.done { background:var(--ok); }
 .ideas-strip { display:flex; gap:12px; overflow-x:auto; padding-bottom:4px; }
 .idea { min-width:270px; max-width:270px; padding:13px 16px; }
+.idea.used { opacity:.45; }
 .idea b { font-size:14.5px; display:block; }
 .idea .src { font-size:12px; color:var(--ink2); margin-top:4px; font-family:ui-monospace,monospace; }
 .idea .act { display:flex; gap:7px; margin-top:10px; }
 
-/* ═══ 右栏：多会话对话（工程实现=宿主原生视图 margin 挤位；此处演示交互形态）═══ */
+/* ═══ 审阅/发布 浮层 ═══ */
+.sheet-back { position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:20; display:flex; align-items:center; justify-content:center; }
+.sheet-back[hidden] { display:none; }
+.sheet { width:min(880px,92vw); max-height:86vh; overflow:auto; padding:26px 30px; display:flex; flex-direction:column; gap:14px; }
+.sheet .st { display:flex; align-items:center; gap:12px; }
+.sheet .st b { font-size:19px; }
+.jrow { display:flex; gap:14px; align-items:flex-start; background:var(--panel); border:1px solid var(--line); border-radius:13px; padding:14px 18px; cursor:pointer; transition:.13s; }
+.jrow:hover { border-color:var(--line2); }
+.jrow.on { border-color:var(--acc); background:linear-gradient(145deg,rgba(45,212,255,.12),transparent),var(--panel); }
+.jrow .no { font-family:ui-monospace,monospace; font-size:12px; color:var(--ink2); padding-top:4px; }
+.jrow .box { width:24px; height:24px; border-radius:8px; border:2px solid var(--line2); flex-shrink:0; margin-top:2px; }
+.jrow.on .box { background:var(--grad); border-color:transparent; }
+.jrow .tx { font-size:16px; line-height:1.65; }
+.sheet .foot { display:flex; align-items:center; gap:14px; border-top:1px solid var(--line); padding-top:14px; }
+.platchips { display:flex; gap:9px; }
+.plat { border:1px solid var(--line2); border-radius:999px; padding:5px 18px; cursor:pointer; font-size:14px; color:var(--ink2); }
+.plat.on { background:var(--grad); color:#fff; border-color:transparent; }
+.pf-text { background:var(--panel2); border:1px solid var(--line); border-radius:11px; padding:12px 15px; font:13.5px/1.7 ui-monospace,monospace; color:var(--ink); white-space:pre-wrap; }
+
+/* ═══ 右栏（高度修复：列表自适应 34vh 上限 + 可整块折叠）═══ */
 .divider { width:7px; cursor:col-resize; position:relative; flex-shrink:0; }
 .divider::after { content:''; position:absolute; left:3px; top:0; bottom:0; width:1px; background:var(--line); }
 .divider:hover::after, .divider.drag::after { width:3px; background:var(--acc); box-shadow:0 0 12px rgba(45,212,255,.4); }
 .dock { width:400px; min-width:300px; max-width:46vw; flex-shrink:0; background:linear-gradient(180deg,rgba(255,255,255,.03),transparent),var(--panel); border-left:1px solid var(--line); backdrop-filter:blur(18px); display:flex; flex-direction:column; }
 .dock.hide { display:none; }
-.dh { height:50px; display:flex; align-items:center; gap:10px; padding:0 14px; border-bottom:1px solid var(--line); }
+.dh { height:50px; display:flex; align-items:center; gap:10px; padding:0 14px; border-bottom:1px solid var(--line); flex-shrink:0; }
 .dh .dot { width:10px; height:10px; border-radius:50%; background:var(--grad); box-shadow:0 0 10px rgba(45,212,255,.8); }
 .dh b { font-size:15px; flex:1; }
 .dh button { background:none; border:1px solid var(--line); color:var(--ink2); border-radius:8px; padding:4px 10px; cursor:pointer; font-size:12.5px; }
 .dh button:hover { border-color:var(--acc); color:var(--acc); }
-/* 会话列表/切换 */
-.sessions { border-bottom:1px solid var(--line); max-height:210px; overflow:auto; padding:8px 10px; display:flex; flex-direction:column; gap:6px; }
-.sgrp { font-size:11px; color:var(--ink2); margin:5px 4px 2px; font-family:ui-monospace,monospace; letter-spacing:1px; }
-.sess { display:flex; align-items:center; gap:9px; background:var(--panel2); border:1px solid transparent; border-radius:11px; padding:8px 12px; cursor:pointer; transition:.14s; }
+.sfold { display:flex; align-items:center; gap:8px; padding:8px 14px 0; cursor:pointer; font-size:12px; color:var(--ink2); flex-shrink:0; user-select:none; }
+.sfold:hover { color:var(--acc); }
+.sessions { border-bottom:1px solid var(--line); padding:9px 10px 10px; display:flex; flex-direction:column; gap:6px; flex-shrink:0; overflow:auto; max-height:34vh; }
+.sessions.fold { display:none; }
+.sgrp { font-size:11px; color:var(--ink2); margin:4px 4px 1px; font-family:ui-monospace,monospace; letter-spacing:1px; }
+.sess { display:flex; align-items:center; gap:9px; background:var(--panel2); border:1px solid transparent; border-radius:11px; padding:9px 12px; cursor:pointer; transition:.14s; }
 .sess:hover { border-color:var(--line2); }
 .sess.on { border-color:var(--acc); background:linear-gradient(145deg,rgba(45,212,255,.12),transparent),var(--panel2); box-shadow:0 0 16px rgba(45,212,255,.15); }
 .sess .si { flex:1; min-width:0; }
@@ -92,17 +112,15 @@ body { font:16px/1.7 system-ui,'Segoe UI',sans-serif; --bg:#050a18; --panel:rgba
 .sbadge.idle { color:var(--ink2); border-color:var(--line2); }
 @keyframes br { 50% { opacity:.55; } }
 .srt { font-family:ui-monospace,monospace; font-size:11px; color:var(--busy); flex-shrink:0; }
-.newsess { margin:6px 4px 4px; }
-/* 对话体 */
-.dbody { flex:1; overflow:auto; padding:15px; display:flex; flex-direction:column; gap:11px; }
+.dbody { flex:1; overflow:auto; padding:15px; display:flex; flex-direction:column; gap:11px; min-height:120px; }
 .bub { padding:10px 13px; border-radius:13px; font-size:14px; max-width:88%; line-height:1.65; }
 .bub.me { align-self:flex-end; background:var(--grad); color:#fff; }
 .bub.ai { background:var(--panel2); border:1px solid var(--line); }
 .bub .mini-acts { display:flex; gap:7px; margin-top:9px; }
-.dinput { display:flex; gap:8px; padding:12px; border-top:1px solid var(--line); }
+.dinput { display:flex; gap:8px; padding:12px; border-top:1px solid var(--line); flex-shrink:0; }
 .dinput input { flex:1; background:color-mix(in srgb,var(--bg) 60%,transparent); border:1px solid var(--line); border-radius:10px; color:var(--ink); padding:10px 13px; font:14.5px system-ui; outline:none; }
 .dinput input:focus { border-color:var(--acc); }
-.toast { position:fixed; left:50%; bottom:30px; transform:translateX(-50%) translateY(16px); background:var(--panel2); border:1px solid var(--line2); color:var(--ink); border-radius:13px; padding:10px 20px; font-size:14px; opacity:0; pointer-events:none; transition:.22s; z-index:30; }
+.toast { position:fixed; left:50%; bottom:30px; transform:translateX(-50%) translateY(16px); background:var(--panel2); border:1px solid var(--line2); color:var(--ink); border-radius:13px; padding:10px 20px; font-size:14px; opacity:0; pointer-events:none; transition:.22s; z-index:40; }
 .toast.show { opacity:1; transform:translateX(-50%); }
 .reopen { position:fixed; right:14px; top:14px; z-index:5; display:none; }
 </style>
@@ -113,7 +131,7 @@ body { font:16px/1.7 system-ui,'Segoe UI',sans-serif; --bg:#050a18; --panel:rgba
 <div class="app">
   <div class="rail">
     <div class="brand">DECK</div>
-    <button class="rbtn on"><span class="i">🏠</span><span class="t">总台</span></button>
+    <button class="rbtn on"><span class="i">🏠</span><span class="t">总台</span><span class="rbadge" id="rbadge">2</span></button>
     <button class="rbtn"><span class="i">🎬</span><span class="t">内容台</span></button>
     <button class="rbtn"><span class="i">🧠</span><span class="t">知识库</span></button>
     <button class="rbtn"><span class="i">📡</span><span class="t">调研台</span></button>
@@ -123,70 +141,178 @@ body { font:16px/1.7 system-ui,'Segoe UI',sans-serif; --bg:#050a18; --panel:rgba
   <div class="main">
     <div class="bar">
       <div class="h1">总台</div>
-      <span class="hint">待办置顶 → 进行中的件 → 灵感流（右侧对话可拖宽度/收起）</span>
-      <span style="flex:1"></span>
+      <span class="hint">完整动线可操作：审阅落库 / 发布点发 / 灵感升任务——状态实时流转</span>
     </div>
     <div class="zone">
-      <!-- 分带 1：待你决定 -->
+      <div class="band" id="todo-band"></div>
       <div class="band">
-        <div class="bhead">🙋 待你决定 <span class="n">2</span></div>
-        <div class="todo-card glass urgent"><span class="ico">📢</span><span class="nm">发布终审</span>
-          <span class="pv">「一页看懂 dsh 插件开发」微博预填就绪——你点发</span>
-          <button class="btn-pri" onclick="toast('→ 打开发布预填（停在最后一步，人工点发）')">去点发</button></div>
-        <div class="todo-card glass urgent"><span class="ico">🧾</span><span class="nm">审阅落库</span>
-          <span class="pv">T-02 已交活：3 条判断待勾选 → LESSONS</span>
-          <button class="btn-pri" onclick="toast('→ 大勾选审阅页')">去审阅</button></div>
+        <div class="bhead">🔁 进行中的件 <span class="n" id="flow-n"></span></div>
+        <div class="flows" id="flows"></div>
       </div>
-      <!-- 分带 2：进行中的件（单件流步进条） -->
       <div class="band">
-        <div class="bhead">🔁 进行中的件 <span class="n">3</span><span class="hint" style="font-weight:400">每件东西从头走到尾，一眼看到卡在哪</span></div>
-        <div class="flows">
-          <div class="flow glass"><div class="ft"><b>📊 竞品周报 #12</b><span class="hint" style="margin-left:auto">PPT · agent 干活中 12:34</span></div>
-            <div class="stp"><span class="s done"><i>✓</i>灵感</span><span class="ln done"></span><span class="s done"><i>✓</i>任务</span><span class="ln done"></span><span class="s now"><i>3</i>创作</span><span class="ln"></span><span class="s"><i>4</i>待发</span><span class="ln"></span><span class="s"><i>5</i>发布</span></div></div>
-          <div class="flow glass"><div class="ft"><b>📊 一页看懂 dsh 插件开发</b><span class="hint" style="margin-left:auto">等你点发</span></div>
-            <div class="stp"><span class="s done"><i>✓</i>灵感</span><span class="ln done"></span><span class="s done"><i>✓</i>任务</span><span class="ln done"></span><span class="s done"><i>✓</i>创作</span><span class="ln done"></span><span class="s now"><i>4</i>待发</span><span class="ln"></span><span class="s"><i>5</i>发布</span></div></div>
-          <div class="flow glass"><div class="ft"><b>📝 插件避坑清单</b><span class="hint" style="margin-left:auto">草稿就绪</span></div>
-            <div class="stp"><span class="s done"><i>✓</i>灵感</span><span class="ln done"></span><span class="s done"><i>✓</i>任务</span><span class="ln done"></span><span class="s done"><i>✓</i>创作</span><span class="ln done"></span><span class="s now"><i>4</i>待发</span><span class="ln"></span><span class="s"><i>5</i>发布</span></div></div>
-        </div>
-      </div>
-      <!-- 分带 3：灵感流（横向） -->
-      <div class="band">
-        <div class="bhead">💡 灵感流 <span class="n">3 新</span><span class="hint" style="font-weight:400">对话里冒出的点子点「存为灵感」就会出现在这</span></div>
-        <div class="ideas-strip">
-          <div class="idea glass"><b>把「评论高赞」做成固定选题栏目</b><div class="src">来源：对话 · 08-25</div>
-            <div class="act"><button class="btn-mini" onclick="toast('✓ 升任务 → 调研队列')">升任务</button><button class="btn-mini" onclick="toast('✓ 推知识库 → 采集层')">推知识库</button><button class="btn-mini" onclick="toast('✓ 推调研台')">推调研台</button></div></div>
-          <div class="idea glass"><b>抖音 AI 配音功能值得测</b><div class="src">来源：调研 · 08-25</div>
-            <div class="act"><button class="btn-mini" onclick="toast('✓ 升任务')">升任务</button><button class="btn-mini" onclick="toast('✓ 推调研台')">推调研台</button></div></div>
-          <div class="idea glass"><b>重读《心智社会》做读书笔记</b><div class="src">来源：阅读 · 08-24</div>
-            <div class="act"><button class="btn-mini" onclick="toast('✓ 推知识库')">推知识库</button></div></div>
-        </div>
+        <div class="bhead">💡 灵感流 <span class="n" id="idea-n"></span></div>
+        <div class="ideas-strip" id="ideas"></div>
       </div>
     </div>
   </div>
 
-  <!-- 拖拽分割条 -->
   <div class="divider" id="dv" title="拖动调宽度 · 双击复位"></div>
 
-  <!-- 右栏：多会话 -->
   <div class="dock" id="dock">
     <div class="dh">
       <span class="dot"></span><b>dsh 对话</b>
       <button onclick="newSess()">＋ 新会话</button>
       <button onclick="hideDock()">⟩⟩ 收起</button>
     </div>
-    <div class="sessions" id="sess"></div>
+    <div class="sfold" onclick="document.getElementById('sessbox').classList.toggle('fold'); this.firstElementChild.textContent = document.getElementById('sessbox').classList.contains('fold') ? '▸' : '▾'"><span>▾</span> 会话列表</div>
+    <div class="sessions" id="sessbox"></div>
     <div class="dbody" id="dbody"></div>
-    <div class="dinput"><input id="din" placeholder="发给 agent…（切会话对话独立保留）"><button class="btn-pri" style="padding:9px 18px" onclick="send()">↑</button></div>
+    <div class="dinput"><input id="din" placeholder="发给 agent…"><button class="btn-pri" style="padding:9px 18px" onclick="send()">↑</button></div>
   </div>
 </div>
+
+<!-- 审阅浮层 -->
+<div class="sheet-back" id="revSheet" hidden>
+  <div class="sheet glass">
+    <div class="st"><span class="sbadge need">👀 待审阅</span><b>调研：GLM-5 发布后的市场反馈</b><span style="flex:1"></span><button class="btn-gho" style="padding:7px 16px;font-size:13.5px" onclick="closeSheet('revSheet')">关闭</button></div>
+    <div class="hint">勾选要落库的判断 → 追加 LESSONS「十、Deck 落库」+ git 提交</div>
+    <div id="jlist" style="display:flex;flex-direction:column;gap:9px"></div>
+    <div class="foot">
+      <button class="btn-pri" id="sinkBtn" onclick="doSink()" disabled>📥 落库选中 0 条</button>
+      <span class="hint">落库后：任务置完成 · 待办消除 · agent 收到确认</span>
+    </div>
+  </div>
+</div>
+
+<!-- 发布浮层 -->
+<div class="sheet-back" id="pubSheet" hidden>
+  <div class="sheet glass" style="width:min(680px,92vw)">
+    <div class="st"><span class="sbadge" style="color:var(--ok);border-color:var(--ok)">📢 发布终审</span><b>📊 一页看懂 dsh 插件开发</b><span style="flex:1"></span><button class="btn-gho" style="padding:7px 16px;font-size:13.5px" onclick="closeSheet('pubSheet')">关闭</button></div>
+    <div>
+      <div class="hint" style="margin-bottom:8px">① 选平台</div>
+      <div class="platchips" id="plats"></div>
+    </div>
+    <div>
+      <div class="hint" style="margin-bottom:8px">② 预填文本（已生成）</div>
+      <div class="pf-text" id="pftext"></div>
+    </div>
+    <div class="foot">
+      <button class="btn-pri" id="pubBtn" onclick="doPublish()" disabled>③ 我已确认，点下发布 ✓</button>
+      <span class="hint">预填页在新标签打开 · 最后一步永远人工点发</span>
+    </div>
+  </div>
+</div>
+
 <button class="btn-mini reopen" id="reopen" onclick="showDock()">💬 展开对话</button>
 <div class="toast" id="toast"></div>
 
 <script>
-// ── 会话数据（真实实现来自宿主快照订阅：分组/状态/时长/预览零 token）──
+// ═══ 状态（单一数据源，动线改的就是这些）═══
+const S = {
+  todos: [
+    { id:'rev', ico:'🧾', nm:'审阅落库', pv:'T-02 已交活：3 条判断待勾选 → LESSONS', act:'去审阅' },
+    { id:'pub', ico:'📢', nm:'发布终审', pv:'「一页看懂 dsh 插件开发」微博预填就绪——你点发', act:'去点发' },
+  ],
+  flows: [
+    { id:'f1', t:'📊 竞品周报 #12', hint:'PPT · agent 干活中 12:34', step:2 },
+    { id:'f2', t:'📊 一页看懂 dsh 插件开发', hint:'等你点发', step:3 },
+    { id:'f3', t:'📝 插件避坑清单', hint:'草稿就绪', step:3 },
+  ],
+  ideas: [
+    { id:'i1', t:'把「评论高赞」做成固定选题栏目', src:'来源：对话 · 08-25', acts:['升任务','推知识库','推调研台'], used:false },
+    { id:'i2', t:'抖音 AI 配音功能值得测', src:'来源：调研 · 08-25', acts:['升任务','推调研台'], used:false },
+    { id:'i3', t:'重读《心智社会》做读书笔记', src:'来源：阅读 · 08-24', acts:['推知识库'], used:false },
+  ],
+  judgments: [
+    'GLM-5 舆论反馈以正面为主，长上下文与 Agent 编排能力是被引用最多的差异化点',
+    '开发者生态位（开放权重、本地可跑）是口碑护城河，本地部署教程出现速度可作生态热度代理指标',
+    '价格仍是中文社区第二落点，「性价比」叙事在 X 与微博两边都成立',
+  ],
+  picked: {}, pubPlat: null,
+}
+const STEPS = ['灵感','任务','创作','待发','发布']
+
+function render() {
+  document.getElementById('todo-band').innerHTML = S.todos.length === 0
+    ? `<div class="bhead">✅ 今日待办清空 <span class="n">0</span></div><div class="hint" style="padding:0 4px">全部处理完——agent 会话继续在右栏干活</div>`
+    : `<div class="bhead">🙋 待你决定 <span class="n">${S.todos.length}</span></div>` + S.todos.map(t => `
+      <div class="todo-card glass urgent"><span class="ico">${t.ico}</span><span class="nm">${t.nm}</span>
+        <span class="pv">${t.pv}</span><button class="btn-pri" onclick="todoAct('${t.id}')">${t.act}</button></div>`).join('')
+  const rb = document.getElementById('rbadge')
+  rb.textContent = S.todos.length; rb.style.display = S.todos.length === 0 ? 'none' : ''
+  const active = S.flows.filter(f => f.step < 4)
+  document.getElementById('flow-n').textContent = active.length
+  document.getElementById('flows').innerHTML = S.flows.map(f => {
+    const done = f.step >= 4
+    return `<div class="flow glass ${done ? 'done-card' : ''}"><div class="ft"><b>${f.t}</b><span class="hint" style="margin-left:auto">${done ? '✅ 已发布' : f.hint}</span></div>
+      <div class="stp">${STEPS.map((s, i) => {
+        const cls = i < f.step ? 'done' : i === f.step ? 'now' : ''
+        const ln = i < f.step ? 'done' : ''
+        return `<span class="s ${cls}"><i>${i < f.step ? '✓' : i + 1}</i>${s}</span>${i < 4 ? `<span class="ln ${ln}"></span>` : ''}`
+      }).join('')}</div></div>`
+  }).join('')
+  document.getElementById('idea-n').textContent = S.ideas.filter(i => !i.used).length
+  document.getElementById('ideas').innerHTML = S.ideas.map(i => `
+    <div class="idea glass ${i.used ? 'used' : ''}"><b>${i.t}</b><div class="src">${i.src}${i.used ? ' · 已流转' : ''}</div>
+      ${i.used ? '' : `<div class="act">${i.acts.map(a => `<button class="btn-mini" onclick="ideaAct('${i.id}','${a}')">${a}</button>`).join('')}</div>`}</div>`).join('')
+}
+
+function todoAct(id) { if (id === 'rev') openRev(); if (id === 'pub') openPub() }
+function closeSheet(id) { document.getElementById(id).hidden = true }
+function openRev() {
+  S.picked = {}
+  document.getElementById('jlist').innerHTML = S.judgments.map((j, i) => `
+    <div class="jrow" id="j${i}" onclick="pickJ(${i})"><span class="no">0${i + 1}</span><span class="box"></span><span class="tx">${j}</span></div>`).join('')
+  updSink()
+  document.getElementById('revSheet').hidden = false
+}
+function pickJ(i) { S.picked[i] = !S.picked[i]; document.getElementById('j' + i).classList.toggle('on', S.picked[i]); updSink() }
+function updSink() {
+  const n = Object.values(S.picked).filter(Boolean).length
+  const b = document.getElementById('sinkBtn'); b.textContent = `📥 落库选中 ${n} 条`; b.disabled = n === 0
+}
+function doSink() {
+  const n = Object.values(S.picked).filter(Boolean).length
+  S.todos = S.todos.filter(t => t.id !== 'rev')
+  closeSheet('revSheet'); render()
+  toast(`✓ 已落库 ${n} 条 → LESSONS「十、Deck 落库」+ git 提交 · 任务置完成`)
+  aiSay(`T-02 审阅通过，${n} 条判断已入 LESSONS。剩 1 条发布待你点发。`)
+}
+function openPub() {
+  S.pubPlat = null
+  document.getElementById('plats').innerHTML = ['微博','X','公众号'].map(p => `<span class="plat" data-p="${p}" onclick="pickP('${p}')">${p}</span>`).join('')
+  document.getElementById('pftext').textContent = ''
+  document.getElementById('pubBtn').disabled = true
+  document.getElementById('pubSheet').hidden = false
+}
+function pickP(p) {
+  S.pubPlat = p
+  document.querySelectorAll('.plat').forEach(e => e.classList.toggle('on', e.dataset.p === p))
+  document.getElementById('pftext').textContent = `【${p} · 预填已生成】\n一页看懂 dsh 插件开发：两半结构 + 五步工作流 + 接单协议。\n（预填页已打开——最后一步你来点）`
+  document.getElementById('pubBtn').disabled = false
+}
+function doPublish() {
+  S.todos = S.todos.filter(t => t.id !== 'pub')
+  const f = S.flows.find(x => x.id === 'f2'); if (f) f.step = 5
+  closeSheet('pubSheet'); render()
+  toast(`✓ 已记录发布（${S.pubPlat}）→ 发布记录.md · 状态 → 已发布`)
+  aiSay(`「一页看懂」已发布 ✓ 记录已回写。今天动线全清——要不要看看灵感流？`)
+}
+function ideaAct(id, act) {
+  const i = S.ideas.find(x => x.id === id); i.used = true
+  if (act === '升任务') {
+    S.flows.unshift({ id:'f' + Date.now(), t:'📋 ' + i.t, hint:'待派发 agent', step:1 })
+    toast('✓ 已升任务 → 进入「进行中的件」')
+    aiSay(`灵感「${i.t}」已立任务卡，要点「发给 agent」派活吗？`)
+  } else if (act === '推知识库') { toast('✓ 已推知识库 → 采集层') }
+  else { toast('✓ 已推调研台') }
+  render()
+}
+
+// ═══ 右栏多会话 ═══
 const GROUPS = [
   { g:'当前工作区', list: [
-    { id:'a', t:'主对话 · agent 总管', p:'早，今天有 2 条发布待终审、3 条评论待回', st:'idle' },
+    { id:'a', t:'主对话 · agent 总管', p:'今天动线：2 待办、3 进行中', st:'idle' },
     { id:'b', t:'PPT：竞品周报 #12', p:'正在按验收条目干活；结论带来源', st:'run', rt:'12:34' },
   ]},
   { g:'其他工作区', list: [
@@ -194,41 +320,38 @@ const GROUPS = [
     { id:'d', t:'coding', p:'（空闲）上次：跑数据回流脚本', st:'idle' },
   ]},
 ]
-const META = { run:['🏃 工作中','run'], need:['🙋 待决定','need'], idle:['💤','idle'] }
+const META = { run:['🏃','run'], need:['🙋','need'], idle:['💤','idle'] }
 let cur = 'a'
 const CONV = {
-  a: [['ai','早，今天有 2 条发布待终审、3 条评论待回。要我先把「插件开发」那条评论起草发出去吗？'],
-      ['me','先把微博那条发了，其余我看看'],
-      ['ai','已起草并预填，点「发送」即写回微博。另：调研台抓到一条高赞线程，要不要进知识库？','','存为灵感']],
+  a: [['ai','早，今天有 2 条待办：审阅落库 + 发布终审。先处理哪个？']],
   b: [['ai','已接单：竞品周报 #12（PPT）。按验收：逐页标题+要点≤5+可预览 html。'],['ai','大纲 P1-P6 已完成，正在排版 P3 表格页…']],
   c: [['ai','需要你确认：产物放 content/B/ 还是新建 content/exp-b/？']],
   d: [],
 }
 function renderSess() {
-  document.getElementById('sess').innerHTML = GROUPS.map(G =>
+  document.getElementById('sessbox').innerHTML = GROUPS.map(G =>
     `<div class="sgrp">${G.g}</div>` + G.list.map(s => `
     <div class="sess ${s.id === cur ? 'on' : ''}" onclick="pick('${s.id}')">
       <span class="si"><div class="st">${s.t}</div><div class="sp">${s.p}</div></span>
       ${s.rt ? `<span class="srt">${s.rt}</span>` : ''}
       <span class="sbadge ${META[s.st][1]}">${META[s.st][0]}</span>
     </div>`).join('')).join('')
-    + '<button class="btn-mini newsess" onclick="newSess()">＋ 新建会话</button>'
+    + '<button class="btn-mini" style="align-self:flex-start;margin:4px 4px 2px" onclick="newSess()">＋ 新建会话</button>'
 }
 function renderConv() {
   const c = CONV[cur] || []
   document.getElementById('dbody').innerHTML = c.length === 0
     ? '<div class="hint" style="text-align:center;margin-top:30px">（空会话——发第一条消息）</div>'
-    : c.map(m => `<div class="bub ${m[0]}">${m[1]}${m[3] ? `<div class="mini-acts"><button class="btn-mini" onclick="toast('✓ 已存为灵感 → 总台灵感流')">${m[3]}</button></div>` : ''}</div>`).join('')
+    : c.map(m => `<div class="bub ${m[0]}">${m[1]}</div>`).join('')
 }
 function pick(id) { cur = id; renderSess(); renderConv() }
 function newSess() { const id = 'n' + Date.now(); GROUPS[0].list.push({ id, t: '新会话 · ' + new Date().toTimeString().slice(0,5), p: '（新）', st: 'idle' }); CONV[id] = []; pick(id) }
 function send() {
   const el = document.getElementById('din'); const v = el.value.trim(); if (!v) return
-  CONV[cur].push(['me', v]); el.value = ''
-  renderConv()
-  setTimeout(() => { CONV[cur].push(['ai', '收到。']); renderConv() }, 500)
+  CONV[cur].push(['me', v]); el.value = ''; renderConv()
+  setTimeout(() => { CONV[cur].push(['ai', '收到。']); renderConv() }, 450)
 }
-// 拖宽度
+function aiSay(t) { CONV.a.push(['ai', t]); if (cur === 'a') renderConv() }
 const dv = document.getElementById('dv'), dock = document.getElementById('dock')
 const saved = localStorage.getItem('dk-v2-dockw'); if (saved) dock.style.width = saved + 'px'
 dv.addEventListener('pointerdown', (e) => { dv.classList.add('drag'); dv.setPointerCapture(e.pointerId)
@@ -238,8 +361,8 @@ dv.addEventListener('pointerdown', (e) => { dv.classList.add('drag'); dv.setPoin
 dv.addEventListener('dblclick', () => { dock.style.width = '400px'; localStorage.removeItem('dk-v2-dockw') })
 function hideDock() { dock.classList.add('hide'); dv.style.display = 'none'; document.getElementById('reopen').style.display = 'block' }
 function showDock() { dock.classList.remove('hide'); dv.style.display = ''; document.getElementById('reopen').style.display = 'none' }
-let tt; function toast(m) { const t = document.getElementById('toast'); t.textContent = m; t.classList.add('show'); clearTimeout(tt); tt = setTimeout(() => t.classList.remove('show'), 2100) }
-renderSess(); renderConv()
+let tt; function toast(m) { const t = document.getElementById('toast'); t.textContent = m; t.classList.add('show'); clearTimeout(tt); tt = setTimeout(() => t.classList.remove('show'), 2400) }
+render(); renderSess(); renderConv()
 </script>
 </body>
 </html>
