@@ -49,6 +49,7 @@ body { font:16px/1.7 system-ui,'Segoe UI',sans-serif;
 .flow { padding:14px 18px; }
 .flow .ft { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
 .flow .ft b { font-size:15px; }
+.flow .fgo { margin-left:auto; flex-shrink:0; }
 .flow.done-card { opacity:.6; }
 .stp { display:flex; align-items:center; }
 .s { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--ink2); white-space:nowrap; }
@@ -109,7 +110,10 @@ body { font:16px/1.7 system-ui,'Segoe UI',sans-serif;
 .sbadge { font-size:11px; border-radius:999px; padding:1px 9px; border:1px solid; white-space:nowrap; flex-shrink:0; }
 .sbadge.run { color:var(--busy); border-color:rgba(96,165,250,.5); background:rgba(96,165,250,.1); animation:br 1.8s infinite; }
 .sbadge.need { color:var(--warn); border-color:rgba(251,191,36,.5); background:rgba(251,191,36,.1); }
+.sbadge.run { color:var(--busy); border-color:rgba(96,165,250,.5); background:rgba(96,165,250,.1); animation:br 1.8s infinite; }
+.sbadge.need { color:var(--warn); border-color:rgba(251,191,36,.5); background:rgba(251,191,36,.1); }
 .sbadge.idle { color:var(--ink2); border-color:var(--line2); }
+.unread-dot { width:9px; height:9px; border-radius:50%; background:#ff3d5e; box-shadow:0 0 8px #ff3d5e; flex-shrink:0; animation:br 1.6s infinite; }
 @keyframes br { 50% { opacity:.55; } }
 .srt { font-family:ui-monospace,monospace; font-size:11px; color:var(--busy); flex-shrink:0; }
 .dbody { flex:1; overflow:auto; padding:15px; display:flex; flex-direction:column; gap:11px; min-height:120px; }
@@ -198,7 +202,7 @@ body { font:16px/1.7 system-ui,'Segoe UI',sans-serif;
     </div>
     <div class="foot">
       <button class="btn-pri" id="pubBtn" onclick="doPublish()" disabled>③ 我已确认，点下发布 ✓</button>
-      <span class="hint">预填页在新标签打开 · 最后一步永远人工点发</span>
+      <span class="hint" id="pubWhy">先在 ① 选一个平台</span>
     </div>
   </div>
 </div>
@@ -244,7 +248,12 @@ function render() {
   document.getElementById('flow-n').textContent = active.length
   document.getElementById('flows').innerHTML = S.flows.map(f => {
     const done = f.step >= 4
-    return `<div class="flow glass ${done ? 'done-card' : ''}"><div class="ft"><b>${f.t}</b><span class="hint" style="margin-left:auto">${done ? '✅ 已发布' : f.hint}</span></div>
+    const goBtn = f.step === 1
+      ? `<button class="btn-mini fgo" onclick="dispatchFlow('${f.id}')">🚀 发给 agent</button>`
+      : f.step === 3
+        ? `<button class="btn-mini fgo" onclick="openPub('${f.id}')">📢 去发布</button>`
+        : ''
+    return `<div class="flow glass ${done ? 'done-card' : ''}"><div class="ft"><b>${f.t}</b>${goBtn || `<span class="hint" style="margin-left:auto">${done ? '✅ 已发布' : f.hint}</span>`}</div>
       <div class="stp">${STEPS.map((s, i) => {
         const cls = i < f.step ? 'done' : i === f.step ? 'now' : ''
         const ln = i < f.step ? 'done' : ''
@@ -278,8 +287,10 @@ function doSink() {
   toast(`✓ 已落库 ${n} 条 → LESSONS「十、Deck 落库」+ git 提交 · 任务置完成`)
   aiSay(`T-02 审阅通过，${n} 条判断已入 LESSONS。剩 1 条发布待你点发。`)
 }
-function openPub() {
-  S.pubPlat = null
+function openPub(fid) {
+  S.pubPlat = null; S.pubFlow = fid || 'f2'
+  const f = S.flows.find(x => x.id === S.pubFlow)
+  document.querySelector('#pubSheet .st b').textContent = f ? f.t : ''
   document.getElementById('plats').innerHTML = ['微博','X','公众号'].map(p => `<span class="plat" data-p="${p}" onclick="pickP('${p}')">${p}</span>`).join('')
   document.getElementById('pftext').textContent = ''
   document.getElementById('pubBtn').disabled = true
@@ -290,23 +301,34 @@ function pickP(p) {
   document.querySelectorAll('.plat').forEach(e => e.classList.toggle('on', e.dataset.p === p))
   document.getElementById('pftext').textContent = `【${p} · 预填已生成】\n一页看懂 dsh 插件开发：两半结构 + 五步工作流 + 接单协议。\n（预填页已打开——最后一步你来点）`
   document.getElementById('pubBtn').disabled = false
+  document.getElementById('pubWhy').textContent = '预填页在新标签打开 · 最后一步永远人工点发'
 }
 function doPublish() {
   S.todos = S.todos.filter(t => t.id !== 'pub')
-  const f = S.flows.find(x => x.id === 'f2'); if (f) f.step = 5
+  const f = S.flows.find(x => x.id === (S.pubFlow || 'f2')); if (f) { f.step = 5; f.hint = '' }
   closeSheet('pubSheet'); render()
   toast(`✓ 已记录发布（${S.pubPlat}）→ 发布记录.md · 状态 → 已发布`)
-  aiSay(`「一页看懂」已发布 ✓ 记录已回写。今天动线全清——要不要看看灵感流？`)
+  aiSay(`「${(f && f.t) || '内容'}」已发布 ✓ 记录已回写。`)
 }
 function ideaAct(id, act) {
   const i = S.ideas.find(x => x.id === id); i.used = true
   if (act === '升任务') {
     S.flows.unshift({ id:'f' + Date.now(), t:'📋 ' + i.t, hint:'待派发 agent', step:1 })
-    toast('✓ 已升任务 → 进入「进行中的件」')
-    aiSay(`灵感「${i.t}」已立任务卡，要点「发给 agent」派活吗？`)
+    toast('✓ 已升任务 → 进入「进行中的件」，点卡片上的「🚀 发给 agent」派活')
+    aiSay(`灵感「${i.t}」已立任务卡，点卡片上的「🚀 发给 agent」就能派活。`)
   } else if (act === '推知识库') { toast('✓ 已推知识库 → 采集层') }
   else { toast('✓ 已推调研台') }
   render()
+}
+
+/** 流程卡下一步：发给 agent（任务→创作，工作会话开始干活） */
+function dispatchFlow(fid) {
+  const f = S.flows.find(x => x.id === fid); if (!f || f.step !== 1) return
+  f.step = 2; f.hint = 'agent 干活中 00:01'
+  render()
+  toast('✓ 已派发给「PPT：竞品周报」工作会话（右栏）')
+  CONV.b.push(['ai', `已接单：${f.t.replace('📋 ', '')}。按验收干活中，交活后总台会出现审阅待办。`])
+  markUnread('b'); if (cur === 'b') renderConv()
 }
 
 // ═══ 右栏多会话 ═══
@@ -332,6 +354,7 @@ function renderSess() {
   document.getElementById('sessbox').innerHTML = GROUPS.map(G =>
     `<div class="sgrp">${G.g}</div>` + G.list.map(s => `
     <div class="sess ${s.id === cur ? 'on' : ''}" onclick="pick('${s.id}')">
+      ${s.unread && s.id !== cur ? '<span class="unread-dot" title="有新消息"></span>' : ''}
       <span class="si"><div class="st">${s.t}</div><div class="sp">${s.p}</div></span>
       ${s.rt ? `<span class="srt">${s.rt}</span>` : ''}
       <span class="sbadge ${META[s.st][1]}">${META[s.st][0]}</span>
@@ -344,14 +367,22 @@ function renderConv() {
     ? '<div class="hint" style="text-align:center;margin-top:30px">（空会话——发第一条消息）</div>'
     : c.map(m => `<div class="bub ${m[0]}">${m[1]}</div>`).join('')
 }
-function pick(id) { cur = id; renderSess(); renderConv() }
+function pick(id) { cur = id; clearUnread(id); renderSess(); renderConv() }
 function newSess() { const id = 'n' + Date.now(); GROUPS[0].list.push({ id, t: '新会话 · ' + new Date().toTimeString().slice(0,5), p: '（新）', st: 'idle' }); CONV[id] = []; pick(id) }
+function markUnread(id) { for (const G of GROUPS) { const s = G.list.find(x => x.id === id); if (s) { s.unread = true } } renderSess() }
+function clearUnread(id) { for (const G of GROUPS) { const s = G.list.find(x => x.id === id); if (s) s.unread = false } }
 function send() {
   const el = document.getElementById('din'); const v = el.value.trim(); if (!v) return
   CONV[cur].push(['me', v]); el.value = ''; renderConv()
   setTimeout(() => { CONV[cur].push(['ai', '收到。']); renderConv() }, 450)
 }
-function aiSay(t) { CONV.a.push(['ai', t]); if (cur === 'a') renderConv() }
+function aiSay(t) { CONV.a.push(['ai', t]); if (cur === 'a') renderConv(); else markUnread('a') }
+// 人因修复：回车发送、ESC/背景关浮层
+document.getElementById('din').addEventListener('keydown', (e) => { if (e.key === 'Enter') send() })
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { document.getElementById('revSheet').hidden = true; document.getElementById('pubSheet').hidden = true } })
+for (const id of ['revSheet', 'pubSheet']) {
+  document.getElementById(id).addEventListener('click', (e) => { if (e.target.id === id) e.target.hidden = true })
+}
 const dv = document.getElementById('dv'), dock = document.getElementById('dock')
 const saved = localStorage.getItem('dk-v2-dockw'); if (saved) dock.style.width = saved + 'px'
 dv.addEventListener('pointerdown', (e) => { dv.classList.add('drag'); dv.setPointerCapture(e.pointerId)
