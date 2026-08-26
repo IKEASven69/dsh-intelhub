@@ -127,6 +127,39 @@ body { font:16px/1.7 system-ui,'Segoe UI',sans-serif;
 .toast { position:fixed; left:50%; bottom:30px; transform:translateX(-50%) translateY(16px); background:var(--panel2); border:1px solid var(--line2); color:var(--ink); border-radius:13px; padding:10px 20px; font-size:14px; opacity:0; pointer-events:none; transition:.22s; z-index:40; }
 .toast.show { opacity:1; transform:translateX(-50%); }
 .reopen { position:fixed; right:14px; top:14px; z-index:5; display:none; }
+
+/* ═══ 其他台 ═══ */
+.desk { display:flex; flex-direction:column; gap:16px; }
+.pipe { display:grid; grid-template-columns:1fr 1fr 1.25fr .9fr; gap:14px; }
+.pcol { background:var(--panel); border:1px solid var(--line); border-radius:15px; padding:12px; display:flex; flex-direction:column; gap:9px; min-height:200px; }
+.pcol.hot { border-color:color-mix(in srgb,var(--ok) 40%,var(--line)); }
+.pcol .ph { font-size:14.5px; font-weight:700; padding:2px 4px 4px; }
+.pcol.hot .ph { color:var(--ok); }
+.pcard { background:var(--panel2); border:1px solid var(--line); border-radius:11px; padding:12px 14px; cursor:pointer; transition:.14s; }
+.pcard:hover { border-color:var(--acc); transform:translateY(-1px); }
+.pcard b { font-size:14.5px; display:block; }
+.pcard .meta { display:flex; gap:8px; margin-top:6px; align-items:center; flex-wrap:wrap; }
+.pcard .meta span { font-size:11.5px; color:var(--ink2); font-family:ui-monospace,monospace; }
+.pcard .go { display:flex; gap:7px; margin-top:9px; }
+.inp { background:color-mix(in srgb,var(--bg) 60%,transparent); border:1px solid var(--line); border-radius:10px; color:var(--ink); padding:9px 14px; font:14.5px system-ui; outline:none; }
+.inp:focus { border-color:var(--acc); }
+.libtabs { display:inline-flex; gap:7px; flex-wrap:wrap; }
+.libtab { border:1px solid var(--line); background:var(--panel); color:var(--ink2); border-radius:999px; padding:5px 15px; cursor:pointer; font-size:13.5px; }
+.libtab.on { background:var(--grad); color:#fff; border-color:transparent; }
+.kitem { background:var(--panel2); border:1px solid var(--line); border-radius:11px; padding:11px 14px; }
+.kitem b { font-size:14.5px; }
+.kitem .kprev { font-size:12.5px; color:var(--ink2); margin-top:4px; }
+.srctag { font-size:11px; border:1px solid var(--line2); color:var(--acc); border-radius:999px; padding:1px 9px; margin-left:9px; }
+.ktime { font-size:11.5px; color:var(--ink2); margin-left:auto; font-family:ui-monospace,monospace; }
+.rrow, .mrow { display:flex; align-items:center; gap:14px; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:13px 18px; }
+.rrow .st2 { font-size:12.5px; border-radius:999px; padding:1px 13px; border:1px solid var(--line2); color:var(--ink2); white-space:nowrap; }
+.rrow .st2.run { color:var(--busy); border-color:rgba(96,165,250,.5); }
+.rrow .st2.q { color:var(--ink2); }
+.mrow .plat2 { font-size:11.5px; border-radius:999px; padding:1px 11px; border:1px solid color-mix(in srgb,var(--acc) 50%,transparent); color:var(--acc); white-space:nowrap; }
+.mrow .body2 { flex:1; font-size:14.5px; }
+.mrow .re { display:flex; gap:8px; width:360px; }
+.mrow .re input { flex:1; background:color-mix(in srgb,var(--bg) 60%,transparent); border:1px solid var(--line); border-radius:9px; color:var(--ink); padding:7px 11px; font:13.5px system-ui; outline:none; }
+.mrow.done2 .body2 { opacity:.55; }
 </style>
 </head>
 <body>
@@ -135,27 +168,55 @@ body { font:16px/1.7 system-ui,'Segoe UI',sans-serif;
 <div class="app">
   <div class="rail">
     <div class="brand">DECK</div>
-    <button class="rbtn on"><span class="i">🏠</span><span class="t">总台</span><span class="rbadge" id="rbadge">2</span></button>
-    <button class="rbtn"><span class="i">🎬</span><span class="t">内容台</span></button>
-    <button class="rbtn"><span class="i">🧠</span><span class="t">知识库</span></button>
-    <button class="rbtn"><span class="i">📡</span><span class="t">调研台</span></button>
-    <button class="rbtn"><span class="i">💬</span><span class="t">消息台</span></button>
+    <button class="rbtn on" data-d="hub"><span class="i">🏠</span><span class="t">总台</span><span class="rbadge" id="rbadge">2</span></button>
+    <button class="rbtn" data-d="content"><span class="i">🎬</span><span class="t">内容台</span></button>
+    <button class="rbtn" data-d="kb"><span class="i">🧠</span><span class="t">知识库</span></button>
+    <button class="rbtn" data-d="research"><span class="i">📡</span><span class="t">调研台</span></button>
+    <button class="rbtn" data-d="msg"><span class="i">💬</span><span class="t">消息台</span></button>
   </div>
 
   <div class="main">
     <div class="bar">
-      <div class="h1">总台</div>
-      <span class="hint">完整动线可操作：审阅落库 / 发布点发 / 灵感升任务——状态实时流转</span>
+      <div class="h1" id="dtitle">总台</div>
+      <span class="hint" id="dsub">完整动线可操作：审阅落库 / 发布点发 / 灵感升任务——状态实时流转</span>
     </div>
     <div class="zone">
-      <div class="band" id="todo-band"></div>
-      <div class="band">
-        <div class="bhead">🔁 进行中的件 <span class="n" id="flow-n"></span></div>
-        <div class="flows" id="flows"></div>
+      <div id="d-hub" class="desk">
+        <div class="band" id="todo-band"></div>
+        <div class="band">
+          <div class="bhead">🔁 进行中的件 <span class="n" id="flow-n"></span></div>
+          <div class="flows" id="flows"></div>
+        </div>
+        <div class="band">
+          <div class="bhead">💡 灵感流 <span class="n" id="idea-n"></span></div>
+          <div class="ideas-strip" id="ideas"></div>
+        </div>
       </div>
-      <div class="band">
-        <div class="bhead">💡 灵感流 <span class="n" id="idea-n"></span></div>
-        <div class="ideas-strip" id="ideas"></div>
+      <div id="d-content" class="desk" hidden>
+        <div class="band">
+          <div class="bhead">内容流水线 <span class="hint" style="font-weight:400">一篇内容 = 一个文件夹 · 点卡片发布</span></div>
+          <div class="pipe" id="pipe"></div>
+        </div>
+      </div>
+      <div id="d-kb" class="desk" hidden>
+        <div class="band">
+          <div class="bhead">知识库 <span class="n" id="kb-n"></span><span class="hint" style="font-weight:400">5486 篇 · 上下文脊柱</span></div>
+          <input class="inp" placeholder="全文搜索（中文子串可查）…" style="max-width:520px">
+        </div>
+        <div class="libtabs" id="libtabs"></div>
+        <div class="kblist" id="kblist"></div>
+      </div>
+      <div id="d-research" class="desk" hidden>
+        <div class="band">
+          <div class="bhead">调研台 <span class="hint" style="font-weight:400">发现 → 任务卡 → agent 干活 → 审阅落库</span></div>
+        </div>
+        <div id="rlist" style="display:flex;flex-direction:column;gap:9px"></div>
+      </div>
+      <div id="d-msg" class="desk" hidden>
+        <div class="band">
+          <div class="bhead">消息台 <span class="n" id="msg-n"></span><span class="hint" style="font-weight:400">回复 → opencli 写回原平台</span></div>
+        </div>
+        <div id="mlist" style="display:flex;flex-direction:column;gap:10px"></div>
       </div>
     </div>
   </div>
@@ -393,6 +454,58 @@ dv.addEventListener('dblclick', () => { dock.style.width = '400px'; localStorage
 function hideDock() { dock.classList.add('hide'); dv.style.display = 'none'; document.getElementById('reopen').style.display = 'block' }
 function showDock() { dock.classList.remove('hide'); dv.style.display = ''; document.getElementById('reopen').style.display = 'none' }
 let tt; function toast(m) { const t = document.getElementById('toast'); t.textContent = m; t.classList.add('show'); clearTimeout(tt); tt = setTimeout(() => t.classList.remove('show'), 2400) }
+// ── 台切换 + 各台数据 ──
+const TITLES = { hub:['总台','完整动线可操作：审阅落库 / 发布点发 / 灵感升任务——状态实时流转'],
+  content:['内容台','发布 + 编辑 + 创作 · 状态即进度'], kb:['知识库','5486 篇 · 上下文脊柱'], research:['调研台','发现 → 任务卡 → agent 干活 → 审阅落库'], msg:['消息台','统一回复 → opencli 写回原平台'] }
+document.querySelectorAll('.rbtn[data-d]').forEach(b => b.onclick = () => {
+  document.querySelectorAll('.rbtn[data-d]').forEach(x => x.classList.toggle('on', x === b))
+  for (const d of ['hub','content','kb','research','msg']) document.getElementById('d-' + d).hidden = d !== b.dataset.d
+  document.getElementById('dtitle').textContent = TITLES[b.dataset.d][0]
+  document.getElementById('dsub').textContent = TITLES[b.dataset.d][1]
+})
+const CONTENT = [
+  { col:['💡 选题', ''], cards:[{ t:'🎬 五分钟读懂预测市场', m:[['08-25'],['微博']] }, { t:'📝 给开发者的 5 个坏习惯', m:[['08-24']] }] },
+  { col:['✍️ 创作', ''], cards:[{ t:'📊 竞品周报 #12', m:[['agent 干活中'],['PPT']] }] },
+  { col:['✅ 待发', 'hot'], cards:[{ t:'📊 一页看懂 dsh 插件开发', m:[['产物已挂载 ✓'],['公众号'],['微博']], go:['📢 去发布'] }, { t:'📝 插件避坑清单', m:[['草稿就绪']] }] },
+  { col:['📢 已发布', ''], cards:[{ t:'📊 竞品周报 #11', m:[['08-18 · 微博 ✓']], dim:true }, { t:'📝 预测市场入门', m:[['08-11 · X ✓']], dim:true }] },
+]
+function renderPipe() {
+  document.getElementById('pipe').innerHTML = CONTENT.map(c => `
+    <div class="pcol ${c.col[1]}"><div class="ph">${c.col[0]}</div>
+      ${c.cards.map(x => `<div class="pcard" ${x.dim ? 'style="opacity:.65"' : ''}><b>${x.t}</b>
+        <div class="meta">${x.m.map(m => `<span${m[0].includes('微博') || m[0].includes('公众号') ? ` class="srctag"` : ''}>${m[0]}</span>`).join('')}</div>
+        ${x.go ? `<div class="go">${x.go.map(g => `<button class="btn-mini" onclick="openPub('f2')">${g}</button>`).join('')}</div>` : ''}</div>`).join('')}</div>`).join('')
+}
+const KB = { '采集':[['zcode 调研线程','X','2h','agent 评测高赞线程'],['豆包工作台对比','微博','5h','workbuddy 爆文对比'],['预测市场知乎问答','知乎','1d','中文科普需求强']],
+  '提炼':[['GLM-5 舆论反馈','微博','1h','正面为主，需验证样本'],['开发者生态位','X','4h','口碑护城河论点']],
+  '学习':[['tsdown 摇树规则','网页','3h','构建工具更新笔记'],['阅读《心智社会》','手输','2d','agent 社会章节']],
+  '复盘':[['Deck 落库结论','手输','12h','待验证到期'],['竞品周报转化','微博','1d','转化 75% 复盘']] }
+let kbLib = '采集'
+function renderKb() {
+  document.getElementById('libtabs').innerHTML = Object.keys(KB).map(l => `<span class="libtab ${l === kbLib ? 'on' : ''}" onclick="kbLib='${l}';renderKb()">${l}</span>`).join('')
+  document.getElementById('kb-n').textContent = Object.values(KB).flat().length + ' 条目'
+  document.getElementById('kblist').innerHTML = KB[kbLib].map(i => `<div class="kitem"><b>${i[0]}</b><span class="srctag">${i[1]}</span><span class="ktime">${i[2]}</span><div class="kprev">${i[3]}</div></div>`).join('')
+}
+function renderResearch() {
+  document.getElementById('rlist').innerHTML = [
+    ['调研：OpenCLI 写回机制', 'run', 'agent 干活中 · 3 来源'],
+    ['调研：抖音 AI 配音', 'q', '待派发'],
+    ['调研：间隔复习策略', 'q', '待派发'],
+  ].map(r => `<div class="rrow"><b style="font-size:15px">${r[0]}</b><span class="st2 ${r[1]}">${r[1] === 'run' ? '🏃 进行中' : '⏳ 待接单'}</span><span class="hint" style="margin-left:auto">${r[2]}</span>${r[1] === 'q' ? '<button class="btn-mini">🚀 发给 agent</button>' : ''}</div>`).join('')
+}
+function renderMsg() {
+  const M = [
+    ['微博', '转发了一条 dsh 插件实战，赞数异常高', '2h'],
+    ['X', '「Can you share the dsh plugin scaffold repo?」', '5h'],
+    ['知乎', '求预测市场中文入门资料', '1d'],
+  ]
+  document.getElementById('msg-n').textContent = M.length
+  document.getElementById('mlist').innerHTML = M.map((m, i) => `<div class="mrow" id="m${i}"><span class="plat2">${m[0]}</span><span class="body2">${m[1]}</span><span class="hint">${m[2]}</span>
+    <span class="re"><input placeholder="回复（AI 可起草）"><button class="btn-mini" onclick="reply(${i})">发送</button></span></div>`).join('')
+}
+function reply(i) { document.getElementById('m' + i).classList.add('done2'); toast('✓ 回复已写回 ' + '原平台（opencli）') }
+renderPipe(); renderKb(); renderResearch(); renderMsg()
+
 render(); renderSess(); renderConv()
 </script>
 </body>
