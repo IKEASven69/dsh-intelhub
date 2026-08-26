@@ -1,0 +1,461 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>dsh-deck · 工作台整合原型</title>
+<style>
+/* ═══ 霓虹玻璃三变体（取自 style-lab2）═══ */
+* { box-sizing:border-box; margin:0; }
+html,body { height:100%; }
+body { font:16px/1.7 system-ui,'Segoe UI',sans-serif; color:var(--ink); background:var(--bg); overflow:hidden; }
+body.v1 { --bg:#050a18; --panel:rgba(120,190,255,.06); --panel2:rgba(120,190,255,.10); --line:rgba(140,200,255,.16); --line2:rgba(140,200,255,.30);
+  --ink:#e3f0ff; --ink2:#8fa8cc; --acc:#2dd4ff; --acc2:#6366f1; --grad:linear-gradient(135deg,#2dd4ff,#6366f1);
+  --aur1:rgba(45,212,255,.16); --aur2:rgba(99,102,241,.15); --aur3:rgba(14,116,144,.20); --ok:#34d399; --warn:#fbbf24; --bad:#fb7185; --busy:#60a5fa; }
+body.v2 { --bg:#0b0618; --panel:rgba(200,160,255,.06); --panel2:rgba(200,160,255,.11); --line:rgba(215,180,254,.17); --line2:rgba(215,180,254,.32);
+  --ink:#f3e9ff; --ink2:#b39ddb; --acc:#c084fc; --acc2:#f472b6; --grad:linear-gradient(135deg,#c084fc,#f472b6);
+  --aur1:rgba(192,132,252,.20); --aur2:rgba(244,114,182,.14); --aur3:rgba(88,28,135,.25); --ok:#4ade80; --warn:#fcd34d; --bad:#fb7185; --busy:#a78bfa; }
+body.v3 { --bg:#0e0a06; --panel:rgba(255,200,120,.055); --panel2:rgba(255,200,120,.10); --line:rgba(255,214,150,.16); --line2:rgba(255,214,150,.30);
+  --ink:#fff3e0; --ink2:#c4a779; --acc:#fbbf24; --acc2:#fb923c; --grad:linear-gradient(135deg,#fbbf24,#fb923c);
+  --aur1:rgba(251,191,36,.13); --aur2:rgba(251,146,60,.10); --aur3:rgba(120,53,15,.22); --ok:#a3e635; --warn:#fbbf24; --bad:#f87171; --busy:#fdba74; }
+
+.aur { position:fixed; inset:0; z-index:0; overflow:hidden; pointer-events:none; }
+.aur i { position:absolute; border-radius:50%; filter:blur(90px); opacity:.85; animation:drift 26s ease-in-out infinite alternate; }
+.aur i:nth-child(1){width:56vw;height:56vw;left:-10vw;top:-22vw;background:var(--aur1);}
+.aur i:nth-child(2){width:48vw;height:48vw;right:-12vw;top:6vw;background:var(--aur2);animation-delay:-8s;}
+.aur i:nth-child(3){width:44vw;height:44vw;left:28vw;bottom:-20vw;background:var(--aur3);animation-delay:-16s;}
+@keyframes drift{from{transform:translate(0,0) scale(1);}to{transform:translate(6vw,4vh) scale(1.15);}}
+.grid-bg { position:fixed; inset:0; z-index:0; pointer-events:none; opacity:.35;
+  background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);
+  background-size:56px 56px; mask-image:radial-gradient(1200px 800px at 50% 20%,#000 30%,transparent 75%); }
+
+/* 外壳 */
+.app { position:relative; z-index:1; display:flex; height:100vh; }
+.rail { width:84px; background:linear-gradient(180deg,rgba(255,255,255,.03),transparent),var(--panel); border-right:1px solid var(--line); backdrop-filter:blur(18px); display:flex; flex-direction:column; align-items:center; gap:6px; padding:14px 0; }
+.rail .brand { font-weight:800; font-size:12px; letter-spacing:3px; background:var(--grad); -webkit-background-clip:text; background-clip:text; color:transparent; padding:8px 0 14px; }
+.rbtn { width:60px; padding:9px 0 7px; display:flex; flex-direction:column; align-items:center; background:none; border:none; border-radius:14px; color:var(--ink); opacity:.5; cursor:pointer; }
+.rbtn:hover { opacity:.9; background:var(--panel); }
+.rbtn.on { opacity:1; background:var(--panel2); box-shadow:inset 0 0 0 1px var(--line2), 0 0 18px color-mix(in srgb,var(--acc) 22%,transparent); }
+.rbtn .i { font-size:22px; line-height:1.2; }
+.rbtn .t { font-size:11.5px; }
+
+.main { flex:1; min-width:0; display:flex; flex-direction:column; padding:18px 26px; }
+.bar { display:flex; align-items:center; gap:12px; margin-bottom:16px; }
+.h1 { font-size:21px; font-weight:750; }
+.hint { font-size:13px; color:var(--ink2); }
+.zone { flex:1; min-height:0; overflow:auto; display:flex; flex-direction:column; gap:18px; padding-bottom:24px; }
+.desk { display:none; flex-direction:column; gap:18px; }
+.desk.on { display:flex; }
+.sec { font-size:13px; font-weight:700; letter-spacing:1.5px; color:var(--ink2); display:flex; align-items:center; gap:10px; }
+.sec .tag { font-size:11px; font-weight:500; letter-spacing:0; color:var(--ink2); border:1px solid var(--line); border-radius:999px; padding:1px 10px; }
+
+/* 玻璃卡 */
+.glass { position:relative; background:linear-gradient(160deg,rgba(255,255,255,.05),rgba(255,255,255,.015)),var(--panel); border:1px solid var(--line); border-radius:18px; backdrop-filter:blur(18px); box-shadow:0 14px 44px rgba(0,0,0,.45); }
+.glass::before { content:''; position:absolute; inset:0 12% auto 12%; height:1px; background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--acc) 65%,#fff),transparent); opacity:.5; }
+.glass::after { content:''; position:absolute; inset:0; border-radius:inherit; pointer-events:none; box-shadow:inset 0 1px 0 rgba(255,255,255,.06); }
+
+/* 顶部状态条（强化定位叙事） */
+.topstat { display:flex; align-items:center; gap:13px; padding:9px 16px; margin-bottom:14px; }
+.topstat .s { display:inline-flex; align-items:center; gap:7px; font-size:13px; color:var(--ink2); white-space:nowrap; }
+.topstat .s b { color:var(--ink); }
+.topstat .dotg { width:8px; height:8px; border-radius:50%; background:var(--ok); box-shadow:0 0 10px var(--ok); animation:pulse 2.4s ease-in-out infinite; }
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
+.topstat .shield { color:var(--acc); font-weight:600; }
+
+/* 台切换淡入 */
+@keyframes fade{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
+.desk.on { animation:fade .26s ease; }
+
+/* 消息台写回强调 */
+.msg .mh .plat { font-size:12px; border-radius:999px; padding:1px 11px; border:1px solid color-mix(in srgb,var(--acc) 50%,transparent); color:var(--acc); background:color-mix(in srgb,var(--acc) 9%,transparent); }
+.msg.sent { border-color:color-mix(in srgb,var(--acc) 45%,transparent); box-shadow:0 0 22px color-mix(in srgb,var(--acc) 14%,transparent); }
+.msg .synced { color:var(--acc); font-weight:600; }
+
+/* 卡片悬浮统一质感 */
+.ccard, .pcard, .icard { transition:transform .16s ease, box-shadow .16s ease, border-color .16s ease; }
+
+.cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:14px; }
+.ccard { padding:16px 18px; cursor:pointer; transition:.18s; }
+.ccard:hover { transform:translateY(-2px); box-shadow:0 18px 54px rgba(0,0,0,.55), 0 0 26px color-mix(in srgb,var(--acc) 18%,transparent); border-color:var(--line2); }
+.chead { display:flex; align-items:center; gap:10px; }
+.cico { font-size:24px; filter:drop-shadow(0 0 10px color-mix(in srgb,var(--acc) 45%,transparent)); }
+.cname { font-weight:650; font-size:16px; flex:1; }
+.badge { font-size:12.5px; border-radius:999px; padding:2px 13px; border:1px solid var(--line2); color:var(--ink2); white-space:nowrap; }
+.badge.need { color:var(--warn); border-color:color-mix(in srgb,var(--warn) 50%,transparent); background:color-mix(in srgb,var(--warn) 10%,transparent); box-shadow:0 0 14px color-mix(in srgb,var(--warn) 18%,transparent); }
+.badge.busy { color:var(--busy); border-color:color-mix(in srgb,var(--busy) 50%,transparent); background:color-mix(in srgb,var(--busy) 10%,transparent); }
+.badge.done { color:var(--ok); border-color:color-mix(in srgb,var(--ok) 50%,transparent); background:color-mix(in srgb,var(--ok) 10%,transparent); }
+.badge.sync { color:var(--acc); border-color:color-mix(in srgb,var(--acc) 50%,transparent); background:color-mix(in srgb,var(--acc) 10%,transparent); }
+.csrc { font-size:11.5px; color:var(--ink2); margin-top:8px; font-family:ui-monospace,monospace; }
+.cprev { margin-top:8px; font-size:13.5px; color:var(--ink2); display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.cact { margin-top:11px; display:flex; gap:8px; }
+
+.board { display:grid; grid-template-columns:repeat(5,1fr); gap:14px; }
+.col { padding:13px; min-height:160px; }
+.colhead { font-size:14px; font-weight:650; padding:2px 8px 11px; display:flex; align-items:center; gap:8px; }
+.colhead .n { margin-left:auto; background:var(--panel2); border-radius:999px; padding:0 10px; font-size:12.5px; color:var(--ink2); }
+.icard { background:var(--panel); border:1px solid var(--line); border-radius:13px; padding:11px 13px; margin-bottom:9px; cursor:pointer; transition:.15s; }
+.icard:hover { border-color:var(--line2); transform:translateY(-1px); box-shadow:0 0 20px color-mix(in srgb,var(--acc) 15%,transparent); }
+.icard b { font-size:14.5px; display:block; }
+.icard span { font-size:12px; color:var(--ink2); font-family:ui-monospace,monospace; }
+.cal { display:grid; grid-template-columns:repeat(7,1fr); gap:8px; }
+.cday { min-height:96px; padding:9px; border-radius:13px; background:var(--panel); border:1px solid var(--line); }
+.cday .d { font-size:12.5px; color:var(--ink2); }
+.cday .ev { margin-top:6px; font-size:12px; background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:4px 8px; }
+.cday .ev.acc { border-color:color-mix(in srgb,var(--acc) 55%,transparent); color:var(--acc); }
+
+.row { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+.btn-pri { background:var(--grad); color:#fff; border:none; border-radius:12px; padding:10px 24px; cursor:pointer; font:600 15px system-ui; box-shadow:0 6px 24px color-mix(in srgb,var(--acc) 45%,transparent); transition:.15s; }
+.btn-pri:hover { filter:brightness(1.12); }
+.btn-gho { background:var(--panel); border:1px solid var(--line2); color:var(--ink); border-radius:12px; padding:10px 20px; cursor:pointer; font:15px system-ui; backdrop-filter:blur(12px); }
+.btn-gho:hover { border-color:var(--acc); box-shadow:0 0 18px color-mix(in srgb,var(--acc) 22%,transparent); }
+.btn-mini { background:var(--panel2); border:1px solid var(--line); color:var(--acc); border-radius:9px; padding:5px 13px; cursor:pointer; font-size:13px; }
+.inp { background:color-mix(in srgb,var(--bg) 60%,transparent); border:1px solid var(--line); border-radius:12px; color:var(--ink); padding:10px 15px; font:15px system-ui; outline:none; min-width:300px; backdrop-filter:blur(10px); }
+.inp:focus { border-color:var(--acc); box-shadow:0 0 0 3px color-mix(in srgb,var(--acc) 22%,transparent), 0 0 22px color-mix(in srgb,var(--acc) 18%,transparent); }
+.pill { font-size:12.5px; border-radius:999px; padding:2px 13px; border:1px solid var(--line2); color:var(--ink2); white-space:nowrap; }
+.stat { display:inline-flex; align-items:center; gap:6px; background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:3px 13px; font-size:13px; color:var(--ink2); }
+.stat b { color:var(--ink); font-size:15px; }
+
+/* 媒体台/内容台 流水线 */
+.funnel { display:flex; gap:0; align-items:center; background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:10px 18px; }
+.fstep { display:flex; align-items:baseline; gap:8px; padding:0 16px; }
+.fstep b { font-size:19px; }
+.fstep span { font-size:12px; color:var(--ink2); }
+.farrow { color:var(--ink2); opacity:.5; }
+.pipe { display:grid; grid-template-columns:1fr 1fr 1.2fr .9fr; gap:14px; }
+.pcol { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:12px; display:flex; flex-direction:column; gap:9px; overflow:auto; }
+.pcol.hot { border-color:color-mix(in srgb,var(--ok) 45%,var(--line)); }
+.phead { display:flex; align-items:center; gap:8px; font-size:15px; font-weight:700; padding:2px 4px 4px; }
+.phead .n { margin-left:auto; background:var(--panel2); border-radius:999px; padding:0 10px; font-size:12.5px; color:var(--ink2); }
+.pcard { background:var(--panel2); border:1px solid var(--line); border-radius:12px; padding:12px 14px; cursor:pointer; transition:.14s; }
+.pcard:hover { border-color:var(--acc); transform:translateY(-1px); }
+.pcard b { font-size:15px; display:block; }
+.pcard .meta { display:flex; gap:8px; margin-top:6px; align-items:center; flex-wrap:wrap; }
+.pcard .meta span { font-size:11.5px; color:var(--ink2); font-family:ui-monospace,monospace; }
+
+/* 知识库 / 调研台 通用 */
+.split { display:grid; grid-template-columns:1.1fr 1fr; gap:16px; }
+.kdb { padding:16px 18px; display:flex; flex-direction:column; gap:12px; }
+.feed { display:flex; flex-direction:column; gap:11px; }
+.fitem { padding:13px 15px; border-radius:13px; background:var(--panel2); border:1px solid var(--line); }
+.fitem .fh { display:flex; align-items:center; gap:9px; font-size:13px; color:var(--ink2); }
+.fitem .fh b { color:var(--ink); font-size:15px; }
+.fitem .ft { margin-top:7px; font-size:14px; }
+.fitem .fa { margin-top:10px; display:flex; gap:8px; }
+
+/* 消息台（统一平台回复 + 写回） */
+.msg { padding:14px 16px; border-radius:14px; background:var(--panel2); border:1px solid var(--line); }
+.msg .mh { display:flex; align-items:center; gap:10px; }
+.msg .mh .plat { font-size:12px; border-radius:999px; padding:1px 11px; border:1px solid var(--line2); color:var(--ink2); }
+.msg .mh b { font-size:15px; }
+.msg .mh .who { font-size:12.5px; color:var(--ink2); margin-left:auto; }
+.msg .mbody { margin-top:8px; font-size:14px; }
+.msg .mreply { margin-top:10px; display:flex; gap:8px; align-items:center; }
+.msg .mreply textarea { flex:1; resize:none; height:38px; background:color-mix(in srgb,var(--bg) 60%,transparent); border:1px solid var(--line); border-radius:10px; color:var(--ink); padding:8px 12px; font:14px system-ui; outline:none; }
+.msg .mreply textarea:focus { border-color:var(--acc); }
+.msg .synced { display:none; margin-top:8px; font-size:12.5px; color:var(--acc); }
+.msg.sent .synced { display:block; }
+
+/* 右栏 dsh 对话 */
+.dock { width:330px; flex-shrink:0; background:linear-gradient(180deg,rgba(255,255,255,.03),transparent),var(--panel); border-left:1px solid var(--line); backdrop-filter:blur(18px); display:flex; flex-direction:column; transition:width .2s; }
+.dock.hide { width:0; border:none; overflow:hidden; }
+.dock .dh { height:48px; display:flex; align-items:center; gap:10px; padding:0 14px; border-bottom:1px solid var(--line); }
+.dock .dh .dot { width:10px; height:10px; border-radius:50%; background:var(--grad); box-shadow:0 0 10px color-mix(in srgb,var(--acc) 85%,transparent); }
+.dock .dh b { flex:1; font-size:15px; }
+.dock .dh button { background:none; border:none; color:var(--ink); opacity:.6; cursor:pointer; font-size:15px; padding:3px 9px; border-radius:7px; }
+.dock .dbody { flex:1; overflow:auto; padding:15px; display:flex; flex-direction:column; gap:11px; }
+.bub { padding:10px 13px; border-radius:13px; font-size:14px; max-width:88%; }
+.bub.me { align-self:flex-end; background:var(--grad); color:#fff; }
+.bub.ai { background:var(--panel2); border:1px solid var(--line); }
+.dock .dinput { display:flex; gap:8px; padding:12px; border-top:1px solid var(--line); }
+.dock .dinput input { flex:1; background:color-mix(in srgb,var(--bg) 60%,transparent); border:1px solid var(--line); border-radius:10px; color:var(--ink); padding:9px 12px; font:14px system-ui; outline:none; }
+.dock .dinput input:focus { border-color:var(--acc); }
+
+.switch { display:inline-flex; align-items:center; gap:6px; margin-left:12px; padding-left:12px; border-left:1px solid var(--line); }
+.switch button { border:none; border-radius:999px; padding:5px 14px; cursor:pointer; font:600 13px system-ui; background:var(--panel); color:var(--ink2); }
+.switch button.on { background:var(--grad); color:#fff; box-shadow:0 0 16px color-mix(in srgb,var(--acc) 45%,transparent); }
+
+/* 操作反馈 toast */
+.toast { position:fixed; left:50%; bottom:34px; transform:translateX(-50%) translateY(20px); background:var(--panel2); border:1px solid var(--line2); color:var(--ink); border-radius:14px; padding:11px 20px; font-size:14px; backdrop-filter:blur(18px); box-shadow:0 14px 44px rgba(0,0,0,.5), 0 0 22px color-mix(in srgb,var(--acc) 18%,transparent); opacity:0; pointer-events:none; transition:.25s; z-index:30; max-width:80vw; }
+.toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+</style>
+</head>
+<body class="v2">
+<div class="aur"><i></i><i></i><i></i></div>
+<div class="grid-bg"></div>
+<div class="app">
+  <!-- 左栏：台导航 -->
+  <div class="rail">
+    <div class="brand">DECK</div>
+    <button class="rbtn on" data-d="hub"><span class="i">🏠</span><span class="t">总台</span></button>
+    <button class="rbtn" data-d="content"><span class="i">🎬</span><span class="t">内容台</span></button>
+    <button class="rbtn" data-d="kb"><span class="i">🧠</span><span class="t">知识库</span></button>
+    <button class="rbtn" data-d="research"><span class="i">📡</span><span class="t">调研台</span></button>
+    <button class="rbtn" data-d="msg"><span class="i">💬</span><span class="t">消息台</span></button>
+  </div>
+
+  <!-- 主区 -->
+  <div class="main">
+    <div class="bar">
+      <div class="h1" id="dtitle">总台</div>
+      <span class="hint" id="dsub">灵感库 · 任务看板 · 待办审阅 · 信息聚合</span>
+      <span style="flex:1"></span>
+      <button id="dockBtn" class="btn-gho" style="padding:8px 18px;font-size:14px" onclick="toggleDock()">隐藏对话</button>
+    </div>
+    <div class="topstat glass">
+      <span class="s"><span class="dotg"></span>opencli 已连接</span>
+      <span class="s">🟢 <b>5/5</b> 平台就绪</span>
+      <span class="s shield">🛡️ 本地优先 · 数据不出本机</span>
+      <span class="s">🔄 模型可切换</span>
+      <span style="flex:1"></span>
+      <span class="s">最后同步 2 分钟前</span>
+      <div class="switch">
+        <button data-s="v1">深空青</button>
+        <button data-s="v2" class="on">极光紫</button>
+        <button data-s="v3">熔金暗港</button>
+      </div>
+    </div>
+    <div class="zone">
+
+      <!-- ═══ 总台 ═══ -->
+      <div class="desk on" id="hub">
+        <div class="sec">灵感库 <span class="tag">突发灵感捕获 · 来源标记</span></div>
+        <div class="cards">
+          <div class="ccard glass"><div class="chead"><span class="cico">💡</span><span class="cname">把「评论高赞」做成固定选题栏目</span></div>
+            <div class="csrc">来源：对话 · 2026-08-25</div><div class="cprev">用户说想把微博高赞问题反哺成周更栏目</div>
+            <div class="cact"><button class="btn-mini" onclick="act(this,'任务看板')">升任务</button><button class="btn-mini" onclick="act(this,'知识库')">推知识库</button><button class="btn-mini" onclick="act(this,'调研台')">推调研台</button></div></div>
+          <div class="ccard glass"><div class="chead"><span class="cico">📡</span><span class="cname">抖音新出的 AI 配音功能值得测</span></div>
+            <div class="csrc">来源：调研发现 · 2026-08-25</div><div class="cprev">刷到一条爆款，疑似用新配音</div>
+            <div class="cact"><button class="btn-mini">升任务</button><button class="btn-mini">推调研台</button></div></div>
+          <div class="ccard glass"><div class="chead"><span class="cico">📖</span><span class="cname">重读《心智社会》做一期读书笔记</span></div>
+            <div class="csrc">来源：阅读 · 2026-08-24</div><div class="cprev">第 3 章关于agent社会很有料</div>
+            <div class="cact"><button class="btn-mini" onclick="act(this,'任务看板')">升任务</button><button class="btn-mini" onclick="act(this,'知识库')">推知识库</button></div></div>
+        </div>
+
+        <div class="sec" style="margin-top:4px">任务面板
+          <button class="btn-mini" onclick="swView('board')">看板</button>
+          <button class="btn-mini" onclick="swView('cal')">日历</button>
+        </div>
+        <div id="hub-board">
+          <div class="board">
+            <div class="col glass"><div class="colhead">🌱 种子<span class="n">2</span></div>
+              <div class="icard"><b>LESSONS 周报自动摘要</b><span>2026-08-25</span></div>
+              <div class="icard"><b>评论高赞反哺选题</b><span>2026-08-25</span></div></div>
+            <div class="col glass"><div class="colhead">🥚 孵化<span class="n">1</span></div>
+              <div class="icard"><b>预测市场中文科普系列</b><span>2026-08-24</span></div></div>
+            <div class="col glass"><div class="colhead">✍️ 创作<span class="n">1</span></div>
+              <div class="icard"><b>竞品周报 #12</b><span>agent工作中</span></div></div>
+            <div class="col glass"><div class="colhead">✅ 待发<span class="n">2</span></div>
+              <div class="icard"><b>一页看懂 dsh 插件开发</b><span>PPT</span></div>
+              <div class="icard"><b>插件开发避坑清单</b><span>草稿</span></div></div>
+            <div class="col glass"><div class="colhead">📢 已发布<span class="n">3</span></div>
+              <div class="icard"><b>竞品周报 #11</b><span>微博✓</span></div>
+              <div class="icard"><b>预测市场入门</b><span>X✓</span></div></div>
+          </div>
+        </div>
+        <div id="hub-cal" style="display:none">
+          <div class="cal">
+            <div class="cday"><div class="d">一</div><div class="ev acc">调研：抖音配音</div></div>
+            <div class="cday"><div class="d">二</div></div>
+            <div class="cday"><div class="d">三</div><div class="ev">发布：周报#12</div></div>
+            <div class="cday"><div class="d">四</div></div>
+            <div class="cday"><div class="d">五</div><div class="ev acc">落库候选审阅</div></div>
+            <div class="cday"><div class="d">六</div></div>
+            <div class="cday"><div class="d">日</div><div class="ev">复盘：insights</div></div>
+          </div>
+        </div>
+
+        <div class="sec">待办 / 审阅 <span class="tag">带任务计划状态</span></div>
+        <div class="cards">
+          <div class="ccard glass"><div class="chead"><span class="cico">💬</span><span class="cname">微博评论待回 ×3</span><span class="badge need">评论待回</span></div><div class="cprev">「插件开发」那条下 3 条高赞提问，AI 已起草回复</div></div>
+          <div class="ccard glass"><div class="chead"><span class="cico">🧠</span><span class="cname">知识库落库候选 ×5</span><span class="badge need">落库候选</span></div><div class="cprev">调研采集的 5 条待你勾选落库</div></div>
+          <div class="ccard glass"><div class="chead"><span class="cico">📢</span><span class="cname">发布终审 ×1</span><span class="badge need">发布终审</span></div><div class="cprev">「一页看懂 dsh 插件开发」待你点发</div></div>
+          <div class="ccard glass"><div class="chead"><span class="cico">⏰</span><span class="cname">insights 到期提醒 ×2</span><span class="badge busy">到期</span></div><div class="cprev">2 条复盘结论待验证到期</div></div>
+        </div>
+
+        <div class="sec">信息聚合</div>
+        <div class="row">
+          <span class="stat">🎬 内容台 <b>2 待发</b></span>
+          <span class="stat">🧠 知识库 <b>5486 篇</b></span>
+          <span class="stat">📡 调研台 <b>4 监听中</b></span>
+          <span class="stat">💬 消息台 <b>3 待回</b></span>
+          <span class="stat">🔌 opencli <b>5/5 就绪</b></span>
+        </div>
+        <div class="row" style="margin-top:6px">
+          <span class="hint">对话桥：任意卡片可「🚀 发给 agent」；对话里冒出的点子自动落灵感库</span>
+        </div>
+      </div>
+
+      <!-- ═══ 内容台 ═══ -->
+      <div class="desk" id="content">
+        <div class="bar" style="margin:0">
+          <div class="h1" style="font-size:18px">内容流水线</div>
+          <span class="hint">一篇一文件夹 · 发布走 opencli 预填+点发</span>
+          <span class="pill">🧠 知识库已连接</span>
+          <button class="btn-pri" style="margin-left:auto">＋ 新选题</button>
+        </div>
+        <div class="funnel">
+          <div class="fstep"><b>12</b><span>选题</span></div><span class="farrow">→</span>
+          <div class="fstep"><b>4</b><span>创作</span></div><span class="farrow">→</span>
+          <div class="fstep"><b>2</b><span>待发</span></div><span class="farrow">→</span>
+          <div class="fstep"><b>9</b><span>已发布</span></div>
+          <span class="hint" style="margin-left:auto">转化 75% · 本周 3 篇</span>
+        </div>
+        <div class="pipe">
+          <div class="pcol"><div class="phead">💡 选题<span class="n">2</span></div>
+            <div class="pcard"><b>🎬 五分钟读懂预测市场</b><div class="meta"><span>08-25</span><span class="pill">微博</span></div></div>
+            <div class="pcard"><b>📝 给开发者的 5 个坏习惯</b><div class="meta"><span>08-24</span></div></div></div>
+          <div class="pcol"><div class="phead">✍️ 创作<span class="n">1</span></div>
+            <div class="pcard"><b>📊 竞品周报 #12</b><div class="meta"><span>agent工作中</span><span class="pill">PPT</span></div></div></div>
+          <div class="pcol hot"><div class="phead" style="color:var(--ok)">✅ 待发<span class="n">2</span></div>
+            <div class="pcard"><b>📊 一页看懂 dsh 插件开发</b><div class="meta"><span class="pill">公众号</span><span class="pill">微博</span></div>
+              <div class="meta" style="margin-top:8px"><button class="btn-mini" onclick="showToast('✓ 已预填，发布将经 opencli 写回平台')">📢 预填发布</button><button class="btn-mini">▶ 放映</button></div></div>
+            <div class="pcard"><b>📝 插件开发避坑清单</b><div class="meta"><span>草稿就绪</span></div></div></div>
+          <div class="pcol"><div class="phead">📢 已发布<span class="n">3</span></div>
+            <div class="pcard" style="opacity:.7"><b>📊 竞品周报 #11</b><div class="meta"><span>08-18 微博✓</span></div></div>
+            <div class="pcard" style="opacity:.7"><b>📝 预测市场入门</b><div class="meta"><span>08-11 X✓</span></div></div></div>
+        </div>
+        <div class="sec">创作 / 编辑 / 素材 / 数据回流</div>
+        <div class="row">
+          <button class="btn-gho">✍️ 文章编辑器</button>
+          <button class="btn-gho">📊 PPT 编辑</button>
+          <button class="btn-gho">🎬 视频脚本</button>
+          <button class="btn-gho">🗂️ 素材管理</button>
+          <button class="btn-gho">📈 数据回流</button>
+        </div>
+        <div class="row" style="margin-top:6px"><span class="hint">⚠️ 公开评论回复已统一收进「消息台」，内容台只管发布/创作</span></div>
+      </div>
+
+      <!-- ═══ 知识库 ═══ -->
+      <div class="desk" id="kb">
+        <div class="row">
+          <input class="inp" placeholder="全文搜索 5486 篇（中文子串可查）…">
+          <button class="btn-pri">🔍 检索</button>
+          <button class="btn-gho">📚 四库导航</button>
+          <span class="pill" style="margin-left:8px">🧠 你的本地上下文脊柱</span>
+        </div>
+        <div class="split">
+          <div class="kdb glass">
+            <div class="sec">采集 → 提炼 → 学习 → 复盘</div>
+            <div class="col" style="padding:0;min-height:0">
+              <div class="icard"><b>📥 采集：zcode 调研 → 候选</b><span>待落库 5</span></div>
+              <div class="icard"><b>🧪 提炼：人工勾选落库</b><span>本周 12</span></div>
+              <div class="icard"><b>📖 学习：复习队列（间隔重复）</b><span>新 8</span></div>
+              <div class="icard"><b>🧾 复盘：insights 到期提醒</b><span>待验证 2</span></div>
+            </div>
+            <div class="sec">关注人 <span class="tag">追踪名单 · 喂调研台</span></div>
+            <div class="feed">
+              <div class="fitem"><div class="fh"><b>@LinXin</b><span>前端/构建工具</span></div><div class="ft">新动态：tsdown 又改了摇树规则</div></div>
+              <div class="fitem"><div class="fh"><b>@AI-hot-take</b><span>AI 观点</span></div><div class="ft">新动态：质疑 agent 评测有效性</div></div>
+            </div>
+          </div>
+          <div class="kdb glass">
+            <div class="sec">md 预览 · LESSONS.md</div>
+            <div class="fitem"><div class="fh"><b>九、Deck 落库</b></div><div class="ft">1. GLM-5 舆论反馈以正面为主 <span class="badge need">⚠️待验证</span><br>2. 开发者生态位是口碑护城河<br><span style="color:var(--ink2);font-size:12px">来源：X+微博高互动 48h · n=87</span></div></div>
+            <div class="sec">发送到</div>
+            <div class="row"><button class="btn-mini" onclick="showToast('✓ 已建监听规则 → 调研台')">→ 调研台监听</button><button class="btn-mini" onclick="showToast('✓ 已送灵感库')">→ 灵感库</button></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ 调研台 ═══ -->
+      <div class="desk" id="research">
+        <div class="sec">发现流 <span class="tag">opencli 抓 X/微博/小红书/知乎</span><span class="pill" style="margin-left:auto">🧠 读知识库 5486 篇</span></div>
+        <div class="feed">
+          <div class="fitem"><div class="fh"><b>🔥 X · AI 圈</b><span>关键词：agent 评测</span></div>
+            <div class="ft">一条线程指出当前 agent 自评普遍高估——高赞</div>
+            <div class="fa"><button class="btn-mini" onclick="toKB(this)">发送到知识库</button><button class="btn-mini">建监听</button></div></div>
+          <div class="fitem"><div class="fh"><b>📕 小红书 · 效率</b><span>话题：个人工作台</span></div>
+            <div class="ft">「用 workbuddy 管全家」爆文，评论在对比豆包</div>
+            <div class="fa"><button class="btn-mini" onclick="toKB(this)">发送到知识库</button></div></div>
+          <div class="fitem"><div class="fh"><b>📰 微博 · 科技</b><span>关注人 @LinXin</span></div>
+            <div class="ft">转发了一条 dsh 插件实战，赞数异常高</div>
+            <div class="fa"><button class="btn-mini" onclick="toKB(this)">发送到知识库</button></div></div>
+        </div>
+        <div class="sec">监听规则</div>
+        <div class="row">
+          <span class="pill">关键词：agent 评测</span>
+          <span class="pill">话题：个人工作台</span>
+          <span class="pill">关注人：@LinXin</span>
+          <button class="btn-gho">＋ 新建规则</button>
+        </div>
+      </div>
+
+      <!-- ═══ 消息台（统一平台回复 + 写回）═══ -->
+      <div class="desk" id="msg">
+        <div class="sec">统一通讯收件箱 <span class="tag">读 opencli · 回写 opencli</span><span class="pill" style="margin-left:auto">🧠 回复归档知识库</span></div>
+        <div class="feed">
+          <div class="msg" data-m>
+            <div class="mh"><span class="plat">微博</span><b>评论回复</b><span class="who">@用户A · 下「插件开发」</span></div>
+            <div class="mbody">「两步工作流里 tsdown 那步我总失败，能细说吗？」</div>
+            <div class="mreply"><textarea placeholder="AI 已起草：tsdown 会把未声明 inject 的服务摇掉，记得…（可改）"></textarea><button class="btn-pri" onclick="sendMsg(this)">发送</button></div>
+            <div class="synced">✅ 已同步到微博（对方能看到你的回复）</div>
+          </div>
+          <div class="msg" data-m>
+            <div class="mh"><span class="plat">微信</span><b>私信</b><span class="who">老李</span></div>
+            <div class="mbody">「周报模板能发我一份不？」</div>
+            <div class="mreply"><textarea placeholder="AI 起草：稍等，我把最新一期链接发你…"></textarea><button class="btn-pri" onclick="sendMsg(this)">发送</button></div>
+            <div class="synced">✅ 已同步到微信</div>
+          </div>
+          <div class="msg" data-m>
+            <div class="mh"><span class="plat">X</span><b>DM</b><span class="who">@dev_jane</span></div>
+            <div class="mbody">「Can you share the dsh plugin scaffold repo?」</div>
+            <div class="mreply"><textarea placeholder="AI 起草：Sure — here's the link…"></textarea><button class="btn-pri" onclick="sendMsg(this)">发送</button></div>
+            <div class="synced">✅ 已同步到 X</div>
+          </div>
+          <div class="msg" data-m>
+            <div class="mh"><span class="plat">公众号</span><b>留言</b><span class="who">订阅者 B</span></div>
+            <div class="mbody">「这期复盘我照着做了，真有用」</div>
+            <div class="mreply"><textarea placeholder="AI 起草：谢谢支持，下期做…"></textarea><button class="btn-pri" onclick="sendMsg(this)">发送</button></div>
+            <div class="synced">✅ 已同步到公众号</div>
+          </div>
+        </div>
+        <div class="row" style="margin-top:6px"><span class="hint">工作台直接回复 → opencli 写回平台，对方在原平台看到。这就是 dsh 做主力工作台：通讯也在里面。</span></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- 右栏 dsh 对话 -->
+  <div class="dock" id="dock">
+    <div class="dh"><span class="dot"></span><b>dsh 对话 · agent</b><button onclick="toggleDock()">×</button></div>
+    <div class="dbody">
+      <div class="bub ai">早，今天有 2 条发布待终审、3 条评论待回。要我先把「插件开发」那条评论起草发出去吗？</div>
+      <div class="bub me">先把微博那条发了，其余我看看</div>
+      <div class="bub ai">已起草并预填，点「发送」即写回微博。另：调研台抓到一条 agent 评测的高赞线程，要不要进知识库？</div>
+    </div>
+    <div class="dinput"><input placeholder="发给 agent…"><button class="btn-pri" style="padding:9px 16px">↑</button></div>
+  </div>
+</div>
+
+  <div class="toast" id="toast"></div>
+
+<script>
+const titles = { hub:['总台','灵感库 · 任务看板 · 待办审阅 · 信息聚合'], content:['内容台','发布(opencli) + 编辑 + 创作'], kb:['知识库','采集→提炼→学习→复盘 + 关注人'], research:['调研台','发现(opencli) → 发知识库'], msg:['消息台','统一平台回复 + opencli 写回'] }
+document.querySelectorAll('.rbtn').forEach(b => b.onclick = () => {
+  document.querySelectorAll('.rbtn').forEach(x => x.classList.toggle('on', x === b))
+  const d = b.dataset.d
+  document.querySelectorAll('.desk').forEach(s => s.classList.toggle('on', s.id === d))
+  document.getElementById('dtitle').textContent = titles[d][0]
+  document.getElementById('dsub').textContent = titles[d][1]
+})
+const swView = (v) => { document.getElementById('hub-board').style.display = v==='board'?'block':'none'; document.getElementById('hub-cal').style.display = v==='cal'?'block':'none' }
+const toggleDock = () => { const d = document.getElementById('dock'); const hidden = d.classList.toggle('hide'); document.getElementById('dockBtn').textContent = hidden ? '展开对话' : '隐藏对话'; }
+const sendMsg = (btn) => {
+  const msg = btn.closest('[data-m]'); if (msg.classList.contains('sent')) return;
+  const ta = btn.previousElementSibling; btn.disabled = true; btn.textContent = '发送中…';
+  setTimeout(() => { msg.classList.add('sent'); btn.textContent = '已发送'; ta.value = ''; showToast('✓ 回复已归档进知识库（上下文脊柱）'); }, 650);
+}
+const act = (btn, dest) => {
+  if (btn.dataset.done) return; btn.dataset.done = '1';
+  btn.textContent = '✓ 已→' + dest; btn.style.opacity = '.55';
+  showToast('✓ 已送入「' + dest + '」');
+}
+const toKB = (btn) => { if (btn.dataset.done) return; btn.dataset.done = '1'; btn.textContent = '✓ 已入知识库'; btn.disabled = true; showToast('✓ 已写入知识库（采集候选 +1）'); }
+let toastTimer;
+const showToast = (m) => { const t = document.getElementById('toast'); t.textContent = m; t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2200); }
+const saved = localStorage.getItem('dk-skin2') || 'v2'; document.body.className = saved
+const sync = () => document.querySelectorAll('.switch button').forEach(b => b.classList.toggle('on', b.dataset.s === document.body.className))
+document.querySelectorAll('.switch button').forEach(b => b.onclick = () => { document.body.className = b.dataset.s; localStorage.setItem('dk-skin2', b.dataset.s); sync() })
+sync()
+</script>
+</body>
+</html>

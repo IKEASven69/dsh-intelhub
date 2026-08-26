@@ -10,11 +10,51 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { Context } from '@deepseek-ai/cordis'
 import {
-  getResident, listResidents, createResident, createChannel,
+  getResident, listResidents, createResident, createChannel, getChannel,
   appendMessage, readMessages, readBookmark, writeBookmark,
   withEngine, makeTurn, extractCandidates,
 } from 'hippo-mind'
 import { makeResolver, renderText } from './tools.ts'
+
+
+/** 通过 dsh llm 服务生成回复（读默认模型配置 + prepareCall→stream 拼接 text）。 */
+/** 通过 ollama 本地 API 生成回复（绕开 dsh LLM 服务的适配器层，直连更可靠）。 */
+async function llmComplete(
+  _ctx: Context,
+  system: string,
+  user: string,
+): Promise<string> {
+  // 读 ollama 模型配置（llm-pi-ai 节），默认 gemma4:e4b
+  let model = 'gemma4:e4b'
+  try {
+    const { readFileSync } = await import('node:fs')
+    const { join } = await import('node:path')
+    const { homedir } = await import('node:os')
+    const yaml = readFileSync(join(homedir(), '.dsh', 'settings.yaml'), 'utf8')
+    const sec = yaml.slice(yaml.indexOf('llm-pi-ai:'))
+    const m = sec.match(/^\s*- id:\s*(\S+)/m)
+    if (m) model = m[1]
+  } catch { /* 用默认 */ }
+
+  const resp = await fetch('http://127.0.0.1:11434/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: 'system', content: system },
+        { role: 'user', content: user },
+      ],
+      max_tokens: 4096,
+    }),
+    signal: AbortSignal.timeout(120_000),
+  })
+  if (!resp.ok) {
+    throw new Error(`ollama ${resp.status}: ${await resp.text().catch(() => '')}`.slice(0, 200))
+  }
+  const d = (await resp.json()) as { choices?: Array<{ message?: { content?: string } }> }
+  return d.choices?.[0]?.message?.content ?? ''
+}
 
 /** 居民记忆 scope（引擎 project 机制）。 */
 const memoryScope = (name: string): string => `life:${name}`
@@ -87,20 +127,8 @@ export async function summonResident(
   // K2：记忆召回（与当前话题相关的之前对话）
   const memoryContext = await recallMemories(name, userText)
 
-  // LLM 生成回复
-  const llm = (ctx as Context & { llm?: { generate: (opts: Record<string, unknown>) => Promise<{ text?: string }> } }).llm
-  if (llm === undefined || typeof llm.generate !== 'function') {
-    return `[${name}] （LLM 服务不可用——确认 dsh 环境）${channelContext !== '' ? '\n' + channelContext : ''}`
-  }
-
   try {
-    const result = await llm.generate({
-      messages: [
-        { role: 'system', content: residentSystemPrompt(name, resident.persona) + channelContext + memoryContext },
-        { role: 'user', content: userText },
-      ],
-    })
-    const reply = typeof result.text === 'string' && result.text !== '' ? result.text : '……'
+    const reply = await llmComplete(ctx, residentSystemPrompt(name, resident.persona) + channelContext + memoryContext, userText) || '……'
     // 记入频道账本（居民生活继续）
     if (channelId !== undefined) {
       appendMessage(channelId, { kind: 'resident', name }, `[被召唤] ${reply}`)
@@ -175,10 +203,10 @@ export function registerLifeTools(ctx: Context): void {
     },
   })), 'dsh-hippo: create_resident')
 
-  // 居民协作：让频道内居民接力对话（引擎选下一个人+上下文，这边调 LLM 生成）
+  // 居民协作：让频道内居民接力对话（直接调 hippo-mind 库，不走 HTTP）
   ctx.effect(() => ctx.tools.register(defineTool({
     name: 'relay_residents',
-    description: '让频道内的居民们接力对话（多居民协作讨论）。引擎自动轮转选下一个居民，把频道近况注入上下文，LLM 生成回复。用户说"让他们聊聊/讨论一下"时调用。',
+    description: '让频道内的居民们接力对话（多居民协作讨论）。自动轮转选下一个居民，把频道近况注入上下文，LLM 生成回复。用户说"让他们聊聊/讨论一下"时调用。',
     parameters: {
       channel: { type: 'string', required: true, description: '频道 id' },
       topic: { type: 'string', description: '本轮话题提示（可选，默认延续最近对话）' },
@@ -191,39 +219,39 @@ export function registerLifeTools(ctx: Context): void {
       const rounds = Math.min(Math.max(1, Number(args.rounds) || 1), 5)
       const results: string[] = []
 
-      for (let i = 0; i < rounds; i++) {
-        const resp = await fetch(`http://127.0.0.1:8139/api/life/channels/${channelId}/relay/next`, { method: 'POST' })
-        if (!resp.ok) {
-          const err = await resp.json().catch(() => ({ error: resp.statusText }))
-          results.push(`[接力失败] ${(err as { error?: string }).error}`)
-          break
-        }
-        const relay = await resp.json() as {
-          next: { name: string; persona: string }
-          context: Array<{ author: string; kind: string; text: string }>
-          channelTopic: string
-        }
-        const contextText = relay.context.length > 0
-          ? '\n\n--- 频道近况 ---\n' + relay.context.map(m => `${m.author}(${m.kind}): ${m.text}`).join('\n')
-          : ''
-        const systemPrompt = `${relay.next.persona}\n\n你是「${relay.next.name}」，住在 hippo 频道「${relay.channelTopic}」里。频道里还有其他居民，你们在协作讨论。用你的语气说话（1-3 句），可以对其他居民的话回应或补充。` + contextText
-        const topicText = typeof args.topic === 'string' ? args.topic.trim() : ''
-        const userPrompt = topicText !== '' ? topicText : '继续频道讨论（对最近的消息做出回应）'
+      const { getChannel } = await import('hippo-mind')
 
-        const llm = (ctx as Context & { llm?: { generate: (opts: Record<string, unknown>) => Promise<{ text?: string }> } }).llm
-        if (llm === undefined) { results.push(`[${relay.next.name}] （LLM 服务不可用）`); break }
+      for (let i = 0; i < rounds; i++) {
+        const ch = getChannel(channelId)
+        if (ch === null) { results.push(`[接力失败] 频道「${channelId}」不存在`); break }
+        const members = ch.members.filter(m => m !== 'user')
+        if (members.length < 2) { results.push('[接力失败] 至少需要 2 个居民'); break }
+
+        // 轮转：最后说话的居民 → 下一个
+        const msgs = readMessages(channelId, 0, 50)
+        const lastResident = [...msgs].reverse().find(m => m.author.kind === 'resident')
+        const lastIdx = lastResident ? members.indexOf((lastResident.author as { name: string }).name) : -1
+        const nextName = members[(lastIdx + 1) % members.length]
+        const resident = getResident(nextName)
+        if (resident === null) { results.push(`[接力失败] 居民「${nextName}」不存在`); break }
+
+        const contextText = msgs.length > 0
+          ? '\n\n--- 频道讨论 ---\n' + msgs.slice(-10).map(m => {
+              const author = m.author.kind === 'resident' ? m.author.name : '用户'
+              return `${author}: ${m.text.slice(0, 80)}`
+            }).join('\n')
+          : ''
+
+        const systemPrompt = `${resident.persona}\n\n你是「${nextName}」，在频道「${ch.topic}」里和另一位居民讨论。用你的语气说话（1-3 句中文），可以对对方的话回应或质疑。` + contextText
+        const topicText = typeof args.topic === 'string' ? args.topic.trim() : ''
+        const userPrompt = topicText !== '' ? topicText : '继续讨论（对最近的消息做出回应）'
 
         try {
-          const result = await llm.generate({ messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userPrompt },
-          ] })
-          const reply = typeof result.text === 'string' && result.text !== '' ? result.text : '……'
-          const { appendMessage } = await import('hippo-mind')
-          appendMessage(channelId, { kind: 'resident', name: relay.next.name }, reply)
-          results.push(`[${relay.next.name}] ${reply}`)
+          const reply = await llmComplete(ctx, systemPrompt, userPrompt) || '……'
+          appendMessage(channelId, { kind: 'resident', name: nextName }, reply.slice(0, 500))
+          results.push(`[${nextName}] ${reply}`)
         } catch (e) {
-          results.push(`[${relay.next.name}] （生成失败：${e instanceof Error ? e.message : String(e)}）`)
+          results.push(`[${nextName}] （生成失败：${e instanceof Error ? e.message : String(e)}）`)
           break
         }
       }
@@ -261,15 +289,8 @@ export function registerLifeTools(ctx: Context): void {
       const systemPrompt = `${resident.persona}
 
 你是「${name}」，接到一项工作任务。用你的专业能力完成它，输出实际结果（不是"我会做"而是做了什么）。` + memoryContext
-      const llm = (ctx as Context & { llm?: { generate: (opts: Record<string, unknown>) => Promise<{ text?: string }> } }).llm
-      if (llm === undefined) return `[${name}] （LLM 服务不可用）`
-
       try {
-        const result = await llm.generate({ messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: task },
-        ] })
-        const output = typeof result.text === 'string' && result.text !== '' ? result.text : '（空产出）'
+        const output = await llmComplete(ctx, systemPrompt, task) || '（空产出）'
 
         // 记入频道（可选）
         const chId = (args.channel ?? '').trim()

@@ -165,7 +165,7 @@ export function apply(ctx: Context, config?: Config): void {
     registerRecallTool(tc)
     if (config?.writeback === true) registerRememberTool(tc)
   })
-  ctx.inject(['tools', 'agents', 'sandboxPolicy'], (tc) => {
+  ctx.inject(['tools', 'agents', 'sandboxPolicy', 'llm'], (tc) => {
     registerLifeTools(tc)
   })
   // K3：主动行为循环（dsh web 常驻时活跃——chattiness 参数控频）
