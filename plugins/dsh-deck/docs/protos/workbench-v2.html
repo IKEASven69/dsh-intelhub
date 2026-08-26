@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>dsh-deck · 工作台 v2（右栏多会话 + 总台分带 + 单件流）</title>
+<style>
+/* 复用 workbench 的霓虹玻璃变量（v1 深空青为主皮） */
+* { box-sizing:border-box; margin:0; }
+html,body { height:100%; }
+body { font:16px/1.7 system-ui,'Segoe UI',sans-serif; --bg:#050a18; --panel:rgba(120,190,255,.06); --panel2:rgba(120,190,255,.10);
+  --line:rgba(140,200,255,.16); --line2:rgba(140,200,255,.30); --ink:#e3f0ff; --ink2:#8fa8cc;
+  --acc:#2dd4ff; --acc2:#6366f1; --grad:linear-gradient(135deg,#2dd4ff,#6366f1);
+  --ok:#34d399; --warn:#fbbf24; --busy:#60a5fa; color:var(--ink); background:var(--bg); overflow:hidden; }
+.aur { position:fixed; inset:0; z-index:0; overflow:hidden; pointer-events:none; }
+.aur i { position:absolute; border-radius:50%; filter:blur(90px); opacity:.8; }
+.aur i:nth-child(1){width:56vw;height:56vw;left:-10vw;top:-22vw;background:rgba(45,212,255,.15);}
+.aur i:nth-child(2){width:48vw;height:48vw;right:-12vw;top:6vw;background:rgba(99,102,241,.13);}
+.grid-bg { position:fixed; inset:0; z-index:0; pointer-events:none; opacity:.3;
+  background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px); background-size:56px 56px;
+  mask-image:radial-gradient(1100px 700px at 50% 20%,#000 30%,transparent 75%); }
+.glass { position:relative; background:linear-gradient(160deg,rgba(255,255,255,.05),rgba(255,255,255,.015)),var(--panel); border:1px solid var(--line); border-radius:18px; backdrop-filter:blur(18px); box-shadow:0 14px 44px rgba(0,0,0,.45); }
+.app { position:relative; z-index:1; display:flex; height:100vh; }
+.btn-pri { background:var(--grad); color:#fff; border:none; border-radius:11px; padding:10px 24px; font:700 15px system-ui; cursor:pointer; box-shadow:0 5px 18px rgba(45,212,255,.3); }
+.btn-mini { background:var(--panel2); border:1px solid var(--line); color:var(--acc); border-radius:8px; padding:5px 13px; font-size:13px; cursor:pointer; }
+.h1 { font-size:21px; font-weight:750; } .hint { font-size:13px; color:var(--ink2); }
+
+/* 左栏 */
+.rail { width:84px; background:linear-gradient(180deg,rgba(255,255,255,.03),transparent),var(--panel); border-right:1px solid var(--line); backdrop-filter:blur(18px); display:flex; flex-direction:column; align-items:center; gap:6px; padding:14px 0; }
+.rail .brand { font-weight:800; font-size:12px; letter-spacing:3px; background:var(--grad); -webkit-background-clip:text; background-clip:text; color:transparent; padding:8px 0 14px; }
+.rbtn { width:60px; padding:9px 0 7px; display:flex; flex-direction:column; align-items:center; background:none; border:none; border-radius:14px; color:var(--ink); opacity:.5; cursor:pointer; }
+.rbtn:hover { opacity:.9; background:var(--panel); }
+.rbtn.on { opacity:1; background:var(--panel2); box-shadow:inset 0 0 0 1px var(--line2), 0 0 18px rgba(45,212,255,.18); }
+.rbtn .i { font-size:22px; } .rbtn .t { font-size:11.5px; }
+
+/* 主区 */
+.main { flex:1; min-width:0; display:flex; flex-direction:column; padding:18px 24px 16px; }
+.bar { display:flex; align-items:center; gap:12px; margin-bottom:14px; }
+
+/* ═══ 总台：分带 + 单件流 ═══ */
+.zone { flex:1; min-height:0; overflow:auto; display:flex; flex-direction:column; gap:18px; padding-bottom:20px; }
+.band { display:flex; flex-direction:column; gap:10px; }
+.bhead { display:flex; align-items:center; gap:10px; font-size:14.5px; font-weight:700; }
+.bhead .n { background:var(--panel2); border:1px solid var(--line); border-radius:999px; padding:0 12px; font-size:12.5px; color:var(--ink2); }
+.todo-card { display:flex; align-items:center; gap:16px; padding:15px 22px; }
+.todo-card.urgent { border-color:rgba(251,191,36,.5); background:linear-gradient(145deg,rgba(251,191,36,.11),transparent 60%),var(--panel); box-shadow:0 8px 30px rgba(251,191,36,.1); }
+.todo-card .ico { font-size:26px; }
+.todo-card .nm { font-size:16.5px; font-weight:700; }
+.todo-card .pv { flex:1; font-size:14.5px; color:var(--ink2); border-left:2px solid var(--line); padding-left:16px; }
+/* 单件流步进条 */
+.flows { display:grid; grid-template-columns:repeat(auto-fill,minmax(420px,1fr)); gap:12px; }
+.flow { padding:14px 18px; }
+.flow .ft { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+.flow .ft b { font-size:15px; }
+.flow .stp { display:flex; align-items:center; }
+.flow .s { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--ink2); white-space:nowrap; }
+.flow .s i { width:18px; height:18px; border-radius:50%; border:1.5px solid var(--line2); display:flex; align-items:center; justify-content:center; font-style:normal; font-size:10px; }
+.flow .s.done i { border-color:var(--ok); color:var(--ok); }
+.flow .s.now { color:var(--acc); font-weight:650; }
+.flow .s.now i { background:var(--grad); color:#fff; border-color:transparent; box-shadow:0 0 10px rgba(45,212,255,.5); }
+.flow .ln { flex:1; height:1px; background:var(--line); margin:0 7px; min-width:14px; }
+.flow .ln.done { background:var(--ok); }
+/* 灵感横向流 */
+.ideas-strip { display:flex; gap:12px; overflow-x:auto; padding-bottom:4px; }
+.idea { min-width:270px; max-width:270px; padding:13px 16px; }
+.idea b { font-size:14.5px; display:block; }
+.idea .src { font-size:12px; color:var(--ink2); margin-top:4px; font-family:ui-monospace,monospace; }
+.idea .act { display:flex; gap:7px; margin-top:10px; }
+
+/* ═══ 右栏：多会话对话（工程实现=宿主原生视图 margin 挤位；此处演示交互形态）═══ */
+.divider { width:7px; cursor:col-resize; position:relative; flex-shrink:0; }
+.divider::after { content:''; position:absolute; left:3px; top:0; bottom:0; width:1px; background:var(--line); }
+.divider:hover::after, .divider.drag::after { width:3px; background:var(--acc); box-shadow:0 0 12px rgba(45,212,255,.4); }
+.dock { width:400px; min-width:300px; max-width:46vw; flex-shrink:0; background:linear-gradient(180deg,rgba(255,255,255,.03),transparent),var(--panel); border-left:1px solid var(--line); backdrop-filter:blur(18px); display:flex; flex-direction:column; }
+.dock.hide { display:none; }
+.dh { height:50px; display:flex; align-items:center; gap:10px; padding:0 14px; border-bottom:1px solid var(--line); }
+.dh .dot { width:10px; height:10px; border-radius:50%; background:var(--grad); box-shadow:0 0 10px rgba(45,212,255,.8); }
+.dh b { font-size:15px; flex:1; }
+.dh button { background:none; border:1px solid var(--line); color:var(--ink2); border-radius:8px; padding:4px 10px; cursor:pointer; font-size:12.5px; }
+.dh button:hover { border-color:var(--acc); color:var(--acc); }
+/* 会话列表/切换 */
+.sessions { border-bottom:1px solid var(--line); max-height:210px; overflow:auto; padding:8px 10px; display:flex; flex-direction:column; gap:6px; }
+.sgrp { font-size:11px; color:var(--ink2); margin:5px 4px 2px; font-family:ui-monospace,monospace; letter-spacing:1px; }
+.sess { display:flex; align-items:center; gap:9px; background:var(--panel2); border:1px solid transparent; border-radius:11px; padding:8px 12px; cursor:pointer; transition:.14s; }
+.sess:hover { border-color:var(--line2); }
+.sess.on { border-color:var(--acc); background:linear-gradient(145deg,rgba(45,212,255,.12),transparent),var(--panel2); box-shadow:0 0 16px rgba(45,212,255,.15); }
+.sess .si { flex:1; min-width:0; }
+.sess .st { font-size:14px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.sess .sp { font-size:11.5px; color:var(--ink2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.sbadge { font-size:11px; border-radius:999px; padding:1px 9px; border:1px solid; white-space:nowrap; flex-shrink:0; }
+.sbadge.run { color:var(--busy); border-color:rgba(96,165,250,.5); background:rgba(96,165,250,.1); animation:br 1.8s infinite; }
+.sbadge.need { color:var(--warn); border-color:rgba(251,191,36,.5); background:rgba(251,191,36,.1); }
+.sbadge.idle { color:var(--ink2); border-color:var(--line2); }
+@keyframes br { 50% { opacity:.55; } }
+.srt { font-family:ui-monospace,monospace; font-size:11px; color:var(--busy); flex-shrink:0; }
+.newsess { margin:6px 4px 4px; }
+/* 对话体 */
+.dbody { flex:1; overflow:auto; padding:15px; display:flex; flex-direction:column; gap:11px; }
+.bub { padding:10px 13px; border-radius:13px; font-size:14px; max-width:88%; line-height:1.65; }
+.bub.me { align-self:flex-end; background:var(--grad); color:#fff; }
+.bub.ai { background:var(--panel2); border:1px solid var(--line); }
+.bub .mini-acts { display:flex; gap:7px; margin-top:9px; }
+.dinput { display:flex; gap:8px; padding:12px; border-top:1px solid var(--line); }
+.dinput input { flex:1; background:color-mix(in srgb,var(--bg) 60%,transparent); border:1px solid var(--line); border-radius:10px; color:var(--ink); padding:10px 13px; font:14.5px system-ui; outline:none; }
+.dinput input:focus { border-color:var(--acc); }
+.toast { position:fixed; left:50%; bottom:30px; transform:translateX(-50%) translateY(16px); background:var(--panel2); border:1px solid var(--line2); color:var(--ink); border-radius:13px; padding:10px 20px; font-size:14px; opacity:0; pointer-events:none; transition:.22s; z-index:30; }
+.toast.show { opacity:1; transform:translateX(-50%); }
+.reopen { position:fixed; right:14px; top:14px; z-index:5; display:none; }
+</style>
+</head>
+<body>
+<div class="aur"><i></i><i></i></div>
+<div class="grid-bg"></div>
+<div class="app">
+  <div class="rail">
+    <div class="brand">DECK</div>
+    <button class="rbtn on"><span class="i">🏠</span><span class="t">总台</span></button>
+    <button class="rbtn"><span class="i">🎬</span><span class="t">内容台</span></button>
+    <button class="rbtn"><span class="i">🧠</span><span class="t">知识库</span></button>
+    <button class="rbtn"><span class="i">📡</span><span class="t">调研台</span></button>
+    <button class="rbtn"><span class="i">💬</span><span class="t">消息台</span></button>
+  </div>
+
+  <div class="main">
+    <div class="bar">
+      <div class="h1">总台</div>
+      <span class="hint">待办置顶 → 进行中的件 → 灵感流（右侧对话可拖宽度/收起）</span>
+      <span style="flex:1"></span>
+      <button class="btn-mini" onclick="toast('（工程实现：宿主原生会话视图 margin 挤位，切会话无缝）')">ⓘ 右栏实现说明</button>
+    </div>
+    <div class="zone">
+      <!-- 分带 1：待你决定 -->
+      <div class="band">
+        <div class="bhead">🙋 待你决定 <span class="n">2</span></div>
+        <div class="todo-card glass urgent"><span class="ico">📢</span><span class="nm">发布终审</span>
+          <span class="pv">「一页看懂 dsh 插件开发」微博预填就绪——你点发</span>
+          <button class="btn-pri" onclick="toast('→ 打开发布预填（停在最后一步，人工点发）')">去点发</button></div>
+        <div class="todo-card glass urgent"><span class="ico">🧾</span><span class="nm">审阅落库</span>
+          <span class="pv">T-02 已交活：3 条判断待勾选 → LESSONS</span>
+          <button class="btn-pri" onclick="toast('→ 大勾选审阅页')">去审阅</button></div>
+      </div>
+      <!-- 分带 2：进行中的件（单件流步进条） -->
+      <div class="band">
+        <div class="bhead">🔁 进行中的件 <span class="n">3</span><span class="hint" style="font-weight:400">每件东西从头走到尾，一眼看到卡在哪</span></div>
+        <div class="flows">
+          <div class="flow glass"><div class="ft"><b>📊 竞品周报 #12</b><span class="hint" style="margin-left:auto">PPT · agent 干活中 12:34</span></div>
+            <div class="stp"><span class="s done"><i>✓</i>灵感</span><span class="ln done"></span><span class="s done"><i>✓</i>任务</span><span class="ln done"></span><span class="s now"><i>3</i>创作</span><span class="ln"></span><span class="s"><i>4</i>待发</span><span class="ln"></span><span class="s"><i>5</i>发布</span></div></div>
+          <div class="flow glass"><div class="ft"><b>📊 一页看懂 dsh 插件开发</b><span class="hint" style="margin-left:auto">等你点发</span></div>
+            <div class="stp"><span class="s done"><i>✓</i>灵感</span><span class="ln done"></span><span class="s done"><i>✓</i>任务</span><span class="ln done"></span><span class="s done"><i>✓</i>创作</span><span class="ln done"></span><span class="s now"><i>4</i>待发</span><span class="ln"></span><span class="s"><i>5</i>发布</span></div></div>
+          <div class="flow glass"><div class="ft"><b>📝 插件避坑清单</b><span class="hint" style="margin-left:auto">草稿就绪</span></div>
+            <div class="stp"><span class="s done"><i>✓</i>灵感</span><span class="ln done"></span><span class="s done"><i>✓</i>任务</span><span class="ln done"></span><span class="s done"><i>✓</i>创作</span><span class="ln done"></span><span class="s now"><i>4</i>待发</span><span class="ln"></span><span class="s"><i>5</i>发布</span></div></div>
+        </div>
+      </div>
+      <!-- 分带 3：灵感流（横向） -->
+      <div class="band">
+        <div class="bhead">💡 灵感流 <span class="n">3 新</span><span class="hint" style="font-weight:400">对话里冒出的点子点「存为灵感」就会出现在这</span></div>
+        <div class="ideas-strip">
+          <div class="idea glass"><b>把「评论高赞」做成固定选题栏目</b><div class="src">来源：对话 · 08-25</div>
+            <div class="act"><button class="btn-mini" onclick="toast('✓ 升任务 → 调研队列')">升任务</button><button class="btn-mini" onclick="toast('✓ 推知识库 → 采集层')">推知识库</button><button class="btn-mini" onclick="toast('✓ 推调研台')">推调研台</button></div></div>
+          <div class="idea glass"><b>抖音 AI 配音功能值得测</b><div class="src">来源：调研 · 08-25</div>
+            <div class="act"><button class="btn-mini" onclick="toast('✓ 升任务')">升任务</button><button class="btn-mini" onclick="toast('✓ 推调研台')">推调研台</button></div></div>
+          <div class="idea glass"><b>重读《心智社会》做读书笔记</b><div class="src">来源：阅读 · 08-24</div>
+            <div class="act"><button class="btn-mini" onclick="toast('✓ 推知识库')">推知识库</button></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 拖拽分割条 -->
+  <div class="divider" id="dv" title="拖动调宽度 · 双击复位"></div>
+
+  <!-- 右栏：多会话 -->
+  <div class="dock" id="dock">
+    <div class="dh">
+      <span class="dot"></span><b>dsh 对话</b>
+      <button onclick="newSess()">＋ 新会话</button>
+      <button onclick="hideDock()">⟩⟩ 收起</button>
+    </div>
+    <div class="sessions" id="sess"></div>
+    <div class="dbody" id="dbody"></div>
+    <div class="dinput"><input id="din" placeholder="发给 agent…（切会话对话独立保留）"><button class="btn-pri" style="padding:9px 18px" onclick="send()">↑</button></div>
+  </div>
+</div>
+<button class="btn-mini reopen" id="reopen" onclick="showDock()">💬 展开对话</button>
+<div class="toast" id="toast"></div>
+
+<script>
+// ── 会话数据（真实实现来自宿主快照订阅：分组/状态/时长/预览零 token）──
+const GROUPS = [
+  { g:'当前工作区', list: [
+    { id:'a', t:'主对话 · agent 总管', p:'早，今天有 2 条发布待终审、3 条评论待回', st:'idle' },
+    { id:'b', t:'PPT：竞品周报 #12', p:'正在按验收条目干活；结论带来源', st:'run', rt:'12:34' },
+  ]},
+  { g:'其他工作区', list: [
+    { id:'c', t:'安全审计', p:'需要你确认：产物放 content/B/？', st:'need' },
+    { id:'d', t:'coding', p:'（空闲）上次：跑数据回流脚本', st:'idle' },
+  ]},
+]
+const META = { run:['🏃 工作中','run'], need:['🙋 待决定','need'], idle:['💤','idle'] }
+let cur = 'a'
+const CONV = {
+  a: [['ai','早，今天有 2 条发布待终审、3 条评论待回。要我先把「插件开发」那条评论起草发出去吗？'],
+      ['me','先把微博那条发了，其余我看看'],
+      ['ai','已起草并预填，点「发送」即写回微博。另：调研台抓到一条高赞线程，要不要进知识库？','','存为灵感']],
+  b: [['ai','已接单：竞品周报 #12（PPT）。按验收：逐页标题+要点≤5+可预览 html。'],['ai','大纲 P1-P6 已完成，正在排版 P3 表格页…']],
+  c: [['ai','需要你确认：产物放 content/B/ 还是新建 content/exp-b/？']],
+  d: [],
+}
+function renderSess() {
+  document.getElementById('sess').innerHTML = GROUPS.map(G =>
+    `<div class="sgrp">${G.g}</div>` + G.list.map(s => `
+    <div class="sess ${s.id === cur ? 'on' : ''}" onclick="pick('${s.id}')">
+      <span class="si"><div class="st">${s.t}</div><div class="sp">${s.p}</div></span>
+      ${s.rt ? `<span class="srt">${s.rt}</span>` : ''}
+      <span class="sbadge ${META[s.st][1]}">${META[s.st][0]}</span>
+    </div>`).join('')).join('')
+    + '<button class="btn-mini newsess" onclick="newSess()">＋ 新建会话（cwd=当前台项目夹）</button>'
+}
+function renderConv() {
+  const c = CONV[cur] || []
+  document.getElementById('dbody').innerHTML = c.length === 0
+    ? '<div class="hint" style="text-align:center;margin-top:30px">（空会话——发第一条消息）</div>'
+    : c.map(m => `<div class="bub ${m[0]}">${m[1]}${m[3] ? `<div class="mini-acts"><button class="btn-mini" onclick="toast('✓ 已存为灵感 → 总台灵感流')">${m[3]}</button></div>` : ''}</div>`).join('')
+}
+function pick(id) { cur = id; renderSess(); renderConv() }
+function newSess() { toast('（工程实现：sessions.create({cwd: 当前台项目夹}) → open）') }
+function send() {
+  const el = document.getElementById('din'); const v = el.value.trim(); if (!v) return
+  CONV[cur].push(['me', v]); el.value = ''
+  renderConv()
+  setTimeout(() => { CONV[cur].push(['ai', '（演示原型——真实实现这里就是宿主会话本体：margin 挤位，模型回复、多会话切换、附件全部原生）']); renderConv() }, 500)
+}
+// 拖宽度
+const dv = document.getElementById('dv'), dock = document.getElementById('dock')
+const saved = localStorage.getItem('dk-v2-dockw'); if (saved) dock.style.width = saved + 'px'
+dv.addEventListener('pointerdown', (e) => { dv.classList.add('drag'); dv.setPointerCapture(e.pointerId)
+  const mv = (ev) => { dock.style.width = Math.min(innerWidth * .46, Math.max(300, innerWidth - ev.clientX)) + 'px' }
+  const up = () => { dv.classList.remove('drag'); dv.removeEventListener('pointermove', mv); localStorage.setItem('dk-v2-dockw', dock.getBoundingClientRect().width) }
+  dv.addEventListener('pointermove', mv); dv.addEventListener('pointerup', up) })
+dv.addEventListener('dblclick', () => { dock.style.width = '400px'; localStorage.removeItem('dk-v2-dockw') })
+function hideDock() { dock.classList.add('hide'); dv.style.display = 'none'; document.getElementById('reopen').style.display = 'block' }
+function showDock() { dock.classList.remove('hide'); dv.style.display = ''; document.getElementById('reopen').style.display = 'none' }
+let tt; function toast(m) { const t = document.getElementById('toast'); t.textContent = m; t.classList.add('show'); clearTimeout(tt); tt = setTimeout(() => t.classList.remove('show'), 2100) }
+renderSess(); renderConv()
+</script>
+</body>
+</html>
