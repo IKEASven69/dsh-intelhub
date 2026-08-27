@@ -18,6 +18,24 @@ body.v3 { --bg:#0e0a06; --panel:rgba(255,200,120,.055); --panel2:rgba(255,200,12
   --ink:#fff3e0; --ink2:#c4a779; --acc:#fbbf24; --acc2:#fb923c; --grad:linear-gradient(135deg,#fbbf24,#fb923c);
   --aur1:rgba(251,191,36,.13); --aur2:rgba(251,146,60,.10); --aur3:rgba(120,53,15,.22); --ok:#a3e635; --warn:#fbbf24; --bad:#f87171; --busy:#fdba74; }
 
+/* ═══ 赛博三变体（取自 style-lab3 D/E/F）═══ */
+body.v4 { --bg:#080d09; --panel:rgba(57,255,110,.05); --panel2:rgba(57,255,110,.09); --line:rgba(47,107,60,.45); --line2:rgba(57,255,110,.55);
+  --ink:#c8f2cf; --ink2:#6fa07a; --acc:#39ff6e; --acc2:#6ee7ff; --grad:linear-gradient(135deg,#39ff6e,#6ee7ff);
+  --aur1:rgba(57,255,110,.16); --aur2:rgba(110,231,255,.12); --aur3:rgba(20,60,30,.22); --ok:#39ff6e; --warn:#ffcc00; --bad:#ff5555; --busy:#6ee7ff; }
+body.v5 { --bg:#0b0b10; --panel:rgba(252,238,10,.05); --panel2:rgba(252,238,10,.09); --line:rgba(42,42,58,.9); --line2:rgba(252,238,10,.6);
+  --ink:#f2f2f8; --ink2:#8a8aa0; --acc:#fcee0a; --acc2:#00f0ff; --grad:linear-gradient(135deg,#fcee0a,#00f0ff);
+  --aur1:rgba(252,238,10,.14); --aur2:rgba(0,240,255,.12); --aur3:rgba(40,20,60,.22); --ok:#00f0aa; --warn:#fcee0a; --bad:#ff3d5e; --busy:#00f0ff; }
+body.v6 { --bg:#f6f1e7; --panel:rgba(176,58,46,.04); --panel2:rgba(176,58,46,.08); --line:rgba(189,171,146,.7); --line2:rgba(176,58,46,.5);
+  --ink:#26211a; --ink2:#7a705d; --acc:#b03a2e; --acc2:#8a6d3b; --grad:linear-gradient(135deg,#b03a2e,#8a6d3b);
+  --aur1:rgba(176,58,46,.10); --aur2:rgba(138,109,59,.08); --aur3:rgba(120,90,50,.12); --ok:#3d7a4f; --warn:#b07d10; --bad:#a93226; --busy:#2e6f8e; }
+
+/* 赛博主题装饰 */
+body.v4 .sec::before { content:'┌ '; color:var(--acc); font-family:ui-monospace,monospace; }
+body.v4 .sec::after { content:' ┐'; color:var(--acc); font-family:ui-monospace,monospace; }
+body.v5 .sec::before { content:'// '; color:var(--acc); font-family:ui-monospace,monospace; }
+body.v5 .glass, body.v5 .ccard, body.v5 .kdb, body.v5 .msg, body.v5 .pill, body.v5 .stat, body.v5 .btn-pri, body.v5 .btn-gho, body.v5 .btn-mini, body.v5 .icard, body.v5 .fitem, body.v5 .toast, body.v5 .pcol, body.v5 .pcard, body.v5 .col, body.v5 .cday, body.v5 .cal, body.v5 .funnel, body.v5 .topstat { border-radius:6px; }
+body.v5 .glass::before { background:linear-gradient(90deg,transparent,var(--acc2),transparent); }
+
 .aur { position:fixed; inset:0; z-index:0; overflow:hidden; pointer-events:none; }
 .aur i { position:absolute; border-radius:50%; filter:blur(90px); opacity:.85; animation:drift 26s ease-in-out infinite alternate; }
 .aur i:nth-child(1){width:56vw;height:56vw;left:-10vw;top:-22vw;background:var(--aur1);}
@@ -169,13 +187,46 @@ body.v3 { --bg:#0e0a06; --panel:rgba(255,200,120,.055); --panel2:rgba(255,200,12
 .dock .dinput input { flex:1; background:color-mix(in srgb,var(--bg) 60%,transparent); border:1px solid var(--line); border-radius:10px; color:var(--ink); padding:9px 12px; font:14px system-ui; outline:none; }
 .dock .dinput input:focus { border-color:var(--acc); }
 
-.switch { display:inline-flex; align-items:center; gap:6px; margin-left:12px; padding-left:12px; border-left:1px solid var(--line); }
-.switch button { border:none; border-radius:999px; padding:5px 14px; cursor:pointer; font:600 13px system-ui; background:var(--panel); color:var(--ink2); }
-.switch button.on { background:var(--grad); color:#fff; box-shadow:0 0 16px color-mix(in srgb,var(--acc) 45%,transparent); }
+/* 左栏主题点切换器 */
+.themes { display:flex; flex-direction:column; gap:8px; align-items:center; padding-top:12px; }
+.tdot { width:21px; height:21px; border-radius:50%; border:2px solid rgba(255,255,255,.22); cursor:pointer; padding:0; transition:.15s; }
+.tdot:hover { transform:scale(1.14); }
+.tdot.on { border-color:#fff; box-shadow:0 0 0 2px var(--bg), 0 0 12px 1px currentColor; }
 
 /* 操作反馈 toast */
 .toast { position:fixed; left:50%; bottom:34px; transform:translateX(-50%) translateY(20px); background:var(--panel2); border:1px solid var(--line2); color:var(--ink); border-radius:14px; padding:11px 20px; font-size:14px; backdrop-filter:blur(18px); box-shadow:0 14px 44px rgba(0,0,0,.5), 0 0 22px color-mix(in srgb,var(--acc) 18%,transparent); opacity:0; pointer-events:none; transition:.25s; z-index:30; max-width:80vw; }
 .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+
+/* 知识库：四库 + 来源分组 */
+.kbtool { gap:10px; flex-wrap:wrap; align-items:center; }
+.libtabs { display:inline-flex; gap:6px; }
+.libtab, .srcchip, .tschip { border:1px solid var(--line); background:var(--panel); color:var(--ink2); border-radius:999px; padding:5px 13px; cursor:pointer; font-size:13px; transition:.15s; }
+.libtab.on, .srcchip.on, .tschip.on { background:var(--grad); color:#fff; border-color:transparent; box-shadow:0 0 14px color-mix(in srgb,var(--acc) 40%,transparent); }
+.kblist { display:flex; flex-direction:column; gap:10px; margin-top:4px; }
+.kgrp { font-size:12.5px; color:var(--ink2); margin:8px 0 2px; font-family:ui-monospace,monospace; }
+.kitem { background:var(--panel2); border:1px solid var(--line); border-radius:12px; padding:10px 13px; }
+.kh { display:flex; align-items:center; gap:6px; }
+.kitem b { font-size:14.5px; }
+.srctag { font-size:11px; border:1px solid var(--line2); color:var(--acc); border-radius:999px; padding:1px 9px; margin-left:8px; }
+.ktime { font-size:11.5px; color:var(--ink2); margin-left:auto; font-family:ui-monospace,monospace; }
+.kprev { font-size:12.5px; color:var(--ink2); margin-top:6px; }
+.pdot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:4px; }
+.pdot.pP0 { background:#ff3d5e; box-shadow:0 0 8px #ff3d5e; }
+.pdot.pP1 { background:var(--warn); }
+.pdot.pP2 { background:var(--busy); }
+.pdot.pP3 { background:var(--ink2); }
+/* 内容台详情工作台 */
+.cwork { margin-top:14px; padding:14px 16px; display:flex; flex-direction:column; gap:12px; }
+.cwhead { display:flex; align-items:center; gap:12px; }
+.cwtabs { display:flex; gap:6px; margin-left:auto; }
+.cwtab { border:1px solid var(--line); background:var(--panel); color:var(--ink2); border-radius:9px; padding:5px 13px; cursor:pointer; font-size:13px; }
+.cwtab.on { background:var(--grad); color:#fff; border-color:transparent; }
+.cwbody { min-height:150px; }
+.cwed { width:100%; height:200px; resize:vertical; background:color-mix(in srgb,var(--bg) 60%,transparent); border:1px solid var(--line); border-radius:12px; color:var(--ink); padding:12px 15px; font:14px system-ui; outline:none; }
+.cwprev { font-size:14px; } .cwprev h3 { margin:0 0 8px; }
+/* 总台任务筛选 */
+.tsort { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:12px 0 10px; }
+.inp.sm { min-width:160px; padding:7px 12px; font-size:13px; }
 </style>
 </head>
 <body class="v2">
@@ -189,7 +240,16 @@ body.v3 { --bg:#0e0a06; --panel:rgba(255,200,120,.055); --panel2:rgba(255,200,12
     <button class="rbtn" data-d="content"><span class="i">🎬</span><span class="t">内容台</span></button>
     <button class="rbtn" data-d="kb"><span class="i">🧠</span><span class="t">知识库</span></button>
     <button class="rbtn" data-d="research"><span class="i">📡</span><span class="t">调研台</span></button>
-    <button class="rbtn" data-d="msg"><span class="i">💬</span><span class="t">消息台</span></button>
+      <button class="rbtn" data-d="msg"><span class="i">💬</span><span class="t">消息台</span></button>
+      <span style="flex:1"></span>
+      <div class="themes">
+        <button class="tdot" data-s="v1" title="深空青" style="background:#2dd4ff;color:#2dd4ff"></button>
+        <button class="tdot" data-s="v2" title="极光紫" style="background:#c084fc;color:#c084fc"></button>
+        <button class="tdot" data-s="v3" title="熔金暗港" style="background:#fbbf24;color:#fbbf24"></button>
+        <button class="tdot" data-s="v4" title="终端绿" style="background:#39ff6e;color:#39ff6e"></button>
+        <button class="tdot" data-s="v5" title="赛博黄青" style="background:#fcee0a;color:#fcee0a"></button>
+        <button class="tdot" data-s="v6" title="复古纸感" style="background:#b03a2e;color:#b03a2e"></button>
+      </div>
   </div>
 
   <!-- 主区 -->
@@ -207,11 +267,7 @@ body.v3 { --bg:#0e0a06; --panel:rgba(255,200,120,.055); --panel2:rgba(255,200,12
       <span class="s">🔄 模型可切换</span>
       <span style="flex:1"></span>
       <span class="s">最后同步 2 分钟前</span>
-      <div class="switch">
-        <button data-s="v1">深空青</button>
-        <button data-s="v2" class="on">极光紫</button>
-        <button data-s="v3">熔金暗港</button>
-      </div>
+      <span class="s" id="themeName">🎨 极光紫</span>
     </div>
     <div class="zone">
 
@@ -235,20 +291,32 @@ body.v3 { --bg:#0e0a06; --panel:rgba(255,200,120,.055); --panel2:rgba(255,200,12
           <button class="btn-mini" onclick="swView('cal')">日历</button>
         </div>
         <div id="hub-board">
+          <div class="tsort">
+            <input class="inp sm" id="taskSearch" placeholder="搜任务…" oninput="filterBoard()">
+            <span class="tschip on" data-f="全部" onclick="setFilter('全部',this)">全部</span>
+            <span class="tschip" data-f="今日" onclick="setFilter('今日',this)">今日截止</span>
+            <span class="tschip" data-f="本周" onclick="setFilter('本周',this)">本周</span>
+            <span class="tschip" data-p="P0" onclick="setPri('P0',this)">P0</span>
+            <span class="tschip" data-p="P1" onclick="setPri('P1',this)">P1</span>
+            <span class="tschip" data-p="P2" onclick="setPri('P2',this)">P2</span>
+            <span style="flex:1"></span>
+            <span class="tschip" data-sort="time" onclick="setSort('time',this)">时间↓</span>
+            <span class="tschip" data-sort="pri" onclick="setSort('pri',this)">优先级↓</span>
+          </div>
           <div class="board">
             <div class="col glass"><div class="colhead">🌱 种子<span class="n">2</span></div>
-              <div class="icard"><b>LESSONS 周报自动摘要</b><span>2026-08-25</span></div>
-              <div class="icard"><b>评论高赞反哺选题</b><span>2026-08-25</span></div></div>
+              <div class="icard" data-pri="P1" data-due="本周"><span class="pdot pP1"></span><b>LESSONS 周报自动摘要</b><span>2026-08-25</span></div>
+              <div class="icard" data-pri="P2" data-due=""><span class="pdot pP2"></span><b>评论高赞反哺选题</b><span>2026-08-25</span></div></div>
             <div class="col glass"><div class="colhead">🥚 孵化<span class="n">1</span></div>
-              <div class="icard"><b>预测市场中文科普系列</b><span>2026-08-24</span></div></div>
+              <div class="icard" data-pri="P1" data-due="今日"><span class="pdot pP1"></span><b>预测市场中文科普系列</b><span>2026-08-24</span></div></div>
             <div class="col glass"><div class="colhead">✍️ 创作<span class="n">1</span></div>
-              <div class="icard"><b>竞品周报 #12</b><span>agent工作中</span></div></div>
+              <div class="icard" data-pri="P2" data-due=""><span class="pdot pP2"></span><b>竞品周报 #12</b><span>agent工作中</span></div></div>
             <div class="col glass"><div class="colhead">✅ 待发<span class="n">2</span></div>
-              <div class="icard"><b>一页看懂 dsh 插件开发</b><span>PPT</span></div>
-              <div class="icard"><b>插件开发避坑清单</b><span>草稿</span></div></div>
+              <div class="icard" data-pri="P0" data-due="今日"><span class="pdot pP0"></span><b>一页看懂 dsh 插件开发</b><span>PPT</span></div>
+              <div class="icard" data-pri="P2" data-due=""><span class="pdot pP2"></span><b>插件开发避坑清单</b><span>草稿</span></div></div>
             <div class="col glass"><div class="colhead">📢 已发布<span class="n">3</span></div>
-              <div class="icard"><b>竞品周报 #11</b><span>微博✓</span></div>
-              <div class="icard"><b>预测市场入门</b><span>X✓</span></div></div>
+              <div class="icard" data-pri="P3" data-due=""><span class="pdot pP3"></span><b>竞品周报 #11</b><span>微博✓</span></div>
+              <div class="icard" data-pri="P3" data-due=""><span class="pdot pP3"></span><b>预测市场入门</b><span>X✓</span></div></div>
           </div>
         </div>
         <div id="hub-cal" style="display:none">
@@ -313,34 +381,48 @@ body.v3 { --bg:#0e0a06; --panel:rgba(255,200,120,.055); --panel2:rgba(255,200,12
             <div class="pcard" style="opacity:.7"><b>📊 竞品周报 #11</b><div class="meta"><span>08-18 微博✓</span></div></div>
             <div class="pcard" style="opacity:.7"><b>📝 预测市场入门</b><div class="meta"><span>08-11 X✓</span></div></div></div>
         </div>
-        <div class="sec">创作 / 编辑 / 素材 / 数据回流</div>
-        <div class="row">
-          <button class="btn-gho">✍️ 文章编辑器</button>
-          <button class="btn-gho">📊 PPT 编辑</button>
-          <button class="btn-gho">🎬 视频脚本</button>
-          <button class="btn-gho">🗂️ 素材管理</button>
-          <button class="btn-gho">📈 数据回流</button>
+        <div class="cwork glass" id="cwork">
+          <div class="cwhead">
+            <b id="cwTitle">未选中作品</b>
+            <span class="pill" id="cwMeta"></span>
+            <div class="cwtabs">
+              <button class="cwtab on" data-t="编辑" onclick="setCTab('编辑',this)">编辑器</button>
+              <button class="cwtab" data-t="预览" onclick="setCTab('预览',this)">预览</button>
+              <button class="cwtab" data-t="素材" onclick="setCTab('素材',this)">素材</button>
+              <button class="cwtab" data-t="回流" onclick="setCTab('回流',this)">数据回流</button>
+            </div>
+          </div>
+          <div class="cwbody" id="cwBody"><span class="hint">↑ 点上方任一卡片，在此打开它的工作台</span></div>
         </div>
-        <div class="row" style="margin-top:6px"><span class="hint">⚠️ 公开评论回复已统一收进「消息台」，内容台只管发布/创作</span></div>
+        <div class="row" style="margin-top:6px"><span class="hint">⚠️ 公开评论回复已统一收进「消息台」，内容台只管发布/创作 · 点上方卡片在下方工作台打开</span></div>
       </div>
 
       <!-- ═══ 知识库 ═══ -->
       <div class="desk" id="kb">
-        <div class="row">
-          <input class="inp" placeholder="全文搜索 5486 篇（中文子串可查）…">
-          <button class="btn-pri">🔍 检索</button>
-          <button class="btn-gho">📚 四库导航</button>
-          <span class="pill" style="margin-left:8px">🧠 你的本地上下文脊柱</span>
+        <div class="row kbtool">
+          <input class="inp" id="kbSearch" placeholder="全文搜索 5486 篇（中文子串可查）…">
+          <button class="btn-pri" onclick="showToast('🔍 检索中…')">🔍 检索</button>
+          <div class="libtabs">
+            <button class="libtab on" data-lib="采集" onclick="setLib('采集',this)">采集库</button>
+            <button class="libtab" data-lib="提炼" onclick="setLib('提炼',this)">提炼库</button>
+            <button class="libtab" data-lib="学习" onclick="setLib('学习',this)">学习库</button>
+            <button class="libtab" data-lib="复盘" onclick="setLib('复盘',this)">复盘库</button>
+          </div>
+          <span style="flex:1"></span>
+          <span class="pill">🧠 你的本地上下文脊柱</span>
         </div>
-        <div class="split">
+        <div class="row" style="margin-top:10px">
+          <span class="srcchip on" data-src="全部" onclick="setSrc('全部',this)">全部来源</span>
+          <span class="srcchip" data-src="X" onclick="setSrc('X',this)">X</span>
+          <span class="srcchip" data-src="微博" onclick="setSrc('微博',this)">微博</span>
+          <span class="srcchip" data-src="知乎" onclick="setSrc('知乎',this)">知乎</span>
+          <span class="srcchip" data-src="网页" onclick="setSrc('网页',this)">网页</span>
+          <span class="srcchip" data-src="手输" onclick="setSrc('手输',this)">手输</span>
+        </div>
+        <div class="split" style="margin-top:12px">
           <div class="kdb glass">
-            <div class="sec">采集 → 提炼 → 学习 → 复盘</div>
-            <div class="col" style="padding:0;min-height:0">
-              <div class="icard"><b>📥 采集：zcode 调研 → 候选</b><span>待落库 5</span></div>
-              <div class="icard"><b>🧪 提炼：人工勾选落库</b><span>本周 12</span></div>
-              <div class="icard"><b>📖 学习：复习队列（间隔重复）</b><span>新 8</span></div>
-              <div class="icard"><b>🧾 复盘：insights 到期提醒</b><span>待验证 2</span></div>
-            </div>
+            <div class="sec" id="kbLibTitle">采集库 · 按来源分组</div>
+            <div id="kblist" class="kblist"></div>
             <div class="sec">关注人 <span class="tag">追踪名单 · 喂调研台</span></div>
             <div class="feed">
               <div class="fitem"><div class="fh"><b>@LinXin</b><span>前端/构建工具</span></div><div class="ft">新动态：tsdown 又改了摇树规则</div></div>
@@ -452,10 +534,98 @@ const act = (btn, dest) => {
 const toKB = (btn) => { if (btn.dataset.done) return; btn.dataset.done = '1'; btn.textContent = '✓ 已入知识库'; btn.disabled = true; showToast('✓ 已写入知识库（采集候选 +1）'); }
 let toastTimer;
 const showToast = (m) => { const t = document.getElementById('toast'); t.textContent = m; t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2200); }
+const themeNames = { v1:'深空青', v2:'极光紫', v3:'熔金暗港', v4:'终端绿', v5:'赛博黄青', v6:'复古纸感' }
 const saved = localStorage.getItem('dk-skin2') || 'v2'; document.body.className = saved
-const sync = () => document.querySelectorAll('.switch button').forEach(b => b.classList.toggle('on', b.dataset.s === document.body.className))
-document.querySelectorAll('.switch button').forEach(b => b.onclick = () => { document.body.className = b.dataset.s; localStorage.setItem('dk-skin2', b.dataset.s); sync() })
+const sync = () => { const cur = document.body.className; document.querySelectorAll('.tdot').forEach(b => b.classList.toggle('on', b.dataset.s === cur)); const tn = document.getElementById('themeName'); if (tn) tn.textContent = '🎨 ' + (themeNames[cur] || cur); }
+document.querySelectorAll('.tdot').forEach(b => b.onclick = () => { document.body.className = b.dataset.s; localStorage.setItem('dk-skin2', b.dataset.s); sync() })
 sync()
+
+// ── 知识库：四库 + 来源分组 ──
+let kbQ = '';
+const kbState = { lib:'采集', src:'全部' };
+const kbData = {
+  采集:[
+    {t:'zcode 调研线程', src:'X', time:'2h', pri:'P1', sum:'agent 评测高估的线程，高赞'},
+    {t:'豆包工作台对比', src:'微博', time:'5h', pri:'P2', sum:'workbuddy 管全家爆文，评论对比豆包'},
+    {t:'预测市场知乎问答', src:'知乎', time:'1d', pri:'P3', sum:'中文科普需求强，适合系列'},
+    {t:'OpenCLI 写回文档', src:'网页', time:'2d', pri:'P2', sum:'写回机制说明片段'},
+    {t:'手写灵感：Deck 落库', src:'手输', time:'3d', pri:'P1', sum:'九、Deck 落库结论待验证'}
+  ],
+  提炼:[
+    {t:'GLM-5 舆论反馈', src:'微博', time:'1h', pri:'P1', sum:'正面为主，需验证样本'},
+    {t:'开发者生态位', src:'X', time:'4h', pri:'P1', sum:'口碑护城河论点'},
+    {t:'间隔复习队列', src:'手输', time:'6h', pri:'P3', sum:'本周新 8 条入队'},
+    {t:'知乎高赞摘录', src:'知乎', time:'1d', pri:'P2', sum:'个人工作台讨论'}
+  ],
+  学习:[
+    {t:'tsdown 摇树规则', src:'网页', time:'3h', pri:'P2', sum:'构建工具更新笔记'},
+    {t:'agent 评测有效性', src:'X', time:'8h', pri:'P1', sum:'质疑自评高估'},
+    {t:'阅读《心智社会》', src:'手输', time:'2d', pri:'P3', sum:'agent 社会章节'}
+  ],
+  复盘:[
+    {t:'Deck 落库结论', src:'手输', time:'12h', pri:'P1', sum:'待验证到期'},
+    {t:'竞品周报转化', src:'微博', time:'1d', pri:'P2', sum:'转化 75% 复盘'},
+    {t:'insights 到期', src:'X', time:'2d', pri:'P1', sum:'2 条待验证'}
+  ]
+};
+const kbitem = i => `<div class="kitem"><div class="kh"><span class="pdot p${i.pri}"></span><b>${i.t}</b><span class="srctag">${i.src}</span><span class="ktime">${i.time}</span></div><div class="kprev">${i.sum}</div></div>`;
+function renderKB(){
+  const items = kbData[kbState.lib].filter(i => (kbState.src==='全部'||i.src===kbState.src) && (!kbQ || (i.t+i.sum).toLowerCase().includes(kbQ)));
+  const list = document.getElementById('kblist');
+  if(kbState.src!=='全部'){ list.innerHTML = items.map(kbitem).join(''); return; }
+  const g = {}; items.forEach(i => (g[i.src]=g[i.src]||[]).push(i));
+  list.innerHTML = Object.keys(g).map(s => `<div class="kgrp">📎 ${s}</div>`+g[s].map(kbitem).join('')).join('');
+}
+function setLib(l, el){ kbState.lib=l; document.querySelectorAll('#kb .libtab').forEach(x=>x.classList.toggle('on',x===el)); document.getElementById('kbLibTitle').textContent=l+'库 · 按来源分组'; renderKB(); }
+function setSrc(s, el){ kbState.src=s; document.querySelectorAll('#kb .srcchip').forEach(x=>x.classList.toggle('on',x===el)); renderKB(); }
+const kbSearch = document.getElementById('kbSearch'); if(kbSearch) kbSearch.oninput = e => { kbQ = e.target.value.trim().toLowerCase(); renderKB(); };
+
+// ── 内容台：选中作品详情工作台 ──
+const cwork = { title:'', tab:'编辑' };
+function selPiece(el){ cwork.title = el.querySelector('b').textContent; const m = el.querySelector('.meta'); document.getElementById('cwTitle').textContent = cwork.title; document.getElementById('cwMeta').textContent = m?m.textContent.trim():''; renderCWork(); }
+function setCTab(t, el){ cwork.tab=t; document.querySelectorAll('#content .cwtab').forEach(x=>x.classList.toggle('on',x===el)); renderCWork(); }
+function renderCWork(){
+  const body = document.getElementById('cwBody');
+  if(!cwork.title){ body.innerHTML='<span class="hint">↑ 点上方任一卡片，在此打开它的工作台</span>'; return; }
+  const t = cwork.title;
+  const map = {
+    编辑:`<textarea class="cwed"># ${t}\n\n（自动带入知识库上下文）\n</textarea>`,
+    预览:`<div class="cwprev"><h3>${t}</h3><p>发布前 Markdown 预览，配图位自动从素材库拉取。</p></div>`,
+    素材:`<div class="row"><span class="pill">封面-赛博A</span><span class="pill">配图 ×3</span><span class="pill">数据图-转化</span><button class="btn-mini" onclick="showToast('✓ 已取素材')">＋ 取素材</button></div>`,
+    回流:`<div class="funnel" style="margin-top:8px"><div class="fstep"><b>0</b><span>阅读</span></div><span class="farrow">→</span><div class="fstep"><b>0</b><span>赞</span></div><span class="farrow">→</span><div class="fstep"><b>0</b><span>评论</span></div><span class="hint" style="margin-left:auto">发布后实时回流</span></div>`
+  };
+  body.innerHTML = map[cwork.tab] || '';
+}
+document.querySelectorAll('#content .pcard').forEach(p => p.onclick = () => selPiece(p));
+
+// ── 总台任务：时间 / 优先级 ──
+const taskState = { f:'全部', p:'', sort:'', q:'' };
+const priRank = { P0:0, P1:1, P2:2, P3:3 };
+const dtOf = s => { const m=(s||'').match(/2026-\d\d-\d\d/); return m?m[0]:'0000-00-00'; };
+function sortBoard(){
+  if(!taskState.sort) return;
+  document.querySelectorAll('#hub-board .col').forEach(col => {
+    const items = [...col.querySelectorAll('.icard')];
+    items.sort((a,b)=> taskState.sort==='pri' ? priRank[a.dataset.pri]-priRank[b.dataset.pri] : dtOf(b.querySelector('span:not(.pdot)')?.textContent).localeCompare(dtOf(a.querySelector('span:not(.pdot)')?.textContent)));
+    items.forEach(it => col.appendChild(it));
+  });
+}
+function filterBoard(){
+  const q = (document.getElementById('taskSearch')?.value||'').trim().toLowerCase();
+  document.querySelectorAll('#hub-board .icard').forEach(c => {
+    const due=c.dataset.due||'', pri=c.dataset.pri||'', txt=c.textContent.toLowerCase();
+    let ok=true;
+    if(taskState.f==='今日' && due!=='今日') ok=false;
+    if(taskState.f==='本周' && due!=='今日' && due!=='本周') ok=false;
+    if(taskState.p && pri!==taskState.p) ok=false;
+    if(q && !txt.includes(q)) ok=false;
+    c.style.display = ok?'':'none';
+  });
+}
+function setFilter(f, el){ taskState.f=f; document.querySelectorAll('#hub-board .tschip[data-f]').forEach(x=>x.classList.toggle('on',x===el)); filterBoard(); }
+function setPri(p, el){ taskState.p = taskState.p===p?'':p; document.querySelectorAll('#hub-board .tschip[data-p]').forEach(x=>x.classList.toggle('on',x===el && taskState.p===p)); filterBoard(); }
+function setSort(s, el){ taskState.sort = taskState.sort===s?'':s; document.querySelectorAll('#hub-board .tschip[data-sort]').forEach(x=>x.classList.toggle('on',x===el && taskState.sort===s)); sortBoard(); filterBoard(); }
+renderKB(); filterBoard();
 </script>
 </body>
 </html>

@@ -255,23 +255,49 @@ export function apply(ctx: Context, config: Config): void {
 
   /** 起终端跑 zcode；失败降级为返回可复制命令。 */
   async function launchZcode(folder: string): Promise<{ ok: boolean, mode: string, command: string, folder: string }> {
-    const zcodeCli = resolve(config?.zcodeCli ?? ZCODE_CLI_DEFAULT)
-    const zcmd = `"${process.execPath}" "${zcodeCli}"`
-    const command = `cd /d "${folder}" && ${zcmd}`
+    const st = store.get() as DeckState & { launcher?: { cli?: string, customCmd?: string, cwd?: string } }
+    const pref = st.launcher ?? {}
+    const cli = pref.cli === 'zcode' || pref.cli === 'custom' ? pref.cli : 'opencode'
+    const cwd = typeof pref.cwd === 'string' && pref.cwd.trim() !== '' ? resolve(pref.cwd) : (cli === 'opencode' ? resolve('D:/coding') : folder)
+    let cmd: string
+    if (cli === 'zcode') cmd = `"${process.execPath}" "${resolve(config?.zcodeCli ?? ZCODE_CLI_DEFAULT)}"`
+    else if (cli === 'custom') cmd = typeof pref.customCmd === 'string' && pref.customCmd.trim() !== '' ? pref.customCmd : 'opencode'
+    else cmd = 'opencode'
+    const command = `cd /d "${cwd}" && ${cmd}`
     let mode = 'clipboard'
     if (process.platform === 'win32') {
       try {
-        const line = `start "dsh-deck zcode" /D "${folder}" cmd /K ${zcmd}`
+        const line = `start "dsh-deck agent" /D "${cwd}" cmd /K ${cmd}`
         const t0 = Date.now()
         const child = spawn('cmd.exe', ['/d', '/s', '/c', line], { detached: true, stdio: 'ignore' })
         child.on('error', (e) => { ctx.logger.warn(`dsh-deck dispatch child error: ${e.message}`) })
         child.unref()
-        ctx.logger.info(`dsh-deck dispatch spawned in ${Date.now() - t0}ms`)
+        ctx.logger.info(`dsh-deck dispatch (${cli}) spawned in ${Date.now() - t0}ms`)
         mode = 'terminal'
       } catch (e) { ctx.logger.warn(`dsh-deck dispatch spawn threw: ${e instanceof Error ? e.message : String(e)}`) }
     }
-    return { ok: true, mode, command, folder }
+    return { ok: true, mode, command, folder: cwd }
   }
+
+  /** 启动器偏好（存 deck.json：cli=opencode|zcode|custom + cwd + customCmd）。 */
+  reg('exact', '/api/deck/launcher', (req, res) => {
+    if (!guard(req, res)) return
+    if (req.method === 'GET') { sendJson(res, 200, { ok: true, launcher: (store.get() as DeckState & { launcher?: object }).launcher ?? { cli: 'opencode', cwd: 'D:/coding' } }); return }
+    void (async () => {
+      const body = await readJsonBody(req, 8 * 1024)
+      if (body === null || typeof body !== 'object') { sendJson(res, 400, { ok: false, error: 'body 非法' }); return }
+      const { cli, cwd, customCmd } = body as Record<string, unknown>
+      const c = cli === 'zcode' || cli === 'custom' ? cli : 'opencode'
+      const st = store.get() as DeckState & { launcher?: object }
+      st.launcher = {
+        cli: c,
+        cwd: typeof cwd === 'string' ? cwd.slice(0, 512) : 'D:/coding',
+        ...(typeof customCmd === 'string' && customCmd.trim() !== '' ? { customCmd: customCmd.slice(0, 512) } : {}),
+      }
+      store.set(st)
+      sendJson(res, 200, { ok: true, launcher: st.launcher })
+    })()
+  })
 
   // ── D4：自媒体台内容层 ──
   const contentFs: ContentFs = {

@@ -36,6 +36,8 @@ window.__ModuleLoader__.load({
       contentHandoff: (slug) => post('/api/deck/content/handoff', { slug }),
       prefill: (slug, platform) => post('/api/deck/publish/prefill', { slug, platform }),
       publishRecord: (slug, platform, link) => post('/api/deck/publish/record', { slug, platform, link }),
+      launcherGet: () => get('/api/deck/launcher'),
+      launcherSet: (x) => post('/api/deck/launcher', x),
       projectCreate: (input) => post('/api/deck/project/create', input),
       projectUpdate: (id, patch) => post('/api/deck/project/update', Object.assign({ id }, patch)),
     }
@@ -143,7 +145,7 @@ window.__ModuleLoader__.load({
     }
 
     // ── 文件浏览（kb 四库 / 通用项目共用）──
-    const LAYERS = [['', '🏠 根目录'], ['collections', '① 采集'], ['research', '② 事实'], ['insights', '③ 判断'], ['skills', '④ 方法论'], ['ideas', '⑤ 点子']]
+    const LAYERS = [['', '🏠 根目录'], ['collections', '① 采集原料'], ['research', '② 事实核查'], ['insights', '③ 判断沉淀'], ['skills', '④ 方法论'], ['ideas', '⑤ 点子池']]
 
     function FsBrowse({ root, base, layers }) {
       const [dir, setDir] = useState(base)
@@ -449,10 +451,11 @@ window.__ModuleLoader__.load({
         : h('iframe', { sandbox: '', srcDoc: html, className: 'dk-frame' }))
     }
 
-    const KB_TABS = [['search', '🔍 搜索'], ['browse', '📚 四库'], ['ideas', '💡 点子'], ['tasks', '📋 任务'], ['review', '🧾 审阅'], ['lessons', '🔁 复盘']]
+    const KB_TABS = [['search', '🔍 搜索'], ['browse', '📚 文库'], ['ideas', '💡 点子'], ['tasks', '📋 任务'], ['review', '🧾 审阅'], ['lessons', '🔁 复盘']]
 
     function KnowledgeDesk() {
       const [tab, setTab] = useState('search')
+      kbGoTab = setTab
       return h('div', { className: 'dk-desk' },
         h('div', { className: 'dk-deskbar' }, KB_TABS.map(([id, label]) =>
           h('button', { key: id, className: tab === id ? 'on' : '', onClick: () => setTab(id) }, label))),
@@ -700,7 +703,24 @@ window.__ModuleLoader__.load({
         else if (typeof s.subscribe === 'function') { try { s.subscribe(eatSessions) } catch {} }
       } catch { /* 无会话 API 则跳过绑定功能 */ }
     }
-    function openSession(id) { try { deckCtx && deckCtx.sessions && deckCtx.sessions.open && deckCtx.sessions.open(id) } catch {} }
+    async function promptIntoSession(sessionId, text) {
+  const b = deckCtx
+  if (!b) throw new Error('bridge unavailable')
+  const sessions = b.sessions
+  let session = null
+  for (let i = 0; i < 10; i++) {
+    try { session = sessions && sessions.binding ? sessions.binding(sessionId)?.session ?? null : null } catch { session = null }
+    if (session) break
+    await new Promise((r) => setTimeout(r, 200))
+  }
+  if (session) {
+    if (b.conversation && typeof b.conversation.sendSession === 'function') { try { await b.conversation.sendSession(session, text, [], 'queue'); return } catch {} }
+    if (typeof session.prompt === 'function') { const r = await session.prompt([{ type: 'text', text }], 'queue'); if (r && r.ok) return }
+  }
+  try { const scoped = sessions && sessions.scope ? sessions.scope(sessionId) : null; const conv = scoped ? scoped.get('conversation') : null; if (conv && typeof conv.send === 'function') { await conv.send(text); return } } catch {}
+  throw new Error('no send path')
+}
+function openSession(id) { try { deckCtx && deckCtx.sessions && deckCtx.sessions.open && deckCtx.sessions.open(id) } catch {} }
     async function createSessionFor(folder) {
       if (!(deckCtx && deckCtx.sessions && typeof deckCtx.sessions.create === 'function')) throw new Error('此 dsh 版本不支持从插件建会话')
       return await deckCtx.sessions.create({ cwd: folder })
@@ -982,9 +1002,125 @@ window.__ModuleLoader__.load({
       )
     }
 
-    // ── 工作台外壳 ──
-    const APPS = [['kb', '🧠', '知识调研台'], ['media', '🎬', '自媒体台']]
+    // ── v4 总台：待办/进行中/灵感流 聚合 ──
+    function HubDesk() {
+      const [boards, setBoards] = useState(null)
+      const [items, setItems] = useState(null)
+      const [ideas, setIdeas] = useState(null)
+      const [msg, setMsg] = useState(null)
+      const reload = () => {
+        API.boards().then((j) => { if (j && j.ok) setBoards(j.boards) }).catch(() => {})
+        API.contentList().then((j) => { if (j && j.ok) setItems(j.items) }).catch(() => {})
+        API.ideas().then((j) => { if (j && j.ok) setIdeas(j.ideas) }).catch(() => {})
+      }
+      useEffect(() => { reload(); const t = setInterval(reload, 5000); return () => { clearInterval(t) } }, [])
+      const reviewCards = (boards ?? []).flatMap((b) => b.cards.filter((c) => c.status === 'review').map((c) => ({ b, c })))
+      const readyItems = (items ?? []).filter((i) => i.status === 'ready' || i.status === 'prefill')
+      const running = (boards ?? []).flatMap((b) => b.cards.filter((c) => c.status === 'running').map((c) => ({ b, c })))
+      const drafting = (items ?? []).filter((i) => i.status === 'idea' || i.status === 'drafting')
+      const seedIdeas = (ideas ?? []).filter((i) => i.status !== 'picked')
+      const goReview = () => { goDesk('kb'); if (kbGoTab) kbGoTab('review') }
+      const goItem = (slug) => { goDesk('content'); if (mediaGoItem) mediaGoItem(slug) }
+      return h('div', { className: 'dk-col' },
+        msg !== null ? h(Note, null, msg) : null,
+        reviewCards.length + readyItems.length === 0
+          ? h(Note, null, '✅ 没有待你决定的——agent 交活/内容待发会出现在这')
+          : h('div', { className: 'dk-col', style: { gap: 8 } },
+              reviewCards.map(({ b, c }) =>
+                h('div', { key: 'r' + b.id + c.id, className: 'dk-card dk-todo urgent', onClick: goReview },
+                  h('span', { className: 'ico' }, '🧾'), h('span', { className: 'nm' }, '审阅落库'),
+                  h('span', { className: 'pv' }, c.title + '（' + b.name + '）→ LESSONS'),
+                  h('button', { className: 'dk-mini', onClick: (e) => { e.stopPropagation(); goReview() } }, '去审阅'))),
+              readyItems.map((i) =>
+                h('div', { key: i.slug, className: 'dk-card dk-todo urgent', onClick: () => goItem(i.slug) },
+                  h('span', { className: 'ico' }, '📢'), h('span', { className: 'nm' }, '发布终审'),
+                  h('span', { className: 'pv' }, i.title + ' · 预填就绪'),
+                  h('button', { className: 'dk-mini', onClick: (e) => { e.stopPropagation(); goItem(i.slug) } }, '去点发')))),
+        h('div', { className: 'dk-toolbar' }, h('span', { className: 'dk-field-label' }, '🔁 进行中的件 · ' + (running.length + drafting.length))),
+        running.map(({ b, c }) =>
+          h('div', { key: 't' + b.id + c.id, className: 'dk-flowrow' },
+            h('span', { className: 'ftt' }, c.title),
+            h('div', { className: 'dk-steps' }, FLOW_STEPS.slice(1).map((st, k) => {
+              const real = k + 1, step = stepOfTask(c.status)
+              return h('span', { key: st },
+                h('span', { className: 'dk-step ' + (real < step ? 'done' : real === step ? 'now' : '') }, h('i', null, real < step ? '✓' : real + 1), st),
+                real < 4 ? h('span', { className: 'dk-stepline ' + (real < step ? 'done' : '') }) : null)
+            })),
+            c.status === 'queued' ? h('button', { className: 'dk-mini', onClick: () => { window.__dkDispatchProject = b.id; window.__dkNeedLaunch = (window.__dkLaunchSeen !== '1'); notify() } }, '🚀 派发') : null)),
+        drafting.map((i) =>
+          h('div', { key: i.slug, className: 'dk-flowrow' },
+            h('span', { className: 'ftt' }, i.title),
+            h('div', { className: 'dk-steps' }, FLOW_STEPS.map((st, k) => {
+              const step = stepOfContent(i.status)
+              return h('span', { key: st },
+                h('span', { className: 'dk-step ' + (k < step ? 'done' : k === step ? 'now' : '') }, h('i', null, k < step ? '✓' : k + 1), st),
+                k < 4 ? h('span', { className: 'dk-stepline ' + (k < step ? 'done' : '') }) : null)
+            })),
+            stepOfContent(i.status) === 3 ? h('button', { className: 'dk-mini', onClick: () => goItem(i.slug) }, '📢 去发布') : null)),
+        h('div', { className: 'dk-toolbar' }, h('span', { className: 'dk-field-label' }, '💡 灵感流 · ' + seedIdeas.length)),
+        h('div', { style: { display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 4 } },
+          seedIdeas.map((idea) =>
+            h('div', { key: idea.file, className: 'dk-card', style: { minWidth: 250, maxWidth: 250, cursor: 'default', flexShrink: 0 } },
+              h('div', { className: 'dk-card-title' }, idea.title),
+              h('div', { className: 'dk-card-sub' }, (idea.created || '') + ' · ' + idea.status),
+              h('div', { className: 'dk-card-actions' },
+                h('button', { className: 'dk-mini', onClick: () => API.adopt(idea.file, 'research').then((j) => { setMsg(j.ok ? '✓ 已升任务 → 调研台' : '失败：' + j.error); reload() }) }, '升任务'),
+                h('button', { className: 'dk-mini', onClick: () => { goDesk('kb'); if (kbGoTab) kbGoTab('ideas') } }, '看全部'))))),
+      )
+    }
+
+    function MsgDesk() {
+      return h('div', { className: 'dk-col' },
+        h(Note, null, '💬 消息台（下一版本）：各平台评论统一收件 + AI 起草 + opencli 写回原平台'),
+        h(Note, null, '当前先用平台通知页 + 内容详情的发布记录。'))
+    }
+
+    // 启动器弹窗
+    function LauncherModal({ project, onClose }) {
+      const [cli, setCli] = useState('opencode')
+      const [cwd, setCwd] = useState('D:/coding')
+      const [customCmd, setCustomCmd] = useState('')
+      const [msg, setMsg] = useState(null)
+      useEffect(() => { API.launcherGet().then((j) => { if (j && j.ok && j.launcher) { if (j.launcher.cli) setCli(j.launcher.cli); if (j.launcher.cwd) setCwd(j.launcher.cwd); if (j.launcher.customCmd) setCustomCmd(j.launcher.customCmd) } }).catch(() => {}) }, [])
+      const save = (dispatch) => {
+        API.launcherSet({ cli, cwd, customCmd }).then(async (j) => {
+          if (!j.ok) { setMsg('保存失败：' + j.error); return }
+          try { localStorage.setItem('dk-launcher-seen', '1'); window.__dkLaunchSeen = '1' } catch {}
+          if (dispatch) {
+            const r = await API.dispatch(project)
+            window.__deckLastCmd = r.command
+            setMsg(r.mode === 'terminal' ? '✓ 已开终端（' + cli + '）' : '命令已生成，复制运行')
+            onClose()
+          } else { setMsg('✓ 已保存'); setTimeout(onClose, 500) }
+        })
+      }
+      return h('div', { className: 'dk-modal-back', onClick: (e) => { if (e.target.className === 'dk-modal-back') onClose() } },
+        h('div', { className: 'dk-modal' },
+          h('div', { className: 'dk-modal-title' }, '🚀 发给 agent · 启动器'),
+          h('div', { className: 'dk-field' }, h('label', null, 'CLI'),
+            h('div', { className: 'dk-launchrow' }, ['opencode', 'zcode', 'custom'].map((c) =>
+              h('button', { key: c, className: 'dk-chip', style: cli === c ? { borderColor: 'var(--dk-accent)', color: 'var(--dk-accent)' } : {}, onClick: () => setCli(c) }, c === 'custom' ? '自定义命令' : c)))),
+          h('div', { className: 'dk-field' }, h('label', null, '启动目录'),
+            h('input', { value: cwd, onChange: (e) => setCwd(e.target.value), placeholder: 'D:/coding' })),
+          cli === 'custom' ? h('div', { className: 'dk-field' }, h('label', null, '命令'), h('input', { value: customCmd, onChange: (e) => setCustomCmd(e.target.value), placeholder: '如 claude' })) : null,
+          msg !== null ? h(Note, null, msg) : null,
+          h('div', { className: 'dk-modal-actions' },
+            h('button', { className: 'dk-ghost', onClick: onClose }, '取消'),
+            h('button', { className: 'dk-ghost', onClick: () => save(false) }, '仅保存'),
+            h('button', { onClick: () => save(true) }, '保存并派发'))),
+      )
+    }
+
+    // ── 工作台外壳（v4 五台）──
+    const APPS = [['hub', '🏠', '总台'], ['content', '🎬', '内容台'], ['kb', '🧠', '知识库'], ['research', '📡', '调研台'], ['msg', '💬', '消息台']]
+    const THEMES = [['glass', '#2dd4ff'], ['term', '#39ff6e'], ['cyber', '#fcee0a'], ['paper', '#d8c9a3']]
+    const FLOW_STEPS = ['灵感', '任务', '创作', '待发', '发布']
+    const stepOfTask = (st) => st === 'queued' ? 1 : (st === 'running' || st === 'review') ? 2 : 4
+    const stepOfContent = (st) => st === 'idea' ? 0 : st === 'drafting' ? 2 : (st === 'ready' || st === 'prefill') ? 3 : 4
+    let kbGoTab = null
+    let mediaGoItem = null
     let navigateApp = null
+    function goDesk(d) { if (!isOpen()) setOpen(true); if (navigateApp !== null) navigateApp(d) }
     function goProject(id) {
       if (!isOpen()) setOpen(true)
       if (navigateApp !== null) navigateApp(id === 'builtin-kb' ? 'kb' : id === 'builtin-media' ? 'media' : 'p:' + id)
@@ -1020,6 +1156,8 @@ window.__ModuleLoader__.load({
             h('span', { className: 'dk-rail-icon' }, p.icon || '📁'),
             h('span', { className: 'dk-rail-label' }, p.name.slice(0, 6)))),
         h('div', { className: 'dk-rail-fill' }),
+        h('div', { className: 'dk-thdots' }, THEMES.map(([id, color]) =>
+          h('button', { key: id, className: 'dk-thdot' + (themeStore.th === id ? ' on' : ''), style: { background: color, color }, title: '主题 ' + id, onClick: () => themeStore.set(id) }))),
         h('button', { className: 'dk-rail-btn' + (app === 'room' ? ' on' : ''), title: '控制室', onClick: () => setApp('room') },
           h('span', { className: 'dk-rail-icon' }, '🖥️'),
           h('span', { className: 'dk-rail-label' }, '控制室')),
@@ -1029,7 +1167,7 @@ window.__ModuleLoader__.load({
     }
 
     function Workspace() {
-      const [app, setApp] = useState('kb')
+      const [app, setApp] = useState('hub')
       const [, force] = useState(0)
       useEffect(() => {
         navigateApp = setApp
@@ -1047,14 +1185,49 @@ window.__ModuleLoader__.load({
           : null
       }
       const proj = app.startsWith('p:') ? (stateStore.projects.find((p) => p.id === app.slice(2)) ?? null) : null
-      return h('div', { className: 'dk-shell' },
+      return h('div', { className: 'dk-shell', 'data-th': themeStore.th, style: { '--dk-chatw': chatStore.w + 'px' } },
         h(Rail, { app, setApp }),
         h('div', { className: 'dk-main' },
-          app === 'kb' ? h(KnowledgeDesk)
-          : app === 'media' ? h(MediaDesk)
+          app === 'hub' ? h(HubDesk)
+          : app === 'content' ? h(MediaDesk)
+          : app === 'kb' ? h(KnowledgeDesk)
+          : app === 'research' ? h('div', { className: 'dk-desk' },
+              h('div', { className: 'dk-deskbar' },
+                h('button', { className: 'on' }, '📋 调研任务 · 知识库项目'),
+                h('span', { className: 'dk-fine', style: { alignSelf: 'center', marginLeft: 6 } }, 'TASK.md 队列 → 发给 agent → 审阅落库')),
+              h('div', { className: 'dk-deskmain' }, h(TaskBoard, { projectId: 'builtin-kb', onGoReview: () => { setApp('kb'); if (kbGoTab) kbGoTab('review') } })))
+          : app === 'msg' ? h(MsgDesk)
           : app === 'room' ? h(ControlRoom)
           : proj !== null ? h(GenericDesk, { project: proj })
           : h('div', { className: 'dk-empty' }, h('div', { className: 'dk-empty-title' }, '项目不存在（可能已删除）'))),
+        h(SessBar),
+        h('div', { className: 'dk-chatdiv', title: '拖动调右侧对话区宽度 · 双击复位', onPointerDown: (e) => {
+          const el = e.currentTarget
+          el.setPointerCapture(e.pointerId)
+          const mv = (ev) => { chatStore.setW(Math.min(window.innerWidth * .55, Math.max(280, window.innerWidth - ev.clientX))) }
+          const up = () => { el.removeEventListener('pointermove', mv); el.removeEventListener('pointerup', up) }
+          el.addEventListener('pointermove', mv); el.addEventListener('pointerup', up)
+        }, onDoubleClick: () => chatStore.setW(420) }),
+        window.__dkNeedLaunch ? h(LauncherModal, { project: window.__dkDispatchProject || 'builtin-kb', onClose: () => { window.__dkNeedLaunch = false; notify() } }) : null,
+      )
+    }
+
+    const themeStore = { th: (() => { try { return localStorage.getItem('dk-theme') || 'glass' } catch { return 'glass' } })(), set(t) { this.th = t; try { localStorage.setItem('dk-theme', t) } catch {} notify() } }
+    const chatStore = { w: Number(localStorage.getItem('dk-chatw')) || 420, setW(v) { this.w = Math.round(v); try { localStorage.setItem('dk-chatw', String(this.w)) } catch {} notify() } }
+
+    function SessBar() {
+      const rows = sessionsStore.ids.map((id) => sessionsStore.byId[id]).filter(Boolean)
+        .sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? ''))).slice(0, 12)
+      return h('div', { className: 'dk-sessbar' },
+        h('div', { className: 'sbh' }, '💬 会话'),
+        h('div', { className: 'sbl' },
+          rows.map((ss) =>
+            h('button', { key: ss.id, style: { textAlign: 'left', width: '100%', background: 'var(--color-bg-2)', border: '1px solid ' + (ss.id === sessionsStore.current ? 'var(--dk-accent)' : 'var(--color-border-1)'), color: 'inherit', borderRadius: 9, padding: '6px 10px', cursor: 'pointer', font: 'inherit' }, onClick: () => openSession(ss.id), title: ss.cwd || '' },
+              h('div', { style: { fontWeight: 600, fontSize: 12.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: ss.running ? 'var(--dk-accent)' : undefined } }, (ss.running ? '🏃 ' : '') + sessTitle(ss)),
+              h('div', { style: { fontSize: 10.5, opacity: .5, fontFamily: 'ui-monospace,monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, (ss.cwd || '').split(/[\/]/).pop() || ''))),
+          h('button', { className: 'dk-mini', style: { alignSelf: 'flex-start' }, onClick: async () => {
+            try { const sid = await createSessionFor('D:/coding'); openSession(sid) } catch (e) { window.alert(String((e && e.message) || e)) }
+          } }, '＋ 新会话')),
       )
     }
 
@@ -1240,14 +1413,43 @@ window.__ModuleLoader__.load({
 `
       const el = document.createElement('style')
       el.id = 'dsh-deck-style'
-      el.textContent = css
+      el.textContent = css + `/* ═══ v4：Hub/会话右条/主题/启动器 ═══ */
+.dk-todo{display:flex;align-items:center;gap:14px;padding:14px 20px;}
+.dk-todo.urgent{border-color:rgba(251,191,36,.5);background:linear-gradient(145deg,rgba(251,191,36,.10),transparent 60%),var(--color-bg-1,#14161c);}
+.dk-todo .ico{font-size:24px;}.dk-todo .nm{font-size:15.5px;font-weight:700;}
+.dk-todo .pv{flex:1;font-size:13.5px;opacity:.7;border-left:2px solid var(--color-border-1,#2a2e37);padding-left:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.dk-flowrow{display:flex;align-items:center;gap:14px;background:var(--color-bg-1,#14161c);border:1px solid var(--color-border-1,#2a2e37);border-radius:13px;padding:12px 18px;}
+.dk-flowrow .ftt{font-size:14.5px;font-weight:650;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.dk-steps{display:flex;align-items:center;flex-shrink:0;}
+.dk-step{display:flex;align-items:center;gap:5px;font-size:11.5px;opacity:.6;white-space:nowrap;}
+.dk-step i{width:17px;height:17px;border-radius:50%;border:1.5px solid var(--color-border-1,#2a2e37);display:flex;align-items:center;justify-content:center;font-style:normal;font-size:9.5px;}
+.dk-step.done i{border-color:var(--dk-ok,#34d399);color:var(--dk-ok,#34d399);}
+.dk-step.now{opacity:1;color:var(--dk-accent,#5b6cff);font-weight:650;}
+.dk-step.now i{background:var(--dk-accent,#5b6cff);color:#fff;border-color:transparent;}
+.dk-stepline{width:16px;height:1px;background:var(--color-border-1,#2a2e37);margin:0 4px;}
+.dk-stepline.done{background:var(--dk-ok,#34d399);}
+.dk-shell{right:var(--dk-chatw,420px);}
+.dk-sessbar{width:230px;flex-shrink:0;border-left:1px solid var(--color-border-1,#2a2e37);background:var(--color-bg-1,#14161c);display:flex;flex-direction:column;min-height:0;}
+.dk-sessbar .sbh{height:44px;display:flex;align-items:center;gap:8px;padding:0 12px;border-bottom:1px solid var(--color-border-1,#2a2e37);font-size:13.5px;font-weight:650;flex-shrink:0;}
+.dk-sessbar .sbl{flex:1;overflow-y:auto;padding:8px;display:flex;flex-direction:column;gap:5px;min-height:0;}
+.dk-chatdiv{position:absolute;top:0;right:-7px;bottom:0;width:7px;cursor:col-resize;z-index:8;}
+.dk-chatdiv::after{content:'';position:absolute;left:3px;top:0;bottom:0;width:1px;background:var(--color-border-1,#2a2e37);}
+.dk-chatdiv:hover::after{width:3px;background:var(--dk-accent,#5b6cff);}
+.dk-thdots{display:flex;flex-direction:column;gap:7px;align-items:center;padding-top:10px;}
+.dk-thdot{width:15px;height:15px;border-radius:50%;border:2px solid rgba(255,255,255,.25);cursor:pointer;padding:0;}
+.dk-thdot.on{border-color:#fff;box-shadow:0 0 0 2px var(--color-bg-1,#14161c),0 0 10px 1px currentColor;}
+.dk-shell[data-th="glass"]{--color-bg-0:#050a18;--color-bg-1:rgba(120,190,255,.07);--color-bg-2:rgba(120,190,255,.12);--color-bg-3:rgba(120,190,255,.16);--color-border-1:rgba(140,200,255,.18);--color-text-1:#e3f0ff;--dk-accent:#2dd4ff;--dk-ok:#34d399;}
+.dk-shell[data-th="term"]{--color-bg-0:#080d09;--color-bg-1:#0b120d;--color-bg-2:#0f1a12;--color-bg-3:#14241a;--color-border-1:#1d3a24;--color-text-1:#c8f2cf;--dk-accent:#39ff6e;--dk-ok:#39ff6e;font-family:ui-monospace,Consolas,monospace;}
+.dk-shell[data-th="cyber"]{--color-bg-0:#0b0b10;--color-bg-1:#12121a;--color-bg-2:#181824;--color-bg-3:#1f1f2e;--color-border-1:#2a2a3a;--color-text-1:#f2f2f8;--dk-accent:#fcee0a;--dk-ok:#00f0aa;}
+.dk-shell[data-th="paper"]{--color-bg-0:#f6f1e7;--color-bg-1:#fffdf8;--color-bg-2:#f4eee1;--color-bg-3:#ece4d2;--color-border-1:#ddd4c2;--color-text-1:#26211a;--dk-accent:#b03a2e;--dk-ok:#3d7a4f;}
+.dk-launchrow{display:flex;gap:10px;flex-wrap:wrap;}`
       document.head.appendChild(el)
     }
 
     // 调试后门：本地渲染台/回归脚本直接渲染各台面（只读）
     try { window.__dkDebug = { MediaDesk, KnowledgeDesk, ControlRoom, ReviewFlow, TaskBoard } } catch {}
 
-    const inject = ['slots', 'sessions']
+    const inject = ['slots', 'sessions', 'conversation']
     function apply(ctx) {
       deckCtx = ctx
       injectStyle()
