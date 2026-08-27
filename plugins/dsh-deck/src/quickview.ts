@@ -17,7 +17,7 @@ export interface Quickview {
   stats: { skills: number; collections: number; raw: number; todayNew: number; lessonsWarn: number; watchChannels: number }
   skills: Array<{ name: string; desc: string; file: string }>
   hot: Array<{ title: string; heat: number; file: string; url: string }>
-  watch: Array<{ channel: string; entries: Array<{ who: string; url: string; why: string }> }>
+  watch: Array<{ channel: string; entries: Array<{ who: string; url: string; why: string; grp?: string }> }>
   raw: { count: number; latest: string[] }
   lessonsWarnList: string[]
 }
@@ -57,27 +57,36 @@ export function buildQuickview(fs: QuickFs, walk: QuickWalk, kbRoot: string): Qu
     return { title, heat: heatOf(q, head), file: q, url }
   }).sort((a, b) => b.heat - a.heat).slice(0, 20)
 
-  // 关注分渠道：watchlist.md 的 ## 小节 + 列表行 [名](url) 理由
+  const BT = String.fromCharCode(96)
+  // 关注分渠道：watchlist.md 每渠道一节，节内 markdown 表（博主|分组|链接|理由|…），链接带反引号
   const watch: Quickview['watch'] = []
   const wlRaw = fs.read(join(kbRoot, 'collections', 'watchlist.md'))
   if (wlRaw !== null) {
-    let channel = '未分组'
+    let channel = ''
     let cur: Quickview['watch'][number] | null = null
     for (const line of wlRaw.split(/\r?\n/)) {
       const h = line.match(/^#{1,3}\s+(.*)$/)
       if (h !== null) {
         if (cur !== null && cur.entries.length > 0) watch.push(cur)
         channel = h[1]!.trim().slice(0, 20)
-        cur = { channel, entries: [] }
+        cur = null
         continue
       }
+      if (channel === '') continue
+      const t = line.trim()
+      if (!t.startsWith('|')) continue
+      const cols = t.split('|').map((c) => c.trim().split(BT).join(''))
+      if (cols.length < 4) continue
+      const who = cols[1] ?? ''
+      if (who === '' || who === '---' || who.startsWith('-')) continue
+      const url = cols.find((c) => c.startsWith('http')) ?? ''
+      if (url === '') continue
       if (cur === null) cur = { channel, entries: [] }
-      const m = line.match(/^\s*[-*]\s*\[([^\]]+)\]\(([^)]+)\)(.*)$/)
-      if (m !== null) cur.entries.push({ who: m[1]!.trim().slice(0, 40), url: m[2]!, why: m[3]!.replace(/^[\s—-]+/, '').trim().slice(0, 60) })
+      const why = (cols[4] !== undefined && cols[4] !== '' ? cols[4] : (cols[3] ?? '')).slice(0, 60)
+      cur.entries.push({ who: who.slice(0, 40), url, why, grp: (cols[2] ?? '').slice(0, 20) })
     }
     if (cur !== null && cur.entries.length > 0) watch.push(cur)
   }
-
   // LESSONS 待验证
   const lessons = fs.read(join(kbRoot, 'insights', 'LESSONS.md')) ?? ''
   const lessonsWarnList = lessons.split(/\r?\n/).filter((l) => l.includes('⚠️')).slice(-15).map((l) => l.replace(/^[-*\s\d.、]+/, '').slice(0, 120))

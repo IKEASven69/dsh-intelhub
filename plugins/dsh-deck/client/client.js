@@ -485,6 +485,7 @@ window.__ModuleLoader__.load({
             h('div', { className: 'dk-card-title' }, w.channel + ' · ' + w.entries.length),
             w.entries.slice(0, 6).map((e, i) => h('div', { key: i, style: { fontSize: 12.5, opacity: .8, padding: '3px 0' } },
               h('a', { href: e.url, target: '_blank', rel: 'noopener noreferrer', style: { color: 'var(--dk-accent)' } }, e.who),
+              e.grp ? h('span', { className: 'dk-chip', style: { fontSize: 10.5, padding: '0 8px', marginLeft: 6 } }, e.grp) : null,
               e.why !== '' ? h('span', { style: { opacity: .6 } }, ' — ' + e.why) : null))))) : null,
         qv.lessonsWarnList.length > 0 ? h('div', { className: 'dk-field-label' }, '⚠️ 判断回看（' + qv.lessonsWarnList.length + ' 条待验证）') : null,
         qv.lessonsWarnList.length > 0 ? h('div', { className: 'dk-card', style: { cursor: 'default', display: 'flex', flexDirection: 'column', gap: 4 } },
