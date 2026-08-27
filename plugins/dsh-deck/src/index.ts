@@ -25,6 +25,7 @@ import { KbIndex, nodeWalk } from './search.ts'
 import { adoptIdea, captureIdea, listIdeas, type IdeasFs } from './ideas.ts'
 import { ensureAgentsMd, makeCard, newTaskId, parseTaskDoc, setCardStatus, upsertCard, TASK_STATUSES, TASK_TYPES, type TaskCard, type TaskFs, type TaskStatus, type TaskType } from './tasks.ts'
 import { buildLessonsSection, parseResultDoc, parseWidgetJson } from './review.ts'
+import { buildQuickview } from './quickview.ts'
 import { ACCEPTANCE_BY_TYPE, appendPublishRow, buildPrefillText, createContent, listContent, PREFILL_TARGETS, setContentStatus, CONTENT_STATUSES, CONTENT_TYPES, type ContentFs, type ContentType, type ContentStatus } from './content.ts'
 import { execFile } from 'node:child_process'
 import { join as joinPath } from 'node:path'
@@ -564,6 +565,12 @@ export function apply(ctx: Context, config: Config): void {
       sendJson(res, 404, { ok: false, error: `读取失败：${e instanceof Error ? e.message : String(e)}` })
     }
   }
+  reg('exact', '/api/deck/kb/quickview', (_req, res) => {
+    if (!guard(_req, res)) return
+    try { sendJson(res, 200, { ok: true, qv: buildQuickview({ read: (p) => { try { return readFileSync(p, 'utf8') } catch { return null } } }, nodeWalk(kbRoot), kbRoot) }) }
+    catch (e) { sendJson(res, 500, { ok: false, error: e instanceof Error ? e.message : String(e) }) }
+  })
+
   reg('exact', '/api/deck/kb/index', fileRoute((r) => joinPath(r, 'INDEX.md')))
   reg('exact', '/api/deck/insights', fileRoute((r) => joinPath(r, 'insights', 'LESSONS.md')))
 

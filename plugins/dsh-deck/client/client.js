@@ -23,6 +23,7 @@ window.__ModuleLoader__.load({
       capture: (text) => post('/api/deck/idea/capture', { text }),
       adopt: (file, to) => post('/api/deck/idea/adopt', { file, to }),
       insights: () => get('/api/deck/insights'),
+      quickview: () => post('/api/deck/kb/quickview', {}),
       tasks: (project) => post('/api/deck/tasks', { project }),
       boards: () => post('/api/deck/tasks', {}),
       taskCreate: (project, title, type, acceptance, body) => post('/api/deck/task/create', { project, title, type, acceptance, body }),
@@ -451,16 +452,60 @@ window.__ModuleLoader__.load({
         : h('iframe', { sandbox: '', srcDoc: html, className: 'dk-frame' }))
     }
 
-    const KB_TABS = [['search', '🔍 搜索'], ['browse', '📚 文库'], ['ideas', '💡 点子'], ['tasks', '📋 任务'], ['review', '🧾 审阅'], ['lessons', '🔁 复盘']]
+    const KB_TABS = [['quick', '📊 速览'], ['search', '🔍 搜索'], ['browse', '📚 文库'], ['ideas', '💡 点子'], ['tasks', '📋 任务'], ['review', '🧾 审阅'], ['lessons', '🔁 复盘']]
 
+    function KbQuick({ onOpenFile }) {
+      const [qv, setQv] = useState(null)
+      const [err, setErr] = useState(null)
+      useEffect(() => {
+        let alive = true
+        API.quickview().then((j) => { if (!alive) return; if (j.ok) setQv(j.qv); else setErr(j.error) }).catch((e) => { if (alive) setErr(String(e)) })
+        return () => { alive = false }
+      }, [])
+      if (err !== null) return h(Err, null, err)
+      if (qv === null) return h(Note, null, '聚合知识库…')
+      const S = qv.stats
+      const stat = (k, v, sub) => h('div', { className: 'dk-card', style: { cursor: 'default', minWidth: 150 } },
+        h('div', { className: 'dk-fine' }, k), h('div', { style: { fontSize: 26, fontWeight: 750 } }, v), sub !== undefined ? h('div', { className: 'dk-fine' }, sub) : null)
+      return h('div', { className: 'dk-col' },
+        h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))', gap: 10 } },
+          stat('已提炼 Skills', S.skills), stat('精选素材', S.collections), stat('今日新增', S.todayNew, '篇'),
+          stat('待处理 all/', S.raw), stat('判断回看', S.lessonsWarn, '⚠️待验证'), stat('关注渠道', S.watchChannels)),
+        h('div', { className: 'dk-field-label' }, '🔥 收藏 Top（互动量降序，点卡预览）'),
+        h('div', { className: 'dk-grid' }, qv.hot.slice(0, 8).map((x, i) =>
+          h('div', { key: x.file, className: 'dk-card', onClick: () => onOpenFile(x.file) },
+            h('div', { className: 'dk-card-title' }, (i + 1) + '. ' + x.title),
+            h('div', { className: 'dk-card-sub' }, (x.heat > 0 ? x.heat + '♥ · ' : '') + x.file)))),
+        h('div', { className: 'dk-field-label' }, '🧭 Skills（点开方法论）'),
+        h('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap' } }, qv.skills.map((sk) =>
+          h('button', { key: sk.file, className: 'dk-chip', title: sk.desc, onClick: () => onOpenFile(sk.file) }, sk.name))),
+        qv.watch.length > 0 ? h('div', { className: 'dk-field-label' }, '👀 关注（分渠道）') : null,
+        qv.watch.length > 0 ? h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))', gap: 10 } },
+          qv.watch.map((w) => h('div', { key: w.channel, className: 'dk-card', style: { cursor: 'default' } },
+            h('div', { className: 'dk-card-title' }, w.channel + ' · ' + w.entries.length),
+            w.entries.slice(0, 6).map((e, i) => h('div', { key: i, style: { fontSize: 12.5, opacity: .8, padding: '3px 0' } },
+              h('a', { href: e.url, target: '_blank', rel: 'noopener noreferrer', style: { color: 'var(--dk-accent)' } }, e.who),
+              e.why !== '' ? h('span', { style: { opacity: .6 } }, ' — ' + e.why) : null))))) : null,
+        qv.lessonsWarnList.length > 0 ? h('div', { className: 'dk-field-label' }, '⚠️ 判断回看（' + qv.lessonsWarnList.length + ' 条待验证）') : null,
+        qv.lessonsWarnList.length > 0 ? h('div', { className: 'dk-card', style: { cursor: 'default', display: 'flex', flexDirection: 'column', gap: 4 } },
+          qv.lessonsWarnList.slice().reverse().map((l, i) => h('div', { key: i, style: { fontSize: 12.5, opacity: .8, borderBottom: '1px dashed var(--color-border-1,#2a2e37)', padding: '4px 0' } }, l))) : null,
+      )
+    }
     function KnowledgeDesk() {
-      const [tab, setTab] = useState('search')
+      const [tab, setTab] = useState('quick')
+      const [quickFile, setQuickFile] = useState(null)
       kbGoTab = setTab
+      if (quickFile !== null) {
+        return h('div', { className: 'dk-desk' },
+          h('div', { className: 'dk-deskbar' }, h('button', { className: 'on' }, '📄 ' + quickFile.split('/').pop())),
+          h('div', { className: 'dk-deskmain' }, h(Preview, { root: 'kb', path: quickFile, onBack: () => setQuickFile(null) })))
+      }
       return h('div', { className: 'dk-desk' },
         h('div', { className: 'dk-deskbar' }, KB_TABS.map(([id, label]) =>
           h('button', { key: id, className: tab === id ? 'on' : '', onClick: () => setTab(id) }, label))),
         h('div', { className: 'dk-deskmain' },
-          tab === 'search' ? h(KbSearch)
+          tab === 'quick' ? h(KbQuick, { onOpenFile: (f) => setQuickFile(f) })
+          : tab === 'search' ? h(KbSearch)
           : tab === 'browse' ? h(FsBrowse, { root: 'kb', base: '', layers: LAYERS })
           : tab === 'ideas' ? h(KbIdeas)
           : tab === 'tasks' ? h(TaskBoard, { projectId: 'builtin-kb', onGoReview: () => setTab('review') })
