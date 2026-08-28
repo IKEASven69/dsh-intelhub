@@ -9,7 +9,7 @@ importers:
   .:
     dependencies:
       hippo-mind:
-        specifier: link:D:/coding/hippo-skills
+        specifier: link:../../../hippo-skills
         version: link:../../../hippo-skills
     devDependencies:
       '@types/react':

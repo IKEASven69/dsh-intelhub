@@ -42,7 +42,7 @@
     }
   },
   "dependencies": {
-    "hippo-mind": "link:D:/coding/hippo-skills"
+    "hippo-mind": "link:../../../hippo-skills"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "*",
