@@ -17,9 +17,10 @@ import {
 import { makeResolver, renderText } from './tools.ts'
 
 
-/** 通过 dsh llm 服务生成回复（读默认模型配置 + prepareCall→stream 拼接 text）。 */
-/** 通过 ollama 本地 API 生成回复（绕开 dsh LLM 服务的适配器层，直连更可靠）。 */
-async function llmComplete(
+/** 通过 ollama 本地 API 生成回复（绕开 dsh LLM 服务的适配器层，直连更可靠）。
+ * summon/relay/task/K3 点醒共用这一条 LLM 路径——此前 K3 走 ctx.llm，
+ * dsh llm 服务不可用时居民全体静默且无日志，统一到 ollama 直连。 */
+export async function llmComplete(
   _ctx: Context,
   system: string,
   user: string,
@@ -31,10 +32,14 @@ async function llmComplete(
     const { join } = await import('node:path')
     const { homedir } = await import('node:os')
     const yaml = readFileSync(join(homedir(), '.dsh', 'settings.yaml'), 'utf8')
-    const sec = yaml.slice(yaml.indexOf('llm-pi-ai:'))
-    const m = sec.match(/^\s*- id:\s*(\S+)/m)
-    if (m) model = m[1]
-  } catch { /* 用默认 */ }
+    // 防御：没有 llm-pi-ai 节时 indexOf 返回 -1，slice(-1) 会切出末字符
+    // 导致正则匹配到错误内容——显式判空后再切。
+    const start = yaml.indexOf('llm-pi-ai:')
+    if (start !== -1) {
+      const m = yaml.slice(start).match(/^\s*- id:\s*(\S+)/m)
+      if (m) model = m[1]
+    }
+  } catch { /* 配置读不到就用默认模型 */ }
 
   const resp = await fetch('http://127.0.0.1:11434/v1/chat/completions', {
     method: 'POST',
@@ -72,8 +77,10 @@ export async function recallMemories(name: string, query: string): Promise<strin
   }
 }
 
-/** K2：对话后蒸馏入引擎（居民记住这次聊了什么）。 */
-async function distillExchange(name: string, userText: string, reply: string): Promise<void> {
+/** K2：对话后蒸馏入引擎（居民记住这次聊了什么）。
+ * 超时 60s：engine.remember 要跑 bge-m3 嵌入，首次加载模型就要十几秒，
+ * 之前的 5s 在冷启动环境必超时——蒸馏静默丢弃，居民永远"记不住"。 */
+async function distillExchange(ctx: Context, name: string, userText: string, reply: string): Promise<void> {
   try {
     await withEngine(async ({ engine }) => {
       const turns = [
@@ -89,9 +96,10 @@ async function distillExchange(name: string, userText: string, reply: string): P
           agent: 'life',
         })
       }
-    }, 5000)
-  } catch {
-    // 蒸馏失败不阻塞对话——下次对话时重新蒸馏由频道账本兜底
+    }, 60_000)
+  } catch (e) {
+    // 蒸馏失败不阻塞对话（频道账本兜底），但要有日志——静默丢记忆没法排查
+    ctx.logger.warn(`[life] ${name} 蒸馏失败：${e instanceof Error ? e.message : String(e)}`)
   }
 }
 
@@ -129,13 +137,15 @@ export async function summonResident(
 
   try {
     const reply = await llmComplete(ctx, residentSystemPrompt(name, resident.persona) + channelContext + memoryContext, userText) || '……'
-    // 记入频道账本（居民生活继续）
+    // 记入频道账本（居民生活继续）。appendMessage 返回值带最新 seq，
+    // 书签直接用它——之前误写 readMessages(0,1)[0]?.seq 把游标设回了
+    // 频道第一条，导致每次召唤后"未读"变成全部历史。
     if (channelId !== undefined) {
-      appendMessage(channelId, { kind: 'resident', name }, `[被召唤] ${reply}`)
-      writeBookmark(channelId, name, readMessages(channelId, 0, 1)[0]?.seq ?? 0)
+      const msg = appendMessage(channelId, { kind: 'resident', name }, `[被召唤] ${reply}`)
+      writeBookmark(channelId, name, msg.seq)
     }
     // K2：蒸馏入引擎（异步不阻塞——居民记住这次聊了什么）
-    void distillExchange(name, userText, reply)
+    void distillExchange(ctx, name, userText, reply)
     return `[${name}] ${reply}`
   } catch (e) {
     return `[${name}] （生成失败：${e instanceof Error ? e.message : String(e)}）`

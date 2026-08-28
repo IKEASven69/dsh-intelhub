@@ -18,6 +18,7 @@ import {
   getResident, listResidents, readMessages, readBookmark, writeBookmark, appendMessage,
   withEngine, recallMemories,
 } from './life-bridge.ts'
+import { llmComplete } from './life-tools.ts'
 
 // ── K4：人格演化视图 ─────────────────────────────────
 
@@ -103,10 +104,6 @@ export async function wakeResident(ctx: Context, name: string): Promise<string |
   const unread = readMessages(channelId, cursor, 10)
   const recentTexts = unread.map((m) => m.text)
 
-  // LLM 生成"要不要说点什么"
-  const llm = (ctx as Context & { llm?: { generate: (opts: Record<string, unknown>) => Promise<{ text?: string }> } }).llm
-  if (llm === undefined) return null
-
   const evolved = getEvolvedPersona(name)
   const memoryCtx = await recallMemories(name, unread.length > 0 ? unread[unread.length - 1].text : '日常')
 
@@ -118,16 +115,27 @@ export async function wakeResident(ctx: Context, name: string): Promise<string |
 如果你觉得有值得说的（回应新消息/分享想法/关心某人），请直接说出你想说的话（1-3 句，保持人格）。
 如果没什么好说的，只输出"[SILENCE]"。`
 
+  // 统一走 ollama 直连（llmComplete）——此前走 ctx.llm，dsh llm 服务
+  // 不可用时 K3 整体静默死亡且无任何日志。
   try {
-    const result = await llm.generate({
-      messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: '（点醒）' }],
-    })
-    const text = (result.text ?? '').trim()
-    if (text === '' || text === '[SILENCE]') return null
-    if (!shouldSpeak(recentTexts, text)) return null
-    appendMessage(channelId, { kind: 'resident', name }, text)
+    const text = (await llmComplete(ctx, systemPrompt, '（点醒）')).trim()
+    // 已读即推进游标（沉默也推进）——此前从不写书签，同一批消息
+    // 每次点醒都重复算"未读"。
+    const readUpTo = unread.length > 0 ? unread[unread.length - 1].seq : cursor
+    if (text === '' || text === '[SILENCE]') {
+      writeBookmark(channelId, name, readUpTo)
+      return null
+    }
+    if (!shouldSpeak(recentTexts, text)) {
+      writeBookmark(channelId, name, readUpTo)
+      return null
+    }
+    const msg = appendMessage(channelId, { kind: 'resident', name }, text)
+    // 推进到自己的发言——下次点醒不会把自己的话当未读
+    writeBookmark(channelId, name, msg.seq)
     return text
-  } catch {
+  } catch (e) {
+    ctx.logger.warn(`[life] K3 点醒 ${name} 生成失败：${e instanceof Error ? e.message : String(e)}`)
     return null
   }
 }
@@ -138,19 +146,20 @@ export async function wakeResident(ctx: Context, name: string): Promise<string |
  */
 export function startAutonomyLoop(ctx: Context): () => void {
   const timer = setInterval(() => {
-    void (async () => {
-      for (const r of listResidents()) {
-        if (r.state.chattiness <= 0) continue
-        // chattiness/h → 每分钟概率 = chattiness / 60
-        if (Math.random() > r.state.chattiness / 60) continue
-        const said = await wakeResident(ctx, r.name)
-        if (said !== null) {
-          ctx.logger.info(`[life] ${r.name} 主动发言：${said.slice(0, 40)}`)
-          // 主动发言后刷新演化视图（经历更新）
-          void refreshEvolvedPersona(r.name).catch(() => {})
-        }
+    // 按概率选中要点醒的居民，然后并行唤醒——此前串行 await，
+    // 一个居民的 LLM 慢（最长 120s 超时）会阻塞后面所有居民。
+    const toWake = listResidents()
+      .filter((r) => r.state.chattiness > 0 && Math.random() <= r.state.chattiness / 60)
+      .map((r) => r.name)
+    if (toWake.length === 0) return
+    void Promise.allSettled(toWake.map(async (name) => {
+      const said = await wakeResident(ctx, name)
+      if (said !== null) {
+        ctx.logger.info(`[life] ${name} 主动发言：${said.slice(0, 40)}`)
+        // 主动发言后刷新演化视图（经历更新）
+        void refreshEvolvedPersona(name).catch(() => {})
       }
-    })()
+    }))
   }, 60_000)
   timer.unref?.()
   return () => { clearInterval(timer) }

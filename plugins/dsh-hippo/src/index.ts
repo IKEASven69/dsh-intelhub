@@ -97,15 +97,39 @@ async function doctor(): Promise<DoctorReport> {
     storeExists = null
   }
 
+  // 生活流（居民）依赖 ollama 本地 API——summon/relay/task/K3 全走它。
+  // 探测可达性 + 已拉取的模型列表，不可达时给出指引（否则居民只会"生成失败"）。
+  let ollamaOk = true
+  let ollamaDetail = ''
+  try {
+    const resp = await fetch('http://127.0.0.1:11434/api/tags', { signal: AbortSignal.timeout(2000) })
+    if (resp.ok) {
+      const tags = (await resp.json()) as { models?: Array<{ name?: string }> }
+      const names = (tags.models ?? []).map((m) => m.name ?? '').filter(Boolean)
+      ollamaDetail = names.length > 0 ? `可达，模型：${names.slice(0, 5).join('、')}` : '可达，但还没有拉取任何模型（ollama pull <model>）'
+      if (names.length === 0) ollamaOk = false
+    } else {
+      ollamaOk = false
+      ollamaDetail = `ollama 响应异常：HTTP ${resp.status}`
+    }
+  } catch {
+    ollamaOk = false
+    ollamaDetail = '无法连接 127.0.0.1:11434（ollama 未启动？）'
+  }
+  if (!ollamaOk) {
+    guidance.push('生活流居民需要 ollama 本地服务（127.0.0.1:11434）生成回复。请安装并启动 ollama，拉取居民用的模型（默认 gemma4:e4b，可在 ~/.dsh/settings.yaml 的 llm-pi-ai 节配置）。')
+  }
+
   const checks = [
     { name: '引擎 hippo-mind', ok: engineErr === null, detail: engineErr ?? 'openEngine() 可用' },
     { name: '向量存储 @zvec/zvec', ok: zvecErr === null, detail: zvecErr ?? 'proxima 索引 + rocksdb FTS 就绪' },
     { name: '遗留 SQLite 模块', ok: legacyErr === null, detail: legacyErr ?? '旧版存储，仍在 import 链上（memories.db 为其遗留文件）' },
     { name: '记忆库', ok: true, detail: storeExists === true ? storePath : storeExists === false ? `尚未创建（首次 import/recall 时自动建立）：${storePath}` : `无法探测：${storePath}` },
+    { name: 'ollama 生活流引擎', ok: ollamaOk, detail: ollamaDetail },
   ]
 
   return {
-    ok: engineErr === null && zvecErr === null && legacyErr === null,
+    ok: engineErr === null && zvecErr === null && legacyErr === null && ollamaOk,
     checks,
     storePath,
     storeExists,
