@@ -50,7 +50,7 @@ const MEMORY_TYPE = z.enum(VALID_TYPES);
  * which the HTTP API doesn't expose. remember/recall/update/forget are
  * fully proxied and cover the agent's everyday memory operations. */
 export function createHippoMcpServer(engine: McpEngine, opts: { distillUnavailable?: boolean } = {}): McpServer {
-  const server = new McpServer({ name: 'hippo', version: '0.1.0' });
+  const server = new McpServer({ name: 'hippo', version: '0.2.0' });
 
   server.registerTool('remember', {
     description:

@@ -22,7 +22,7 @@ const program = new Command();
 program
   .name('hippo')
   .description('hippo memory engine (TypeScript)')
-  .version('0.1.0');
+  .version('0.2.0');
 
 // ── remember ──────────────────────────────────────
 
