@@ -569,12 +569,69 @@ window.__ModuleLoader__.load({
       )
     }
 
+
+    // ── 产出预览：PPT 放映（键盘←→翻页/Esc 退出/O 概览）+ 文章阅读 ──
+    function PPTViewer({ html, title, onClose, onEditSlide }) {
+      const [cur, setCur] = useState(0)
+      const [ov, setOv] = useState(false)
+      const slides = html.match(/<section[^>]*>[\s\S]*?<\/section>/g) || [html]
+      const n = slides.length
+      useEffect(() => {
+        const fn = (e) => {
+          if (e.key === 'ArrowRight') { e.preventDefault(); setCur(c => (c + 1) % n) }
+          if (e.key === 'ArrowLeft') { e.preventDefault(); setCur(c => (c - 1 + n) % n) }
+          if (e.key === 'Escape') { if (ov) setOv(false); else onClose() }
+          if (e.key === 'o') setOv(v => !v)
+        }
+        document.addEventListener('keydown', fn)
+        return () => { document.removeEventListener('keydown', fn) }
+      }, [n, ov])
+      const ci = Math.min(cur, n - 1)
+      const nav = h('div', { style: { height: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, flexShrink: 0 } },
+        h('button', { className: 'dk-mini', onClick: () => setCur((ci - 1 + n) % n) }, '‹'),
+        ...Array.from({ length: Math.min(n, 12) }, (_, i) =>
+          h('button', { key: i, onClick: () => setCur(i), style: { width: i === ci ? 22 : 8, height: 8, borderRadius: 4, border: 'none', cursor: 'pointer', background: i === ci ? '#5b6cff' : '#333', transition: '.15s' } })),
+        h('button', { className: 'dk-mini', onClick: () => setCur((ci + 1) % n) }, '›'))
+      const stage = ov
+        ? h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(200px,1fr))', gap: 10, width: '100%', padding: '0 20px', overflowY: 'auto' } },
+            slides.map((sl, i) =>
+              h('iframe', { key: i, sandbox: '', srcDoc: sl, onClick: () => { setCur(i); setOv(false) },
+                style: { aspectRatio: '16/9', width: '100%', border: i === ci ? '2px solid #5b6cff' : '1px solid #333', borderRadius: 8, cursor: 'pointer', background: '#0e1015' } })))
+        : h('iframe', { sandbox: '', srcDoc: slides[ci],
+            style: { aspectRatio: '16/9', maxHeight: '100%', maxWidth: 'min(90vw,1100px)', width: '100%', border: '1px solid #2a2e37', borderRadius: 12, background: '#0e1015', boxShadow: '0 20px 80px rgba(0,0,0,.5)' } })
+      return h('div', { style: { position: 'fixed', inset: 0, zIndex: 100, background: '#08090d', display: 'flex', flexDirection: 'column' } },
+        h('div', { style: { height: 44, display: 'flex', alignItems: 'center', gap: 12, padding: '0 16px', borderBottom: '1px solid #222', flexShrink: 0 } },
+          h('b', { style: { fontSize: 14 } }, title),
+          h('span', { style: { fontFamily: 'ui-monospace,monospace', fontSize: 12, opacity: .6 } }, 'P' + (ci + 1) + ' / ' + n),
+          h('span', { style: { flex: 1 } }),
+          h('button', { className: 'dk-mini', onClick: () => setOv(v => !v) }, ov ? '□ 退出概览' : '⊞ 概览'),
+          onEditSlide ? h('button', { className: 'dk-mini', onClick: () => onEditSlide(ci) }, '🤖 改这页') : null,
+          h('button', { className: 'dk-mini', onClick: onClose }, '✕ 退出放映')),
+        h('div', { style: { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 0, padding: '12px 0' } }, stage),
+        ov ? null : nav,
+      )
+    }
+    function ArticleReader({ md, title, onClose }) {
+      return h('div', { style: { position: 'fixed', inset: 0, zIndex: 100, background: 'var(--color-bg-0,#0b0d12)', display: 'flex', flexDirection: 'column' } },
+        h('div', { style: { height: 46, display: 'flex', alignItems: 'center', gap: 12, padding: '0 18px', borderBottom: '1px solid var(--color-border-1,#2a2e37)', flexShrink: 0 } },
+          h('b', { style: { fontSize: 14 } }, title),
+          h('span', { style: { flex: 1 } }),
+          h('button', { className: 'dk-mini', onClick: onClose }, '✕ 退出阅读')),
+        h('div', { style: { flex: 1, overflowY: 'auto', display: 'flex', justifyContent: 'center' } },
+          h('div', { className: 'dk-md', style: { width: 'min(780px,92%)', padding: '28px 36px 60px', fontSize: 16, lineHeight: 2 }, dangerouslySetInnerHTML: { __html: mdToHtml(md) } })),
+      )
+    }
+
     function ContentDetail({ item, onClose, onChanged }) {
       const [topicHtml, setTopicHtml] = useState(null)
       const [msg, setMsg] = useState(null)
       const [busy, setBusy] = useState(false)
       const [widget, setWidget] = useState(null)
       const [pub, setPub] = useState(null)
+      const [pptHtml, setPptHtml] = useState(null)
+      const [artMd, setArtMd] = useState(null)
+      if (pptHtml !== null) return h(PPTViewer, { html: pptHtml, title: item.title, onClose: () => setPptHtml(null) })
+      if (artMd !== null) return h(ArticleReader, { md: artMd, title: item.title, onClose: () => setArtMd(null) })
       useEffect(() => {
         let alive = true
         API.read('content', item.slug + '/选题.md').then((j) => { if (alive) { setTopicHtml(j.ok ? mdToHtml(j.content) : '<p>（无选题.md）</p>') } }).catch(() => {})
@@ -627,6 +684,16 @@ window.__ModuleLoader__.load({
           h('div', { className: 'dk-modal-actions' },
             h('button', { type: 'button', className: 'dk-ghost', onClick: onClose }, '关闭'),
             next !== null ? h('button', { type: 'button', className: 'dk-ghost', onClick: advance }, '状态 → ' + next) : null,
+            item.files.filter(f => f.endsWith('.html')).length > 0
+              ? h('button', { type: 'button', className: 'dk-ghost', onClick: () => {
+                  const f = item.files.find(x => x.endsWith('.html'))
+                  API.read('content', item.slug + '/' + f).then(j => { if (j.ok) setPptHtml(j.content) })
+                } }, '▶ 放映') : null,
+            item.files.filter(f => f.endsWith('.md') && !f.includes('meta') && !f.includes('发布记录')).length > 0
+              ? h('button', { type: 'button', className: 'dk-ghost', onClick: () => {
+                  const f = item.files.find(x => x.endsWith('.md') && !x.includes('meta') && !x.includes('发布记录'))
+                  API.read('content', item.slug + '/' + f).then(j => { if (j.ok) setArtMd(j.content) })
+                } }, '📖 阅读') : null,
             h('button', { type: 'button', className: 'dk-ghost', onClick: () => setPub(item.status) }, '📢 预填发布'),
             h('button', { type: 'button', disabled: busy, onClick: handoff }, '🚀 交给 zcode')),
         ),
