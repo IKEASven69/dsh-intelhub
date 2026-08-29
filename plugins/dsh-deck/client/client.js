@@ -493,9 +493,9 @@ window.__ModuleLoader__.load({
       )
     }
     function KnowledgeDesk() {
-      const [tab, setTab] = useState('quick')
+      const [tab, setTab] = useState(() => { const t = kbPendingTab; kbPendingTab = null; return t || 'quick' })
       const [quickFile, setQuickFile] = useState(null)
-      kbGoTab = setTab
+      // kbGoTab 保持 pending 版（总台未挂载知识库台时也能定向）
       if (quickFile !== null) {
         return h('div', { className: 'dk-desk' },
           h('div', { className: 'dk-deskbar' }, h('button', { className: 'on' }, '📄 ' + quickFile.split('/').pop())),
@@ -1168,7 +1168,8 @@ function openSession(id) { try { deckCtx && deckCtx.sessions && deckCtx.sessions
     const FLOW_STEPS = ['灵感', '任务', '创作', '待发', '发布']
     const stepOfTask = (st) => st === 'queued' ? 1 : (st === 'running' || st === 'review') ? 2 : 4
     const stepOfContent = (st) => st === 'idea' ? 0 : st === 'drafting' ? 2 : (st === 'ready' || st === 'prefill') ? 3 : 4
-    let kbGoTab = null
+    let kbGoTab = (f) => { kbPendingTab = f }
+    let kbPendingTab = null
     let mediaGoItem = null
     let navigateApp = null
     function goDesk(d) { if (!isOpen()) setOpen(true); if (navigateApp !== null) navigateApp(d) }
