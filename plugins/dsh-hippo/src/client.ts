@@ -612,7 +612,7 @@ function Panel(): ReturnType<typeof createElement> {
     void fetchMem({ q: memQApplied, type: memType, offset: 0, append: false })
   }, [memType])
 
-  const ready = report !== null && report.ok
+  const ready = report !== null && report.migrationReady
   const hasSessions = (inv ?? []).some((a) => a.sessions > 0)
 
   return createElement('div', { className: 'hb-panel' },

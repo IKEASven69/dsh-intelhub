@@ -8,6 +8,8 @@ export interface DoctorCheck {
 
 export interface DoctorReport {
   ok: boolean
+  /** 迁移链路就绪（引擎/向量存储/SQLite）——不含 ollama：生活流专属，与迁移无关。 */
+  migrationReady: boolean
   checks: DoctorCheck[]
   storePath: string
   storeExists: boolean | null

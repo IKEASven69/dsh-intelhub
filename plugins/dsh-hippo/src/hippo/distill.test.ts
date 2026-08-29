@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { distill, DEDUP_MAYBE, DEDUP_REINFORCE, SUPERSEDE_FLOOR, extractCandidates, makeCandidate, MAX_CANDIDATES, type Candidate } from './distill.js';
+import { distill, DEDUP_MAYBE, DEDUP_REINFORCE, SUPERSEDE_FLOOR, extractCandidates, makeCandidate, MAX_CANDIDATES, isNoiseCandidate, type Candidate } from './distill.js';
 import { MemoryEngine, type SearchHit, type Store } from './memory.js';
 import { makeTurn } from '../patterns/transcript.js';
 import { fakeEmbed, FakeStore } from './test-helpers.js';
@@ -209,4 +209,49 @@ test('superseded memories are downweighted in recall', async () => {
   const ha = hits.find(h => h.id === a.id);
   const hb = hits.find(h => h.id === b.id);
   if (ha && hb) assert.ok(ha.score < hb.score, `superseded (${ha.score}) should score below active (${hb.score})`);
+});
+
+// ── 质量闸门：过程自语/标题/疑问/清单碎片不得成为记忆 ──────────────────────
+test('noise gate rejects monologue, headings, questions, list fragments', () => {
+  const noiseSamples = [
+    '我需要决定端口号',                       // 过程自语（中）
+    '让我检查一下服务器日志，看看具体原因',       // 过程自语（中）
+    'Wait, let me re-verify the returns',     // 过程自语（英）
+    'Let me confirm a few important details', // 过程自语（英）
+    'Now let me list all docs files',         // 过程自语（英）
+    'So in the tutorial version with MockLLM',// 叙述续接
+    'I have strong information now',          // 自语
+    '## 几个会决定一切的设计岔路',               // markdown 标题
+    '### M3. run_vfox_streaming timeout branch', // 标题
+    '9. [pending] Identify UI entry points',  // 清单碎片
+    '8. 决定项目是否支持减弱动画？',             // 清单+疑问
+    'Continue the conversation from where it left off without asking the user', // 提示词泄漏
+  ];
+  for (const s of noiseSamples) {
+    assert.ok(isNoiseCandidate(s), `should be noise: ${s}`);
+  }
+  // 干净短句不得误伤（测试基线样本）
+  const cleanSamples = [
+    '我们决定用 SQLite 而不是 zvec。',
+    '决定用 A 方案。',
+    '端口是 3456。',
+    '以后都用 pnpm 跑脚本。',
+    '根因是 vec0 的锁只授予一个进程。',
+    '改用读取截图文件本身',
+    '- Offer ads only at the player\'s explicit request — never interrupt', // 真偏好可以列表开头
+  ];
+  for (const s of cleanSamples) {
+    assert.ok(!isNoiseCandidate(s), `should NOT be noise: ${s}`);
+  }
+});
+
+test('extractCandidates filters noise but keeps real decisions', () => {
+  const turns = [
+    makeTurn({ role: 'assistant', text: '我需要决定端口号。让我检查一下服务器日志。' }),
+    makeTurn({ role: 'user', text: '我们决定用 SQLite 而不是 zvec。' }),
+    makeTurn({ role: 'assistant', text: '## 几个会决定一切的设计岔路' }),
+  ];
+  const cands = extractCandidates(turns);
+  assert.equal(cands.length, 1, `only real decision survives, got ${JSON.stringify(cands.map(c => c.text))}`);
+  assert.ok(cands[0].text.includes('SQLite'));
 });

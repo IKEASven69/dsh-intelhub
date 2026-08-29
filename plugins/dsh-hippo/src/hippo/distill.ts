@@ -65,6 +65,31 @@ const REMEMBER_TRIGGER = /(记住|记下来|记一下|别忘了|重要|remember 
 // Pronouns / deictics at the start of a candidate that make it non-self-contained.
 const LEADING_PRONOUN = /^\s*(它|这[个是条]|那个|那[是条]|this|that|it|these|those)\s*/i;
 
+// ---------------------------------------------------------------------------
+// 质量闸门：规则匹配只看触发词，而 agent 转写里大量"过程自语"同样含触发词
+// （"我需要决定端口号"、"Let me confirm"、"## 几个设计岔路"）。这些句子
+// 对未来会话毫无价值，进库只会污染召回。以下模式是抽查真实库后标定的
+// 高置信噪音特征——宁可漏掉少量边界样本，不误伤干净短句（如"决定用 X。"）。
+// ---------------------------------------------------------------------------
+const NOISE_PATTERNS: Array<{ re: RegExp; why: string }> = [
+  // 过程自语：模型描述自己正在做什么（中英）
+  { re: /^(让我|我来|我先|我需要|我要|我得|我之前|我刚才|我也|我想|我觉得|接下来|wait[,. ]|let me|let'?s|i need|i have|i should|i'?ll|i'?m going to|now let|so let|so[, ]|first[, ]|second[, ]|finally[, ]|continue)/i, why: 'monologue' },
+  // markdown 标题行：只有标题没有内容
+  { re: /^#{1,6}\s/, why: 'heading' },
+  // 疑问句：问题是待办不是结论
+  { re: /[?？]\s*$/, why: 'question' },
+  // 编号清单碎片："2. [pending] …" / "9. 决定 xxx"（列表项而非陈述）
+  { re: /^\d+[.)][\s\[]/, why: 'list-fragment' },
+  // 系统提示词泄漏："Continue the conversation…" 被截进偏好
+  { re: /continue the conversation from where it left off|without asking (the )?user/i, why: 'instruction-leak' },
+];
+
+/** 候选是否为高置信噪音（过程自语/标题/疑问/清单碎片/提示词泄漏）。 */
+export function isNoiseCandidate(text: string): boolean {
+  const t = text.trim();
+  return NOISE_PATTERNS.some(({ re }) => re.test(t));
+}
+
 // Sentence splitter that works for Chinese and English: 。！？.!?\n
 const SENTENCE_END = /[。！？!?\n]+/;
 
@@ -160,6 +185,8 @@ export function extractCandidates(
         if (LEADING_PRONOUN.test(text) && referent) {
           text = text.replace(LEADING_PRONOUN, referent + ' ');
         }
+        // 质量闸门：拒收过程自语/标题/疑问/清单碎片（见 NOISE_PATTERNS 注释）。
+        if (isNoiseCandidate(text)) break;
         // Truncate very long sentences; they're rarely good memories.
         if (text.length > 300) text = text.slice(0, 297) + '…';
         const key = text.toLowerCase();

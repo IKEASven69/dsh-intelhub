@@ -111,6 +111,8 @@ async function doctor(): Promise<DoctorReport> {
 
   return {
     ok: zvecErr === null && legacyErr === null && ollamaOk,
+    // 迁移链路只依赖引擎三件套；ollama 挂了不该挡住"开始迁移"（生活流专属依赖）
+    migrationReady: zvecErr === null && legacyErr === null,
     checks,
     storePath,
     storeExists,
