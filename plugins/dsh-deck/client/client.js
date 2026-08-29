@@ -1067,7 +1067,7 @@ function openSession(id) { try { deckCtx && deckCtx.sessions && deckCtx.sessions
       const seedIdeas = (ideas ?? []).filter((i) => i.status !== 'picked')
       const goReview = () => { goDesk('kb'); if (kbGoTab) kbGoTab('review') }
       const goItem = (slug) => { goDesk('content'); if (mediaGoItem) mediaGoItem(slug) }
-      return h('div', { className: 'dk-col' },
+      const inner = h('div', { className: 'dk-col' },
         msg !== null ? h(Note, null, msg) : null,
         reviewCards.length + readyItems.length === 0
           ? h(Note, null, '✅ 没有待你决定的——agent 交活/内容待发会出现在这')
@@ -1113,12 +1113,17 @@ function openSession(id) { try { deckCtx && deckCtx.sessions && deckCtx.sessions
                 h('button', { className: 'dk-mini', onClick: () => API.adopt(idea.file, 'research').then((j) => { setMsg(j.ok ? '✓ 已升任务 → 调研台' : '失败：' + j.error); reload() }) }, '升任务'),
                 h('button', { className: 'dk-mini', onClick: () => { goDesk('kb'); if (kbGoTab) kbGoTab('ideas') } }, '看全部'))))),
       )
+      return h('div', { className: 'dk-desk' },
+        h('div', { className: 'dk-deskbar' }, h('button', { className: 'on' }, '🏠 今日动线 · 待办 → 进行中 → 灵感')),
+        h('div', { className: 'dk-deskmain' }, inner))
     }
 
     function MsgDesk() {
-      return h('div', { className: 'dk-col' },
-        h(Note, null, '💬 消息台（下一版本）：各平台评论统一收件 + AI 起草 + opencli 写回原平台'),
-        h(Note, null, '当前先用平台通知页 + 内容详情的发布记录。'))
+      return h('div', { className: 'dk-desk' },
+        h('div', { className: 'dk-deskbar' }, h('button', { className: 'on' }, '💬 消息台')),
+        h('div', { className: 'dk-deskmain' }, h('div', { className: 'dk-col' },
+          h(Note, null, '💬 消息台（下一版本）：各平台评论统一收件 + AI 起草 + opencli 写回原平台'),
+          h(Note, null, '当前先用平台通知页 + 内容详情的发布记录。'))))
     }
 
     // 启动器弹窗
