@@ -630,8 +630,6 @@ window.__ModuleLoader__.load({
       const [pub, setPub] = useState(null)
       const [pptHtml, setPptHtml] = useState(null)
       const [artMd, setArtMd] = useState(null)
-      if (pptHtml !== null) return h(PPTViewer, { html: pptHtml, title: item.title, onClose: () => setPptHtml(null) })
-      if (artMd !== null) return h(ArticleReader, { md: artMd, title: item.title, onClose: () => setArtMd(null) })
       useEffect(() => {
         let alive = true
         API.read('content', item.slug + '/选题.md').then((j) => { if (alive) { setTopicHtml(j.ok ? mdToHtml(j.content) : '<p>（无选题.md）</p>') } }).catch(() => {})
@@ -641,6 +639,8 @@ window.__ModuleLoader__.load({
         }).catch(() => {})
         return () => { alive = false }
       }, [item.slug])
+      if (pptHtml !== null) return h(PPTViewer, { html: pptHtml, title: item.title, onClose: () => setPptHtml(null) })
+      if (artMd !== null) return h(ArticleReader, { md: artMd, title: item.title, onClose: () => setArtMd(null) })
       const advance = () => {
         const next = NEXT_STATUS[item.status]
         if (next === null) return
