@@ -1,14 +1,22 @@
 {
   "name": "dsh-hippo",
-  "description": "记忆桥：把 Claude Code / Codex / opencode 会话里积累的记忆蒸馏进 dsh——开局即认识你的项目与偏好（引擎 hippo-mind beta）",
-  "version": "0.1.0",
+  "description": "记忆桥：把 Claude Code / Codex / opencode 会话里积累的记忆蒸馏进 dsh——开局即认识你的项目与偏好（引擎已内置，hippo gui 另有桌面工作台）",
+  "version": "0.2.0",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",
+  "bin": {
+    "hippo": "./dist/hippo/cli.js",
+    "hippo-mind": "./dist/hippo/cli.js"
+  },
   "exports": {
     ".": {
       "types": "./lib/types/index.d.ts",
       "default": "./lib/index.js"
+    },
+    "./engine": {
+      "types": "./dist/hippo/engine.d.ts",
+      "default": "./dist/hippo/engine.js"
     },
     "./client": "./lib/client.js",
     "./cordis.patch.yml": "./cordis.patch.yml",
@@ -18,15 +26,21 @@
     "lib/index.js",
     "lib/client.js",
     "lib/index.js.map",
+    "dist/",
+    "web/dist/",
     "cordis.patch.yml",
     "scripts",
     "tsconfig.build.json",
+    "tsconfig.engine.json",
     "tsdown.config.ts",
     "pnpm-workspace.yaml"
   ],
   "license": "MIT",
   "scripts": {
-    "build": "node scripts/link-deps.mjs && tsc -p tsconfig.build.json && tsdown && node scripts/build-client.mjs",
+    "build": "node scripts/link-deps.mjs && tsc -p tsconfig.build.json && tsdown && node scripts/build-client.mjs && tsc -p tsconfig.engine.json",
+    "build:engine": "tsc -p tsconfig.engine.json",
+    "build:web": "cd web && pnpm build",
+    "test": "tsx --test src/hippo/*.test.ts src/agents/*.test.ts src/patterns/*.test.ts src/team/*.test.ts",
     "watch": "tsdown --watch"
   },
   "dsh": {
@@ -42,7 +56,18 @@
     }
   },
   "dependencies": {
-    "hippo-mind": "link:../../../hippo-skills"
+    "@huggingface/transformers": "^4.2.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@zvec/zvec": "^0.6.0",
+    "better-sqlite3": "^11.7.0",
+    "chalk": "^5.4.0",
+    "commander": "^13.1.0",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "fzstd": "^0.1.1",
+    "open": "^11.0.0",
+    "sqlite-vec": "^0.1.9",
+    "zod": "^4.4.3"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "*",
@@ -54,12 +79,26 @@
     "@deepseek-ai/dsh-tools": "*",
     "react": "^18.2.0"
   },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/cordis": { "optional": true },
+    "@deepseek-ai/dsh-agent": { "optional": true },
+    "@deepseek-ai/dsh-client-runtime": { "optional": true },
+    "@deepseek-ai/dsh-client-ui-settings": { "optional": true },
+    "@deepseek-ai/dsh-sandbox-policy": { "optional": true },
+    "@deepseek-ai/dsh-system-prompt": { "optional": true },
+    "@deepseek-ai/dsh-tools": { "optional": true }
+  },
   "devDependencies": {
     "@types/react": "~18.3.1",
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^22.10.0",
     "esbuild": "^0.25.0",
     "react": "^18.2.0",
     "react-dom": "18.3.1",
     "tsdown": "^0.22.14",
+    "tsx": "^4.19.0",
     "typescript": "^5.6.0"
   }
 }

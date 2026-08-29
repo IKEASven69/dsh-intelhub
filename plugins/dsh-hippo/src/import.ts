@@ -16,7 +16,7 @@ import {
   writeImportState,
   type ImportState,
   type SessionRef,
-} from 'hippo-mind'
+} from './hippo/engine.js'
 import type { AgentInventory, ImportJob, ImportStats } from './types.ts'
 
 export { inventory }

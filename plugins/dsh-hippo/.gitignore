@@ -1,2 +1,22 @@
-lib/
+node_modules/
+dist/
+.codegraph/
+.omo/
+.mimosa/
+.env
+*.db
+*.db-journal
+*.db-wal
+# generated dashboards
+hippo-dashboard.html
+web/node_modules/
+web/dist/
+*.tgz
+web/tsconfig.tsbuildinfo
+
+gui-*.log
+gui-test.*
+gui-fg.log
+p*.json
+payload-test.json
 .tsc/

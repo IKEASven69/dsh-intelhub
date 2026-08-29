@@ -16,7 +16,7 @@
  * loadTasks 是旁挂 JSON 读取，不经过 zvec 引擎——零锁开销，K3 每分钟
  * 调用也无压力。
  */
-import { loadTasks, type TaskRecord } from 'hippo-mind'
+import { loadTasks, type TaskRecord } from './hippo/engine.js'
 
 /** 项目在多少天内有任务更新算"活跃"。与引擎 project-card 的 7 天阈值一致。 */
 const ACTIVE_DAYS = 7

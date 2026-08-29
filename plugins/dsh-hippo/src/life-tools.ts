@@ -13,7 +13,7 @@ import {
   getResident, listResidents, createResident, createChannel, getChannel,
   appendMessage, readMessages, readBookmark, writeBookmark,
   withEngine, makeTurn, extractCandidates,
-} from 'hippo-mind'
+} from './hippo/engine.js'
 import { makeResolver, renderText } from './tools.ts'
 import { workDigest } from './project-awareness.ts'
 
@@ -232,7 +232,7 @@ export function registerLifeTools(ctx: Context): void {
       const rounds = Math.min(Math.max(1, Number(args.rounds) || 1), 5)
       const results: string[] = []
 
-      const { getChannel } = await import('hippo-mind')
+      const { getChannel } = await import('./hippo/engine.js')
 
       for (let i = 0; i < rounds; i++) {
         const ch = getChannel(channelId)
@@ -292,7 +292,7 @@ export function registerLifeTools(ctx: Context): void {
       // 召回相关记忆（与任务相关的项目偏好/坑/决策）
       let memoryContext = ''
       try {
-        const { withEngine } = await import('hippo-mind')
+        const { withEngine } = await import('./hippo/engine.js')
         memoryContext = await withEngine(async ({ engine }) => {
           const hits = await engine.recall(task, { project: 'global', limit: 3 })
           return hits.length > 0 ? '\n\n--- 相关记忆 ---\n' + hits.map((h: { type: string; text: string }) => `[${h.type}] ${h.text.slice(0, 100)}`).join('\n') : ''
@@ -309,14 +309,14 @@ export function registerLifeTools(ctx: Context): void {
         // 记入频道（可选）
         const chId = (args.channel ?? '').trim()
         if (chId !== '') {
-          const { appendMessage } = await import('hippo-mind')
+          const { appendMessage } = await import('./hippo/engine.js')
           appendMessage(chId, { kind: 'resident', name }, `[任务] ${task}
 ${output}`)
         }
 
         // K2 蒸馏：任务+产出入库为记忆（"干了什么"）
         try {
-          const { withEngine } = await import('hippo-mind')
+          const { withEngine } = await import('./hippo/engine.js')
           void withEngine(async ({ engine }) => {
             await engine.remember(`任务完成（${name}）：${task.slice(0, 80)} → 产出：${output.slice(0, 120)}`, {
               type: 'fact', project: 'life:tasks', agent: 'life',

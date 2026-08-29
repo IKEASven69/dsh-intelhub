@@ -7,7 +7,7 @@ export {
   createChannel, listChannels, getChannel,
   appendMessage, readMessages, readBookmark, writeBookmark,
   withEngine,
-} from 'hippo-mind'
+} from './hippo/engine.js'
 
 /** 记忆召回（life-tools 里的同名函数提出来共用）。 */
 export { recallMemories } from './life-tools.ts'

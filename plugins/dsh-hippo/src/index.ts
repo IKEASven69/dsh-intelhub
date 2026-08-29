@@ -15,11 +15,11 @@ import type { Context } from '@deepseek-ai/cordis'
 // Type-only: pulls the Context.webServer merge（宿主由 web bundle 提供，不打进产物）。
 import type {} from '@deepseek-ai/dsh-host-webserver'
 import { currentJob, inventory, startImport } from './import.ts'
-import { readTeamEvents, distillTeamEvents, foldLedger, triage } from 'hippo-mind'
+import { readTeamEvents, distillTeamEvents, foldLedger, triage } from './hippo/engine.js'
 import {
   loadAutoSettings, saveAutoSettings, listShelved, takeShelved,
   runAutoDistillOnce, withEngine, distill, deleteSession, type AutoDistillSettings,
-} from 'hippo-mind'
+} from './hippo/engine.js'
 import { compileMemories, forgetMemory, listMemories, updateMemory } from './memories.ts'
 import { registerPromptContext, registerRecallTool, registerRememberTool } from './tools.ts'
 import { registerLifeTools } from './life-tools.ts'
@@ -33,35 +33,17 @@ export interface Config {
 
 export const name = 'dsh-hippo'
 
-/** 动态加载可选依赖：变量形式的 specifier 不参与静态类型解析，装载失败返回错误信息。 */
-async function tryImport(spec: string): Promise<string | null> {
-  try {
-    await import(spec)
-    return null
-  } catch (e) {
-    return e instanceof Error ? e.message : String(e)
-  }
-}
-
 /**
- * 在引擎 hippo-mind 的真实安装位置上构造 require：原生/平台依赖是引擎的传递依赖，
- * pnpm 严格布局（或 link: 开发安装）下位于引擎自己的 node_modules，从插件目录
- * 直接解析必然失败——必须以引擎为锚点探测。
+ * 引擎源码已并入本包（原 hippo-mind 独立包已合并）：原生/平台依赖是本包的
+ * 直接 dependencies，从插件自身位置解析即可——旧的"以引擎安装位置为锚点"
+ * 的探测 hack 随包合并一并移除。
  */
-function engineScopedRequire(): ((spec: string) => unknown) | null {
-  try {
-    const enginePkg = createRequire(import.meta.url).resolve('hippo-mind/package.json')
-    return createRequire(enginePkg)
-  } catch {
-    return null
-  }
-}
+const selfRequire = createRequire(import.meta.url)
 
-/** 用引擎锚点的 require 实际加载一个依赖，返回 null（成功）或错误信息。 */
-function tryEngineLoad(req: ((spec: string) => unknown) | null, spec: string): string | null {
-  if (req === null) return `无法定位 hippo-mind 的安装位置，跳过 ${spec} 探测`
+/** 加载一个原生依赖，返回 null（成功）或错误信息。 */
+function tryNativeLoad(spec: string): string | null {
   try {
-    req(spec)
+    selfRequire(spec)
     return null
   } catch (e) {
     return e instanceof Error ? e.message : String(e)
@@ -71,20 +53,19 @@ function tryEngineLoad(req: ((spec: string) => unknown) | null, spec: string): s
 const NATIVE_BLOCKED_HINT =
   '旧版 SQLite 存储模块（better-sqlite3 / sqlite-vec）仍在引擎的 import 链上，装不齐会阻断引擎加载。pnpm 10 / npm 12 默认拦截依赖 install 脚本导致 prebuild 二进制缺失时：在插件安装目录执行 pnpm approve-builds 勾选两者（或在其 pnpm-workspace.yaml 的 onlyBuiltDependencies 加入）后重装。'
 
-/** 自检：引擎 / 存储栈 / 记忆库探测，产出放行/下载指引。 */
+/** 自检：存储栈 / 记忆库探测，产出放行/下载指引。 */
 async function doctor(): Promise<DoctorReport> {
   const guidance: string[] = []
 
-  const engineErr = await tryImport('hippo-mind')
-  const engineReq = engineScopedRequire()
+  // 引擎源码已内联进插件 bundle——doctor 能跑到这里引擎就已加载成功；
+  // 真正会失败的是外置原生模块（安装期 pnpm 拦截 build script 的场景）。
   // 当前存储栈是 @zvec/zvec（proxima 向量索引 + rocksdb FTS）；
   // better-sqlite3/sqlite-vec 是旧版 SQLite 存储遗留，但仍在 import 链上必须可加载。
-  const zvecErr = engineErr === null ? tryEngineLoad(engineReq, '@zvec/zvec') : '引擎不可用，无法探测'
-  const legacyErr = engineErr === null ? tryEngineLoad(engineReq, 'better-sqlite3') : '引擎不可用，无法探测'
+  const zvecErr = tryNativeLoad('@zvec/zvec')
+  const legacyErr = tryNativeLoad('better-sqlite3')
 
-  if (engineErr !== null) guidance.push(`引擎包 hippo-mind 加载失败：${engineErr}。请在插件目录重装依赖（pnpm install）。`)
-  if (engineErr === null && zvecErr !== null) guidance.push(`当前存储栈 @zvec/zvec 加载失败：${zvecErr}。请在插件目录重装依赖（pnpm install）。`)
-  if (engineErr === null && legacyErr !== null) guidance.push(NATIVE_BLOCKED_HINT)
+  if (zvecErr !== null) guidance.push(`当前存储栈 @zvec/zvec 加载失败：${zvecErr}。请在插件目录重装依赖（pnpm install）。`)
+  if (legacyErr !== null) guidance.push(NATIVE_BLOCKED_HINT)
 
   const dataDir = process.env.HIPPO_DATA_DIR ?? join(homedir(), '.hippo')
   // 引擎 v0.1.9 起 zvec 原生存储在 <dataDir>/memories/（proxima 向量索引 +
@@ -121,7 +102,7 @@ async function doctor(): Promise<DoctorReport> {
   }
 
   const checks = [
-    { name: '引擎 hippo-mind', ok: engineErr === null, detail: engineErr ?? 'openEngine() 可用' },
+    { name: '记忆引擎（内置）', ok: true, detail: '已内联进插件 bundle' },
     { name: '向量存储 @zvec/zvec', ok: zvecErr === null, detail: zvecErr ?? 'proxima 索引 + rocksdb FTS 就绪' },
     { name: '遗留 SQLite 模块', ok: legacyErr === null, detail: legacyErr ?? '旧版存储，仍在 import 链上（memories.db 为其遗留文件）' },
     { name: '记忆库', ok: true, detail: storeExists === true ? storePath : storeExists === false ? `尚未创建（首次 import/recall 时自动建立）：${storePath}` : `无法探测：${storePath}` },
@@ -129,7 +110,7 @@ async function doctor(): Promise<DoctorReport> {
   ]
 
   return {
-    ok: engineErr === null && zvecErr === null && legacyErr === null && ollamaOk,
+    ok: zvecErr === null && legacyErr === null && ollamaOk,
     checks,
     storePath,
     storeExists,
@@ -533,7 +514,7 @@ export function apply(ctx: Context, config?: Config): void {
             void readJsonBody(request).then(
               (body) => {
                 void withEngine(async (held) => {
-                  const { runSleep } = await import('hippo-mind')
+                  const { runSleep } = await import('./hippo/engine.js')
                   const r = await runSleep(held.engine, { apply: body.apply === true })
                   sendJson(response, 200, r)
                 }).catch((error: unknown) => {
@@ -560,7 +541,7 @@ export function apply(ctx: Context, config?: Config): void {
             void readJsonBody(request).then(
               (body) => {
                 try {
-                  const { deleteSession } = require('hippo-mind') as typeof import('hippo-mind')
+                  const { deleteSession } = require('./hippo/engine.js') as typeof import('./hippo/engine.js')
                   const r = deleteSession(String(body.id), { deleteSource: body.deleteSource === true })
                   sendJson(response, 200, r)
                 } catch (e) {

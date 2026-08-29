@@ -4,9 +4,18 @@
 onlyBuiltDependencies:
   - better-sqlite3
   - sqlite-vec
+  - '@zvec/zvec'
+  - onnxruntime-node
+  - protobufjs
+  - sharp
 # peerDependencies 声明的是 dsh 宿主运行时注入的包，不在本目录安装：
 # 关闭 pnpm 默认的 peer 自动安装（否则它会去 npm 拉 @deepseek-ai/*，部分包 404）。
 # 构建期由 scripts/link-deps.mjs 从 dsh checkout 链接供给。
 autoInstallPeers: false
 allowBuilds:
+  '@zvec/zvec': true
+  better-sqlite3: true
   esbuild: true
+  onnxruntime-node: true
+  protobufjs: true
+  sharp: true
