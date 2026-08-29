@@ -4,7 +4,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { MemoryEngine } from './memory.js';
-import { SqliteStore } from './store.js';
+import { ZvecStore } from './store.js';
 import { exportRecords, importJsonl, listRecords, renderMarkdown, writeJsonl } from './transfer.js';
 import { fakeEmbed, FAKE_DIM } from './test-helpers.js';
 
@@ -12,8 +12,8 @@ function tmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-transfer-'));
 }
 
-async function seededEngine(dir: string): Promise<{ engine: MemoryEngine; store: SqliteStore }> {
-  const store = new SqliteStore(dir, FAKE_DIM);
+async function seededEngine(dir: string): Promise<{ engine: MemoryEngine; store: ZvecStore }> {
+  const store = new ZvecStore(dir, FAKE_DIM);
   const engine = new MemoryEngine(store, fakeEmbed);
   await engine.remember('端口是 3456', { type: 'fact', project: 'proj-a', agent: 'claude', createdAt: 1000 });
   await engine.remember('决定用 SQLite', { type: 'decision', project: 'proj-a', agent: 'codex', createdAt: 2000 });
@@ -30,7 +30,7 @@ test('export → import roundtrip is idempotent (re-import reinforces)', async (
     store.close();
 
     // Import into a fresh store: all created.
-    const store2 = new SqliteStore(dir2, FAKE_DIM);
+    const store2 = new ZvecStore(dir2, FAKE_DIM);
     const engine2 = new MemoryEngine(store2, fakeEmbed);
     const counts = await importJsonl(engine2, jsonl);
     assert.deepEqual(counts, { created: 3, reinforced: 0, skipped: 0 });
@@ -113,7 +113,7 @@ test('renderMarkdown groups by project with Chinese type tags', async () => {
 test('importJsonl skips malformed lines and reports them', async () => {
   const dir = tmpDir();
   try {
-    const store = new SqliteStore(dir, FAKE_DIM);
+    const store = new ZvecStore(dir, FAKE_DIM);
     const engine = new MemoryEngine(store, fakeEmbed);
     const counts = await importJsonl(engine, [
       '{"text":"ok one","type":"fact"}',

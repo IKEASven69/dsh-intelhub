@@ -41,7 +41,6 @@ import { extractCandidates, distill as runDistill, MAX_CANDIDATES, type Candidat
 import { parseJsonl, entryToTurns, cwdToProject, type Turn } from '../patterns/transcript.js';
 import { findTranscripts, loadSessionEvents, minePatterns, scorePatterns, patternToDict, type Pattern, type ToolEvent } from '../patterns/miner.js';
 import { exportSkills } from './sop.js';
-import type { SqliteStore } from './store.js';
 import { dataDir } from './store.js';
 // 会话端点（G1）：适配器 + 索引层 + 导出格式；G2 增列表蒸馏标记与记忆反查
 import {
@@ -143,7 +142,7 @@ export function startHttpServer(port: number = DEFAULT_PORT, opts: HttpServerOpt
       type: type ? String(type) : undefined,
       agent: agent ? String(agent) : undefined,
     };
-    const rows = listRecords(held.engine.store as SqliteStore, {
+    const rows = listRecords(held.engine.store as never, {
       ...filters,
       limit: limit ? Number(limit) : 50,
       offset: offset ? Number(offset) : 0,
@@ -158,7 +157,7 @@ export function startHttpServer(port: number = DEFAULT_PORT, opts: HttpServerOpt
       }
     } catch { /* sources 目录不可用则不带 origin_ts */ }
     // 带筛选后总数，分页页数用
-    res.json({ memories: rows, total: countRecords(held.engine.store as SqliteStore, filters) });
+    res.json({ memories: rows, total: countRecords(held.engine.store as never, filters) });
   }));
 
   // 批量相似边（图谱专用）：一次短持出 top-N 记忆的全图边，免去逐条 200 次 similar

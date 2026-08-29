@@ -13,7 +13,7 @@ const ROOT = dirname(fileURLToPath(import.meta.url))
 // prebuild 装载），@zvec/zvec 同为原生存储，transformers 携带模型运行时。
 // 引擎源码（原 hippo-mind 包）已并入本包 src/，随插件一起内联进 lib——
 // 独立引擎包依赖随包合并移除。
-const ENGINE_EXTERNALS = ['better-sqlite3', 'sqlite-vec', '@zvec/zvec', '@huggingface/transformers']
+const ENGINE_EXTERNALS = ['better-sqlite3', '@zvec/zvec', '@huggingface/transformers']
 
 const isEngineExternal = (id: string) =>
   ENGINE_EXTERNALS.some((e) => id === e || id.startsWith(e + '/'))

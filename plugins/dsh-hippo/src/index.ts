@@ -51,7 +51,7 @@ function tryNativeLoad(spec: string): string | null {
 }
 
 const NATIVE_BLOCKED_HINT =
-  '旧版 SQLite 存储模块（better-sqlite3 / sqlite-vec）仍在引擎的 import 链上，装不齐会阻断引擎加载。pnpm 10 / npm 12 默认拦截依赖 install 脚本导致 prebuild 二进制缺失时：在插件安装目录执行 pnpm approve-builds 勾选两者（或在其 pnpm-workspace.yaml 的 onlyBuiltDependencies 加入）后重装。'
+  '会话索引模块 better-sqlite3 加载失败（迁移与会话搜索不可用）。pnpm 10 / npm 12 默认拦截依赖 install 脚本导致 prebuild 二进制缺失时：在插件安装目录执行 pnpm approve-builds 勾选（或在其 pnpm-workspace.yaml 的 onlyBuiltDependencies 加入）后重装。'
 
 /** 自检：存储栈 / 记忆库探测，产出放行/下载指引。 */
 async function doctor(): Promise<DoctorReport> {
@@ -59,13 +59,14 @@ async function doctor(): Promise<DoctorReport> {
 
   // 引擎源码已内联进插件 bundle——doctor 能跑到这里引擎就已加载成功；
   // 真正会失败的是外置原生模块（安装期 pnpm 拦截 build script 的场景）。
-  // 当前存储栈是 @zvec/zvec（proxima 向量索引 + rocksdb FTS）；
-  // better-sqlite3/sqlite-vec 是旧版 SQLite 存储遗留，但仍在 import 链上必须可加载。
+  // 存储分工：记忆本体在 @zvec/zvec（proxima 向量 + rocksdb FTS）；
+  // better-sqlite3 服务会话索引 sessions.db（FTS5 trigram 中文搜索）与
+  // zcode 数据源只读——迁移链路两者都需要。
   const zvecErr = tryNativeLoad('@zvec/zvec')
-  const legacyErr = tryNativeLoad('better-sqlite3')
+  const sqliteErr = tryNativeLoad('better-sqlite3')
 
   if (zvecErr !== null) guidance.push(`当前存储栈 @zvec/zvec 加载失败：${zvecErr}。请在插件目录重装依赖（pnpm install）。`)
-  if (legacyErr !== null) guidance.push(NATIVE_BLOCKED_HINT)
+  if (sqliteErr !== null) guidance.push(NATIVE_BLOCKED_HINT)
 
   const dataDir = process.env.HIPPO_DATA_DIR ?? join(homedir(), '.hippo')
   // 引擎 v0.1.9 起 zvec 原生存储在 <dataDir>/memories/（proxima 向量索引 +
@@ -104,15 +105,15 @@ async function doctor(): Promise<DoctorReport> {
   const checks = [
     { name: '记忆引擎（内置）', ok: true, detail: '已内联进插件 bundle' },
     { name: '向量存储 @zvec/zvec', ok: zvecErr === null, detail: zvecErr ?? 'proxima 索引 + rocksdb FTS 就绪' },
-    { name: '遗留 SQLite 模块', ok: legacyErr === null, detail: legacyErr ?? '旧版存储，仍在 import 链上（memories.db 为其遗留文件）' },
+    { name: '会话索引 better-sqlite3', ok: sqliteErr === null, detail: sqliteErr ?? 'sessions.db FTS5 就绪（迁移/会话搜索用）' },
     { name: '记忆库', ok: true, detail: storeExists === true ? storePath : storeExists === false ? `尚未创建（首次 import/recall 时自动建立）：${storePath}` : `无法探测：${storePath}` },
     { name: 'ollama 生活流引擎', ok: ollamaOk, detail: ollamaDetail },
   ]
 
   return {
-    ok: zvecErr === null && legacyErr === null && ollamaOk,
+    ok: zvecErr === null && sqliteErr === null && ollamaOk,
     // 迁移链路只依赖引擎三件套；ollama 挂了不该挡住"开始迁移"（生活流专属依赖）
-    migrationReady: zvecErr === null && legacyErr === null,
+    migrationReady: zvecErr === null && sqliteErr === null,
     checks,
     storePath,
     storeExists,

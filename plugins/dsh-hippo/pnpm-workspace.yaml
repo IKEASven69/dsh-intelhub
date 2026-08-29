@@ -3,7 +3,6 @@
 # 否则 Windows 上回退 node-gyp 源码编译大概率失败——doctor 自检会给出同样指引。
 onlyBuiltDependencies:
   - better-sqlite3
-  - sqlite-vec
   - '@zvec/zvec'
   - onnxruntime-node
   - protobufjs
