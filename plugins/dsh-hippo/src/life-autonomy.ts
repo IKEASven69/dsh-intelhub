@@ -19,6 +19,7 @@ import {
   withEngine, recallMemories,
 } from './life-bridge.ts'
 import { llmComplete } from './life-tools.ts'
+import { workDigest } from './project-awareness.ts'
 
 // ── K4：人格演化视图 ─────────────────────────────────
 
@@ -106,14 +107,18 @@ export async function wakeResident(ctx: Context, name: string): Promise<string |
 
   const evolved = getEvolvedPersona(name)
   const memoryCtx = await recallMemories(name, unread.length > 0 ? unread[unread.length - 1].text : '日常')
+  // 工作感知（严格模式）：主人最近 2 小时任务有动静才注入——不在干活时
+  // 居民不该聊工作（调研：badly-timed proactive speech 伤关系不伤任务）。
+  const work = workDigest({ onlyIfRecent: true })
 
-  const systemPrompt = `${evolved}${memoryCtx}
+  const systemPrompt = `${evolved}${memoryCtx}${work !== '' ? '\n\n' + work : ''}
 
 --- 当前状态 ---
 你被定时点醒了。${unread.length > 0 ? `频道有 ${unread.length} 条你未读的消息：\n${recentTexts.slice(-5).map((t) => t.slice(0, 100)).join('\n')}` : '频道没有新消息。'}
 
 如果你觉得有值得说的（回应新消息/分享想法/关心某人），请直接说出你想说的话（1-3 句，保持人格）。
-如果没什么好说的，只输出"[SILENCE]"。`
+如果没什么好说的，只输出"[SILENCE]"。
+（提工作相关的话也遵守一句以内，别罗列任务——罗列即沉默。）`
 
   // 统一走 ollama 直连（llmComplete）——此前走 ctx.llm，dsh llm 服务
   // 不可用时 K3 整体静默死亡且无任何日志。

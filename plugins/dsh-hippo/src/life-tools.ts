@@ -15,6 +15,7 @@ import {
   withEngine, makeTurn, extractCandidates,
 } from 'hippo-mind'
 import { makeResolver, renderText } from './tools.ts'
+import { workDigest } from './project-awareness.ts'
 
 
 /** 通过 ollama 本地 API 生成回复（绕开 dsh LLM 服务的适配器层，直连更可靠）。
@@ -134,9 +135,11 @@ export async function summonResident(
 
   // K2：记忆召回（与当前话题相关的之前对话）
   const memoryContext = await recallMemories(name, userText)
+  // 工作感知：主人最近在忙什么（用户主动召唤——值得注入近况）
+  const work = workDigest()
 
   try {
-    const reply = await llmComplete(ctx, residentSystemPrompt(name, resident.persona) + channelContext + memoryContext, userText) || '……'
+    const reply = await llmComplete(ctx, residentSystemPrompt(name, resident.persona) + channelContext + memoryContext + (work !== '' ? '\n\n' + work : ''), userText) || '……'
     // 记入频道账本（居民生活继续）。appendMessage 返回值带最新 seq，
     // 书签直接用它——之前误写 readMessages(0,1)[0]?.seq 把游标设回了
     // 频道第一条，导致每次召唤后"未读"变成全部历史。
@@ -296,9 +299,10 @@ export function registerLifeTools(ctx: Context): void {
         }).catch(() => '')
       } catch { /* 引擎不可用不阻断 */ }
 
+      const work = workDigest()
       const systemPrompt = `${resident.persona}
 
-你是「${name}」，接到一项工作任务。用你的专业能力完成它，输出实际结果（不是"我会做"而是做了什么）。` + memoryContext
+你是「${name}」，接到一项工作任务。用你的专业能力完成它，输出实际结果（不是"我会做"而是做了什么）。` + memoryContext + (work !== '' ? '\n\n' + work : '')
       try {
         const output = await llmComplete(ctx, systemPrompt, task) || '（空产出）'
 
