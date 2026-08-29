@@ -50,6 +50,18 @@ function passesFilters(
 let _running = false;
 
 /** 跑一轮自动蒸馏。返回统计（并写回 settings.lastRun）。 */
+/** LLM 精炼注入点：插件启动时注入（走 dsh 配的模型）；不注入 = 纯规则。
+ *  llmRefine 内部对 LLM 失败降级原样返回，这里无需再兜底。 */
+let distillRefiner: ((candidates: import('./distill.js').Candidate[]) => Promise<import('./distill.js').Candidate[]>) | null = null
+export function setDistillRefiner(refiner: typeof distillRefiner): void {
+  distillRefiner = refiner
+}
+
+/** 当前注入的 LLM 精炼（未注入 = null，纯规则）。迁移入口（import.ts）共用。 */
+export function getDistillRefiner(): typeof distillRefiner {
+  return distillRefiner
+}
+
 export async function runAutoDistillOnce(): Promise<AutoRunStats> {
   const st = loadAutoSettings();
   const stats: AutoRunStats = { scanned: 0, created: 0, reinforced: 0, superseded: 0, shelved: 0, skipped: 0, at: Date.now() / 1000 };
@@ -100,7 +112,7 @@ async function runOnceInner(st: AutoDistillSettings, stats: AutoRunStats): Promi
 
     await withEngine(async held => {
       // 第一遍 dry-run（不带 turns：不落 L0 source）拿 duplicate/similarity 分档
-      const dry = await distill(held.engine, candidates.map(c => ({ ...c })), { apply: false, agent: ref.agent });
+      const dry = await distill(held.engine, candidates.map(c => ({ ...c })), { apply: false, agent: ref.agent, refiner: distillRefiner ?? undefined });
       const classified = dry.candidates;
 
       const safe: Candidate[] = [];
@@ -120,7 +132,7 @@ async function runOnceInner(st: AutoDistillSettings, stats: AutoRunStats): Promi
         : '';
 
       if (safe.length > 0) {
-        const applied = await distill(held.engine, safe.map(c => ({ ...c })), { apply: true, agent: ref.agent, sourceId });
+        const applied = await distill(held.engine, safe.map(c => ({ ...c })), { apply: true, agent: ref.agent, sourceId, refiner: distillRefiner ?? undefined });
         stats.created += applied.created;
         stats.reinforced += applied.reinforced;
         stats.superseded += applied.candidates.filter(c => c.duplicate === 'supersede').length;

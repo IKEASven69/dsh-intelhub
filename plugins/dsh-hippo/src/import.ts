@@ -17,6 +17,7 @@ import {
   type ImportState,
   type SessionRef,
 } from './hippo/engine.js'
+import { getDistillRefiner } from './hippo/auto-distill-run.js'
 import type { AgentInventory, ImportJob, ImportStats } from './types.ts'
 
 export { inventory }
@@ -114,7 +115,7 @@ export function startImport(opts: { dryRun: boolean }): ImportJob {
           tally.candidates += candidates.length
           if (candidates.length === 0) { markProcessed(state, ref); job.current += 1; continue }
           stats.sessionsWithCandidates += 1
-          const result = await distill(opened.engine, candidates, { apply: !opts.dryRun, agent: `import:${ref.agent}`, turns })
+          const result = await distill(opened.engine, candidates, { apply: !opts.dryRun, agent: `import:${ref.agent}`, turns, refiner: getDistillRefiner() ?? undefined })
           stats.created += result.created
           stats.reinforced += result.reinforced
           stats.skipped += result.skipped

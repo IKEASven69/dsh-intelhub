@@ -14,6 +14,8 @@ import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 // Type-only: pulls the Context.webServer merge（宿主由 web bundle 提供，不打进产物）。
 import type {} from '@deepseek-ai/dsh-host-webserver'
+// Type-only: pulls the Context.llm merge（dsh llm 服务声明）。
+import type {} from '@deepseek-ai/dsh-llm'
 import { currentJob, inventory, startImport } from './import.ts'
 import { readTeamEvents, distillTeamEvents, foldLedger, triage } from './hippo/engine.js'
 import {
@@ -24,6 +26,9 @@ import { compileMemories, forgetMemory, listMemories, updateMemory } from './mem
 import { registerPromptContext, registerRecallTool, registerRememberTool } from './tools.ts'
 import { registerLifeTools } from './life-tools.ts'
 import { startAutonomyLoop } from './life-autonomy.ts'
+import { llmCompleteWithFallback } from './dsh-llm.ts'
+import { setDistillRefiner } from './hippo/auto-distill-run.js'
+import { llmRefine } from './hippo/refine.js'
 import type { DoctorReport } from './types.ts'
 
 /** H4 回写开关：默认关，cordis.patch.yml / profile config 里 writeback: true 显式开启。 */
@@ -32,6 +37,9 @@ export interface Config {
 }
 
 export const name = 'dsh-hippo'
+
+/** inject(['llm']) 作用域内的 context（llm 可安全触碰）；未注入 = null。 */
+let llmCtx: Context | null = null
 
 /**
  * 引擎源码已并入本包（原 hippo-mind 独立包已合并）：原生/平台依赖是本包的
@@ -79,27 +87,42 @@ async function doctor(): Promise<DoctorReport> {
     storeExists = null
   }
 
-  // 生活流（居民）依赖 ollama 本地 API——summon/relay/task/K3 全走它。
-  // 探测可达性 + 已拉取的模型列表，不可达时给出指引（否则居民只会"生成失败"）。
-  let ollamaOk = true
-  let ollamaDetail = ''
-  try {
-    const resp = await fetch('http://127.0.0.1:11434/api/tags', { signal: AbortSignal.timeout(2000) })
-    if (resp.ok) {
-      const tags = (await resp.json()) as { models?: Array<{ name?: string }> }
-      const names = (tags.models ?? []).map((m) => m.name ?? '').filter(Boolean)
-      ollamaDetail = names.length > 0 ? `可达，模型：${names.slice(0, 5).join('、')}` : '可达，但还没有拉取任何模型（ollama pull <model>）'
-      if (names.length === 0) ollamaOk = false
-    } else {
-      ollamaOk = false
-      ollamaDetail = `ollama 响应异常：HTTP ${resp.status}`
-    }
-  } catch {
-    ollamaOk = false
-    ollamaDetail = '无法连接 127.0.0.1:11434（ollama 未启动？）'
+  // 生活流/LLM 蒸馏精炼走 dsh 配的模型（ctx.llm 优先，直连 ollama 兜底）。
+  // 探测不真调模型（零成本零延迟）：settings.yaml 有默认模型 + 默认 provider
+  // 已注册适配器 = dsh llm 可用；否则探测 ollama 直连兜底是否可达。
+  let llmOk = true
+  let llmDetail = ''
+  const { readDefaultModel } = await import('./dsh-llm.ts')
+  const route = readDefaultModel()
+  const hasLlmSvc = llmCtx !== null && typeof llmCtx.llm?.listProviders === 'function'
+  let viaDsh = false
+  if (route !== null && hasLlmSvc) {
+    try {
+      const providers = llmCtx!.llm.listProviders()
+      viaDsh = providers.some((pvd) => pvd.id === route.provider)
+    } catch { /* 列举失败按不可用处理 */ }
   }
-  if (!ollamaOk) {
-    guidance.push('生活流居民需要 ollama 本地服务（127.0.0.1:11434）生成回复。请安装并启动 ollama，拉取居民用的模型（默认 gemma4:e4b，可在 ~/.dsh/settings.yaml 的 llm-pi-ai 节配置）。')
+  if (viaDsh) {
+    llmDetail = `dsh 模型路由就绪（${route!.provider}/${route!.model}），蒸馏精炼与生活流共用`
+  } else {
+    // 兜底探测 ollama 直连
+    try {
+      const resp = await fetch('http://127.0.0.1:11434/api/tags', { signal: AbortSignal.timeout(2000) })
+      if (resp.ok) {
+        const tags = (await resp.json()) as { models?: Array<{ name?: string }> }
+        const names = (tags.models ?? []).map((m) => m.name ?? '').filter(Boolean)
+        llmDetail = names.length > 0 ? `ollama 直连可达（模型：${names.slice(0, 3).join('、')}）` : 'ollama 可达但无模型（ollama pull）'
+        if (names.length === 0) llmOk = false
+      } else { llmOk = false; llmDetail = `ollama 响应异常：HTTP ${resp.status}` }
+    } catch {
+      llmOk = false
+      llmDetail = route !== null
+        ? `默认模型 ${route.provider}/${route.model} 的适配器未就绪，且 ollama 直连不可达`
+        : 'settings.yaml 无默认模型，且 ollama 直连不可达'
+    }
+  }
+  if (!llmOk) {
+    guidance.push('LLM 精炼与生活流居民需要可用的模型：在 dsh 设置里配置默认模型（agent-default-model），或启动 ollama（127.0.0.1:11434）并拉取模型。不可用时蒸馏自动退回纯规则（质量降级但可用）。')
   }
 
   const checks = [
@@ -107,11 +130,11 @@ async function doctor(): Promise<DoctorReport> {
     { name: '向量存储 @zvec/zvec', ok: zvecErr === null, detail: zvecErr ?? 'proxima 索引 + rocksdb FTS 就绪' },
     { name: '会话索引 better-sqlite3', ok: sqliteErr === null, detail: sqliteErr ?? 'sessions.db FTS5 就绪（迁移/会话搜索用）' },
     { name: '记忆库', ok: true, detail: storeExists === true ? storePath : storeExists === false ? `尚未创建（首次 import/recall 时自动建立）：${storePath}` : `无法探测：${storePath}` },
-    { name: 'ollama 生活流引擎', ok: ollamaOk, detail: ollamaDetail },
+    { name: 'LLM（蒸馏精炼/生活流）', ok: llmOk, detail: llmDetail },
   ]
 
   return {
-    ok: zvecErr === null && sqliteErr === null && ollamaOk,
+    ok: zvecErr === null && sqliteErr === null && llmOk,
     // 迁移链路只依赖引擎三件套；ollama 挂了不该挡住"开始迁移"（生活流专属依赖）
     migrationReady: zvecErr === null && sqliteErr === null,
     checks,
@@ -167,6 +190,17 @@ function readJsonBody(request: IncomingMessage): Promise<Record<string, unknown>
 
 export function apply(ctx: Context, config?: Config): void {
   ctx.logger.info('dsh-hippo: 记忆桥已加载（H2 工具+提示注入 / H3 管理+编译 / H4 回写' + (config?.writeback === true ? '已开启' : '默认关') + '）')
+
+  // LLM 蒸馏精炼注入：规则粗筛 → LLM 判决（走 dsh 配的模型）。
+  // llmRefine 对 LLM 失败/超时降级原样返回，蒸馏链路永不被它阻塞。
+  // cordis 纪律：ctx.llm 只能在 inject(['llm']) 作用域内触碰——注入时保存
+  // 引用，refiner/doctor 后续都用这个作用域内的 lc。
+  ctx.inject(['llm'], (lc) => {
+    llmCtx = lc
+    setDistillRefiner((candidates) =>
+      llmRefine(candidates, (system, user, opts) =>
+        llmCompleteWithFallback(lc, system, user, opts).then(r => r.text)))
+  })
 
   // H2：memory_recall 工具 + systemPrompt 注入（服务缺席时降级跳过，不阻断插件）。
   ctx.inject(['tools', 'agents', 'sandboxPolicy'], (tc) => {

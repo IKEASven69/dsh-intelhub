@@ -36,6 +36,7 @@ const LINKS = [
   ['@deepseek-ai/dsh-agent', 'packages/core/agent'],
   ['@deepseek-ai/dsh-sandbox-policy', 'packages/sandbox/sandbox-policy'],
   ['@deepseek-ai/dsh-system-prompt', 'packages/core/system-prompt'],
+  ['@deepseek-ai/dsh-llm', 'packages/llm/llm'],
   ['@types/node', 'node_modules/@types/node'],
 ]
 

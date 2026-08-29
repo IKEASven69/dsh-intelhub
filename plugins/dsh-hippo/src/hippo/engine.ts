@@ -51,7 +51,8 @@ export {
   loadAutoSettings, saveAutoSettings, listShelved, appendShelved, takeShelved,
   type AutoDistillSettings, type AutoMode, type ShelvedCandidate,
 } from './auto-distill.js';
-export { runAutoDistillOnce, startAutoDistillTimer, type AutoRunStats } from './auto-distill-run.js';
+export { runAutoDistillOnce, startAutoDistillTimer, setDistillRefiner, getDistillRefiner, type AutoRunStats } from './auto-distill-run.js';
+export { llmRefine, parseVerdicts, type CompleteFn } from './refine.js';
 export { runSleep, type SleepReport, type DupCluster } from './sleep.js';
 export { deleteSession, ignoreSession, type DeleteSessionResult } from '../agents/session-delete.js';
 

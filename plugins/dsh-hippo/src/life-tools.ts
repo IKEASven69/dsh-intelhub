@@ -18,48 +18,17 @@ import { makeResolver, renderText } from './tools.ts'
 import { workDigest } from './project-awareness.ts'
 
 
-/** 通过 ollama 本地 API 生成回复（绕开 dsh LLM 服务的适配器层，直连更可靠）。
- * summon/relay/task/K3 点醒共用这一条 LLM 路径——此前 K3 走 ctx.llm，
- * dsh llm 服务不可用时居民全体静默且无日志，统一到 ollama 直连。 */
+/** 生活流 LLM 入口：走 dsh 配的模型（ctx.llm），无 dsh llm 服务时降级直连 ollama。
+ * summon/relay/task/K3 点醒共用这一条路径——模型路由尊重 dsh 的
+ * agent-default-model 配置，用户在 dsh 里切模型插件自动跟随。 */
 export async function llmComplete(
-  _ctx: Context,
+  ctx: Context,
   system: string,
   user: string,
 ): Promise<string> {
-  // 读 ollama 模型配置（llm-pi-ai 节），默认 gemma4:e4b
-  let model = 'gemma4:e4b'
-  try {
-    const { readFileSync } = await import('node:fs')
-    const { join } = await import('node:path')
-    const { homedir } = await import('node:os')
-    const yaml = readFileSync(join(homedir(), '.dsh', 'settings.yaml'), 'utf8')
-    // 防御：没有 llm-pi-ai 节时 indexOf 返回 -1，slice(-1) 会切出末字符
-    // 导致正则匹配到错误内容——显式判空后再切。
-    const start = yaml.indexOf('llm-pi-ai:')
-    if (start !== -1) {
-      const m = yaml.slice(start).match(/^\s*- id:\s*(\S+)/m)
-      if (m) model = m[1]
-    }
-  } catch { /* 配置读不到就用默认模型 */ }
-
-  const resp = await fetch('http://127.0.0.1:11434/v1/chat/completions', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: 'system', content: system },
-        { role: 'user', content: user },
-      ],
-      max_tokens: 4096,
-    }),
-    signal: AbortSignal.timeout(120_000),
-  })
-  if (!resp.ok) {
-    throw new Error(`ollama ${resp.status}: ${await resp.text().catch(() => '')}`.slice(0, 200))
-  }
-  const d = (await resp.json()) as { choices?: Array<{ message?: { content?: string } }> }
-  return d.choices?.[0]?.message?.content ?? ''
+  const { llmCompleteWithFallback } = await import('./dsh-llm.ts')
+  const { text } = await llmCompleteWithFallback(ctx, system, user)
+  return text
 }
 
 /** 居民记忆 scope（引擎 project 机制）。 */

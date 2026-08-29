@@ -232,15 +232,24 @@ export async function distill(
     dataDir?: string;
     /** 外部预存的 L0 source id（auto-distill 先存源再分流，避免二次落盘） */
     sourceId?: string;
+    /** LLM 精炼（可选）：去重判决前过滤/改写候选——规则管召回、LLM 管精度。
+     *  传 null/不传 = 纯规则；LLM 不可用时 llmRefine 内部降级原样返回。 */
+    refiner?: (candidates: Candidate[]) => Promise<Candidate[]>;
   } = {},
 ): Promise<DistillResult> {
-  const { apply = false, agent = 'distill:claude', turns, dataDir } = opts;
+  const { apply = false, agent = 'distill:claude', turns, dataDir, refiner } = opts;
 
   // Save one L0 blob for the whole transcript; every candidate references it.
   let sourceId = opts.sourceId ?? '';
   if (!sourceId && turns && turns.length && candidates.some(c => c.source_offset >= 0)) {
     const proj = candidates.length ? candidates[0].project : '';
     sourceId = saveSource(turns.map(turnToDict), { project: proj, agent, dataDir });
+  }
+
+  // LLM 精炼在去重判决之前：被丢弃的候选不消耗嵌入计算，改写后的文本
+  // 参与正常的 dedup/supersede 判定（改写不绕过任何质量带）。
+  if (refiner && candidates.length > 0) {
+    candidates = await refiner(candidates);
   }
 
   const result: DistillResult = { created: 0, reinforced: 0, skipped: 0, maybe: 0, candidates };
