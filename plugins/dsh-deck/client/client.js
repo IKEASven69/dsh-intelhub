@@ -293,6 +293,27 @@ window.__ModuleLoader__.load({
         if (cmd === undefined) return
         try { await navigator.clipboard.writeText(cmd); setMsg('命令已复制 ✓') } catch { setMsg('复制失败，请手动选择') }
       }
+      const sendToSession = async () => {
+        const queued = (cards ?? []).find((c) => c.status === 'queued')
+        if (queued === undefined) { setMsg('没有待接单的卡（queued）'); return }
+        const proj = stateStore.projects.find((p) => p.id === projectId)
+        const sid = (proj && proj.bindSession) || sessionsStore.current
+        if (sid === undefined) { setMsg('没有绑定会话，先在控制室绑定'); return }
+        const text = [
+          '【dsh-deck 任务派发】',
+          '任务：' + queued.title,
+          '类型：' + (TYPE_LABEL[queued.type] || queued.type),
+          queued.acceptance.length > 0 ? '验收：\n' + queued.acceptance.map((a, i) => (i + 1) + '. ' + a).join('\n') : '',
+          '\n协议：读项目 TASK.md 找 status:queued 的卡→改 running→干活→写 RESULT.md（含 ## 判断 + ## 来源）→改 review。',
+          '完成后总台会出现审阅待办。',
+        ].filter(Boolean).join('\n')
+        try {
+          setMsg('投递中…')
+          await promptIntoSession(sid, text)
+          openSession(sid)
+          setMsg('✓ 已派发到会话（右侧可见 agent 开始工作）')
+        } catch (e) { setMsg('失败：' + String((e && e.message) || e)) }
+      }
       const markDone = (id) => API.taskStatus(projectId, id, 'done').then(() => reload())
       return h('div', { className: 'dk-col' },
         h('form', { className: 'dk-taskform', onSubmit: create },
@@ -303,6 +324,7 @@ window.__ModuleLoader__.load({
           h('button', { type: 'submit' }, '建卡')),
         h('div', { className: 'dk-toolbar' },
           h('button', { className: 'dk-ghost', onClick: dispatch }, '🚀 发给 zcode'),
+          h('button', { className: 'dk-ghost', onClick: () => sendToSession() }, '💬 发到会话'),
           h('span', { className: 'dk-fine' }, '把 TASK.md 的卡派给终端里的 agent（会开新窗口）')),
         msg !== null
           ? h(Note, null, msg, window.__deckLastCmd !== undefined
@@ -1159,7 +1181,15 @@ function openSession(id) { try { deckCtx && deckCtx.sessions && deckCtx.sessions
                 h('span', { className: 'dk-step ' + (real < step ? 'done' : real === step ? 'now' : '') }, h('i', null, real < step ? '✓' : real + 1), st),
                 real < 4 ? h('span', { className: 'dk-stepline ' + (real < step ? 'done' : '') }) : null)
             })),
-            c.status === 'queued' ? h('button', { className: 'dk-mini', onClick: () => { window.__dkDispatchProject = b.id; window.__dkNeedLaunch = (window.__dkLaunchSeen !== '1'); notify() } }, '🚀 派发') : null)),
+            c.status === 'queued' ? h('span', null,
+              h('button', { className: 'dk-mini', onClick: () => { window.__dkDispatchProject = b.id; window.__dkNeedLaunch = (window.__dkLaunchSeen !== '1'); notify() } }, '🚀 派发'),
+              h('button', { className: 'dk-mini', style: { marginLeft: 5 }, onClick: async () => {
+                const proj = stateStore.projects.find((p) => p.id === b.id)
+                const sid = (proj && proj.bindSession) || sessionsStore.current
+                if (!sid) { window.alert('先在控制室绑定会话'); return }
+                const text = '【dsh-deck 任务派发】\n任务：' + c.title + '\n读 TASK.md 找 queued 卡→干活→写 RESULT.md→改 review'
+                try { await promptIntoSession(sid, text); openSession(sid) } catch (e) { window.alert(String(e.message || e)) }
+              } }, '💬 会话')) : null)),
         drafting.map((i) =>
           h('div', { key: i.slug, className: 'dk-flowrow' },
             h('span', { className: 'ftt' }, i.title),
