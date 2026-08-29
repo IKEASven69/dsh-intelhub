@@ -1,7 +1,7 @@
 {
   "name": "dsh-deck",
-  "version": "0.1.0",
-  "description": "dsh 工作台插件：知识调研台 + 自媒体台 + 可新建工作台的容器。文件即协议，zcode 引擎，发布预填人工终审。计划见 PLAN.md。",
+  "version": "0.2.0",
+  "description": "dsh 个人工作台插件：五台一屏（总台/知识库/内容/调研/消息）+ 宿主对话右栏 + PPT 放映 + 双通道派发 + 审阅落库 + 发布预填。本地优先，零云端。",
   "type": "module",
   "main": "./lib/index.js",
   "exports": {
