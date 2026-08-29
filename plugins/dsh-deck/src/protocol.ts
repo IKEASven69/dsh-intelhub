@@ -24,15 +24,28 @@ export interface DeckAccountStatus {
   checkedAt?: string
 }
 
+export interface DeckMessage {
+  id: string
+  platform: string
+  author: string
+  text: string
+  contentSlug: string
+  time: string
+  status: 'new' | 'drafted' | 'replied'
+  reply: string
+  repliedAt?: string
+}
+
 export interface DeckState {
   version: 1
   projects: DeckProject[]
   accounts: Record<string, DeckAccountStatus>
   pendingMount: Array<Record<string, unknown>>
+  messages: DeckMessage[]
 }
 
 export function emptyDeck(): DeckState {
-  return { version: 1, projects: [], accounts: {}, pendingMount: [] }
+  return { version: 1, projects: [], accounts: {}, pendingMount: [], messages: [] }
 }
 
 /** 内置两台面 = 预注册模板实例（不可删，可隐藏）。 */

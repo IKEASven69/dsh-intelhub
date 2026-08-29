@@ -24,6 +24,11 @@ window.__ModuleLoader__.load({
       adopt: (file, to) => post('/api/deck/idea/adopt', { file, to }),
       insights: () => get('/api/deck/insights'),
       quickview: () => post('/api/deck/kb/quickview', {}),
+      msgList: () => get('/api/deck/messages'),
+      msgAdd: (x) => post('/api/deck/messages', x),
+      msgReply: (id, reply) => post('/api/deck/message/reply', { id, reply }),
+      msgDraft: (id) => post('/api/deck/message/reply', { id, reply: '', draft: true }),
+      msgDelete: (id) => post('/api/deck/message/delete', { id }),
       tasks: (project) => post('/api/deck/tasks', { project }),
       boards: () => post('/api/deck/tasks', {}),
       taskCreate: (project, title, type, acceptance, body) => post('/api/deck/task/create', { project, title, type, acceptance, body }),
@@ -1216,11 +1221,83 @@ function openSession(id) { try { deckCtx && deckCtx.sessions && deckCtx.sessions
     }
 
     function MsgDesk() {
+      const [msgs, setMsgs] = useState(null)
+      const [showAdd, setShowAdd] = useState(false)
+      const [replying, setReplying] = useState(null)
+      const [replyText, setReplyText] = useState('')
+      const [msg, setMsg] = useState(null)
+      const reload = () => API.msgList().then((j) => setMsgs(j.ok ? j.messages : [])).catch(() => setMsgs([]))
+      useEffect(() => { reload() }, [])
+      const addMsg = (plat, author, text, slug) => {
+        API.msgAdd({ platform: plat, author, text, contentSlug: slug }).then((j) => {
+          if (j.ok) { setShowAdd(false); reload() } else setMsg('失败：' + j.error)
+        })
+      }
+      const doDraft = (id) => {
+        setReplying(id); setReplyText('起草中…')
+        API.msgDraft(id).then((j) => { if (j.ok) { setReplyText(j.draft) } else { setMsg('起草失败') } })
+      }
+      const doReply = () => {
+        API.msgReply(replying, replyText).then((j) => {
+          if (j.ok) { setReplying(null); setReplyText(''); reload() } else setMsg('失败：' + j.error)
+        })
+      }
+      const news = (msgs ?? []).filter((m) => m.status === 'new')
+      const replied = (msgs ?? []).filter((m) => m.status === 'replied')
       return h('div', { className: 'dk-desk' },
-        h('div', { className: 'dk-deskbar' }, h('button', { className: 'on' }, '💬 消息台')),
-        h('div', { className: 'dk-deskmain' }, h('div', { className: 'dk-col' },
-          h(Note, null, '💬 消息台（下一版本）：各平台评论统一收件 + AI 起草 + opencli 写回原平台'),
-          h(Note, null, '当前先用平台通知页 + 内容详情的发布记录。'))))
+        h('div', { className: 'dk-deskbar' },
+          h('button', { className: 'on' }, '💬 消息台 · 新 ' + news.length + ' · 已回 ' + replied.length),
+          h('button', { style: { marginLeft: 8, background: 'none', border: '1px solid var(--color-border-1,#2a2e37)', borderRadius: 999, color: 'var(--dk-accent,#5b6cff)', cursor: 'pointer', padding: '4px 14px', fontSize: 13 } , onClick: () => setShowAdd(!showAdd) }, showAdd ? '收起' : '＋ 手动添加')),
+        h('div', { className: 'dk-deskmain' },
+          h('div', { className: 'dk-col' },
+            msg !== null ? h(Note, null, msg) : null,
+            showAdd ? h(AddMsgForm, { onAdd: addMsg }) : null,
+            msgs === null ? h(Note, null, '加载中…') : null,
+            msgs !== null && msgs.length === 0 ? h(Note, null, '没有消息——点「＋ 手动添加」把平台评论粘进来，或让 agent 从通知页导入') : null,
+            news.length > 0 ? h('div', { className: 'dk-field-label' }, '📥 新评论（' + news.length + '）') : null,
+            news.map((m) => h(MsgCard, { key: m.id, m, onDraft: doDraft, onReply: () => { setReplying(m.id); setReplyText('') }, onDelete: () => API.msgDelete(m.id).then(reload) })),
+            replying !== null ? h('div', { className: 'dk-card', style: { cursor: 'default' } },
+              h('div', { className: 'dk-field-label' }, '✏️ 回复'),
+              h('textarea', { value: replyText, onChange: (e) => setReplyText(e.target.value), rows: 3, style: { width: '100%', background: 'var(--color-bg-2,#1b1e26)', color: 'inherit', border: '1px solid var(--color-border-1,#2a2e37)', borderRadius: 8, padding: 8, font: '13px/1.6 system-ui', outline: 'none', resize: 'vertical' } }),
+              h('div', { className: 'dk-card-actions' },
+                h('button', { className: 'dk-mini', onClick: doDraft }, '🤖 AI 起草'),
+                h('button', { className: 'dk-mini', onClick: doReply, disabled: replyText.trim() === '' }, '✓ 已回复，记录'),
+                h('button', { className: 'dk-mini', onClick: () => setReplying(null) }, '取消'))) : null,
+            replied.length > 0 ? h('div', { className: 'dk-field-label' }, '✅ 已回复（' + replied.length + '）') : null,
+            replied.map((m) => h(MsgCard, { key: m.id, m, onDelete: () => API.msgDelete(m.id).then(reload) })),
+          )))
+    }
+
+    function AddMsgForm({ onAdd }) {
+      const [plat, setPlat] = useState('微博')
+      const [author, setAuthor] = useState('')
+      const [text, setText] = useState('')
+      const [slug, setSlug] = useState('')
+      return h('div', { className: 'dk-taskform', style: { maxWidth: 560 } },
+        h('div', { className: 'dk-taskform-row' },
+          h('select', { value: plat, onChange: (e) => setPlat(e.target.value) }, ['微博', 'X', '知乎', '小红书', 'B站', '其他'].map((p) => h('option', { key: p, value: p }, p))),
+          h('input', { value: author, onChange: (e) => setAuthor(e.target.value), placeholder: '评论者昵称', style: { flex: 1 } })),
+        h('textarea', { value: text, onChange: (e) => setText(e.target.value), rows: 3, placeholder: '粘贴评论原文…' }),
+        h('input', { value: slug, onChange: (e) => setSlug(e.target.value), placeholder: '关联内容 slug（可空，如 一页看懂-dsh-插件开发）' }),
+        h('div', { className: 'dk-taskform-row' },
+          h('button', { type: 'button', onClick: () => onAdd(plat, author, text, slug), disabled: text.trim() === '' }, '添加'),
+          h('span', { className: 'dk-fine', style: { alignSelf: 'center' } }, '粘进来后可 AI 起草回复')))
+    }
+
+    function MsgCard({ m, onDraft, onReply, onDelete }) {
+      return h('div', { className: 'dk-card', style: { cursor: 'default' } },
+        h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
+          h('span', { className: 'dk-chip', style: { fontSize: 11, padding: '1px 10px' } }, m.platform),
+          h('b', { style: { fontSize: 14 } }, m.author),
+          h('span', { className: 'dk-fine' }, m.time),
+          m.status === 'replied' ? h('span', { style: { color: 'var(--dk-ok,#34d399)', fontSize: 12, fontWeight: 600 } }, '✓ 已回') : null,
+          onDelete ? h('button', { className: 'dk-mini danger', style: { marginLeft: 'auto', fontSize: 11, padding: '2px 8px' }, onClick: onDelete }, '删') : null),
+        h('div', { style: { fontSize: 14, marginTop: 6, lineHeight: 1.7 } }, m.text),
+        m.reply ? h('div', { style: { marginTop: 8, padding: '8px 12px', background: 'var(--color-bg-2,#1b1e26)', borderRadius: 8, fontSize: 13, opacity: .8, borderLeft: '2px solid var(--dk-ok,#34d399)' } },
+          h('span', { style: { fontSize: 11, color: 'var(--dk-ok,#34d399)', fontWeight: 600 } }, '回复：'), m.reply) : null,
+        m.status === 'new' ? h('div', { className: 'dk-card-actions' },
+          onDraft ? h('button', { className: 'dk-mini', onClick: () => onDraft(m.id) }, '🤖 起草') : null,
+          onReply ? h('button', { className: 'dk-mini', onClick: onReply }, '✏️ 手写回复') : null) : null)
     }
 
     // 启动器弹窗

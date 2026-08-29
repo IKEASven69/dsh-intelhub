@@ -26,6 +26,7 @@ import { adoptIdea, captureIdea, listIdeas, type IdeasFs } from './ideas.ts'
 import { ensureAgentsMd, makeCard, newTaskId, parseTaskDoc, setCardStatus, upsertCard, TASK_STATUSES, TASK_TYPES, type TaskCard, type TaskFs, type TaskStatus, type TaskType } from './tasks.ts'
 import { buildLessonsSection, parseResultDoc, parseWidgetJson } from './review.ts'
 import { buildQuickview } from './quickview.ts'
+import { draftReply, normalizeMessage, setReply } from './messages.ts'
 import { ACCEPTANCE_BY_TYPE, appendPublishRow, buildPrefillText, createContent, listContent, PREFILL_TARGETS, setContentStatus, CONTENT_STATUSES, CONTENT_TYPES, type ContentFs, type ContentType, type ContentStatus } from './content.ts'
 import { execFile } from 'node:child_process'
 import { join as joinPath } from 'node:path'
@@ -279,6 +280,58 @@ export function apply(ctx: Context, config: Config): void {
     }
     return { ok: true, mode, command, folder: cwd }
   }
+
+  // ── 消息台 v1 ──
+  reg('exact', '/api/deck/messages', (req, res) => {
+    if (!guard(req, res)) return
+    const st = store.get() as DeckState & { messages?: unknown[] }
+    if (req.method === 'GET') { sendJson(res, 200, { ok: true, messages: Array.isArray(st.messages) ? st.messages : [] }); return }
+    void (async () => {
+      const body = await readJsonBody(req, 8 * 1024)
+      if (body === null || typeof body !== 'object') { sendJson(res, 400, { ok: false, error: 'body 非法' }); return }
+      const r = normalizeMessage(body as Record<string, unknown>)
+      if (!r.ok) { sendJson(res, 400, r); return }
+      const msgs = Array.isArray(st.messages) ? st.messages : []
+      st.messages = [...msgs, r.value]
+      store.set(st)
+      sendJson(res, 200, { ok: true, message: r.value })
+    })()
+  })
+
+  reg('exact', '/api/deck/message/reply', (req, res) => {
+    if (!guard(req, res)) return
+    void (async () => {
+      const body = await readJsonBody(req, 8 * 1024)
+      if (body === null || typeof body !== 'object') { sendJson(res, 400, { ok: false, error: 'body 非法' }); return }
+      const { id, reply, draft } = body as Record<string, unknown>
+      if (typeof id !== 'string' || typeof reply !== 'string') { sendJson(res, 400, { ok: false, error: 'id/reply 必填' }); return }
+      const st = store.get() as DeckState & { messages?: unknown[] }
+      const msgs = Array.isArray(st.messages) ? st.messages : []
+      if (draft === true) {
+        const m = msgs.find((x) => (x as Record<string, string>).id === id) as Record<string, string> | undefined
+        if (m === undefined) { sendJson(res, 404, { ok: false, error: '消息不存在' }); return }
+        sendJson(res, 200, { ok: true, draft: draftReply({ platform: m.platform ?? '', author: m.author ?? '', text: m.text ?? '' }) })
+        return
+      }
+      const next = setReply(msgs, id, reply)
+      if (next === null) { sendJson(res, 404, { ok: false, error: '消息不存在' }); return }
+      st.messages = next
+      store.set(st)
+      sendJson(res, 200, { ok: true })
+    })()
+  })
+
+  reg('exact', '/api/deck/message/delete', (req, res) => {
+    if (!guard(req, res)) return
+    void (async () => {
+      const body = await readJsonBody(req, 4 * 1024)
+      const id = body !== null && typeof body === 'object' ? String((body as Record<string, unknown>).id ?? '') : ''
+      const st = store.get() as DeckState & { messages?: unknown[] }
+      st.messages = (Array.isArray(st.messages) ? st.messages : []).filter((m) => (m as Record<string, string>).id !== id)
+      store.set(st)
+      sendJson(res, 200, { ok: true })
+    })()
+  })
 
   /** 启动器偏好（存 deck.json：cli=opencode|zcode|custom + cwd + customCmd）。 */
   reg('exact', '/api/deck/launcher', (req, res) => {
