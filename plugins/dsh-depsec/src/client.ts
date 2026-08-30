@@ -348,7 +348,7 @@ function Panel({ remote }: { remote: DepsecRemote }) {
   const tab = (val: string, label: string) => createElement('button', { className: `da-tab${mode === val ? ' da-tabOn' : ''}`, onClick: () => setMode(val) }, label)
   const hints: Record<string, string> = {
     vuln: '官方漏洞审计（npm/pnpm/yarn/pip/cargo/go），查已知 CVE/GHSA。',
-    'supply-chain': 'install 脚本内容审查（PASS/WARN/BLOCK 证据分级）+ typosquatting 近名 + registry 联网信誉；可一键写回放行清单。',
+    'supply-chain': 'install 脚本内容审查（PASS/WARN/BLOCK 证据分级）+ typosquatting 近名（动态宇宙）+ registry 联网信誉 + slopsquatting（404）检测；可一键写回放行清单。',
     secrets: '密钥/令牌泄露，含 git 历史 + 熵检测 + .depsecignore 白名单。',
     sast: '危险代码模式扫描（eval/命令注入/XSS/弱哈希等）。',
   }

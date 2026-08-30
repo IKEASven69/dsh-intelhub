@@ -40,6 +40,16 @@ Settings → **Trust List** → pick a mode → **Run**. Leave the path empty to
 - **写回覆盖**（2026-08 核实键名）：package.json 的 `pnpm.onlyBuiltDependencies`（pnpm 10）与 `trustedDependencies`（bun）、pnpm 11 的 pnpm-workspace.yaml `allowBuilds`（名→布尔映射，与 deepseek-harness 官方参考文档一致）、npm 12 的 package.json `allowScripts`——四处一并写回，无需手动同步。两条边界：你在任何一处写下的显式 `false`（拒绝）永不翻转、也不入单；`allowScripts` 写 name 条目而非 `pkg@version` pinned（npm 自己的 approve-scripts 默认 pinned，需要钉版本用 `npm approve-scripts`）。
 - `plugin roster` audits by walking the profile directory — it sees what pnpm has materialized. Plugins installed via `link:` (local source), `file:`, or `git:` are scanned against their on-disk tree; a fresh source clone with a build step that pnpm already gated is graded against the **source** state, not the built artifact.
 
+## 语料回归跑分（2026-08-30）
+
+| 语料 | 条数 | 结果 |
+|---|---|---|
+| 良性安装器（node-gyp / prebuild / husky / esbuild 式下载器 / 本地操作） | 8 | 8 pass，**0 误报 block** |
+| 公开投毒手法（curl\|sh、env POST 外传、eval 载荷、裸 IP、敏感路径、持久化、无域名混淆） | 9 | 9 BLOCK，**0 漏报** |
+| 灰色地带（子进程 + 陌生镜像域名） | 1 | warn 转人工 |
+
+语料即 `tests/corpus-regression.test.ts`——改检测逻辑先过这里，数字变了先解释。
+
 ## Building from source
 
 Standard Cordis plugin (host `TypertRemoteService` + client `dsh.client`).

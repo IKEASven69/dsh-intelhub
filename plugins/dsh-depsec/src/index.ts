@@ -34,6 +34,7 @@ import { parseCargoAudit, parseGoVulncheck, parsePipAudit } from './vuln-parsers
 
 import { analyzeInstallScript, referencedScriptFiles, renderSignals } from './script-analysis.ts'
 import { mergeAllowBuildsYaml, mergeAllowScriptsDoc, parseAllowBuildsYaml } from './trust-writeback.ts'
+import { slopsquatFinding, typosquatFindings } from './trust-signals.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -607,39 +608,6 @@ export class DepsecService extends TypertRemoteService {
     return out
   }
 
-  private levenshtein(a: string, b: string): number {
-    const m = a.length
-    const n = b.length
-    if (m === 0) return n
-    if (n === 0) return m
-    const dp: number[][] = []
-    for (let i = 0; i <= m; i++) dp.push([i])
-    for (let j = 0; j <= n; j++) dp[0][j] = j
-    for (let i = 1; i <= m; i++) {
-      for (let j = 1; j <= n; j++) {
-        const cost = a.charCodeAt(i - 1) === b.charCodeAt(j - 1) ? 0 : 1
-        dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + cost)
-      }
-    }
-    return dp[m][n]
-  }
-
-  private typosquatting(names: string[]): DepsecFinding[] {
-    const out: DepsecFinding[] = []
-    for (const name of names) {
-      let best: string | null = null
-      let bestDist = 3
-      for (const top of TOP_PACKAGES) {
-        if (top === name) { best = null; bestDist = 0; break }
-        const d = this.levenshtein(name, top)
-        if (d < bestDist) { bestDist = d; best = top }
-      }
-      if (best !== null && bestDist === 1) out.push({ kind: '疑似近名投毒', name, detail: `与流行包 \`${best}\` 仅差 ${bestDist} 字符`, severity: 'high' })
-      else if (best !== null && bestDist === 2 && name.length >= 5) out.push({ kind: '疑似近名投毒', name, detail: `与流行包 \`${best}\` 仅差 ${bestDist} 字符`, severity: 'medium' })
-    }
-    return out
-  }
-
   private async scanNodeModules(root: string): Promise<{ findings: { name: string; dir: string; scripts: { script: string; command: string }[] }[]; scanned: number; skipped: string }> {
     const nmPath = this.joinPath(root, 'node_modules')
     let entries
@@ -717,7 +685,18 @@ export class DepsecService extends TypertRemoteService {
     for (let i = 0; i < names.length && i < MAX; i++) {
       const name = names[i]
       const enc = name.replace('/', '%2F')
-      const meta = await this.fetchJson('https://registry.npmjs.org/' + enc)
+      let statusCode: number | null = null
+      let meta: Record<string, unknown> | null = null
+      try {
+        const res = await this.ctx.web.fetch({ url: 'https://registry.npmjs.org/' + enc })
+        statusCode = res.statusCode
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          meta = JSON.parse(res.body?.content ?? '') as Record<string, unknown>
+        }
+      } catch { statusCode = null }
+      // 404 = registry 无此包名：slopsquatting（agent 幻觉包名被抢注）单列高危；其余非 2xx 才算「不可达」
+      const sq = slopsquatFinding(name, statusCode)
+      if (sq !== null) { out.push(sq); continue }
       const dl = await this.fetchJson('https://api.npmjs.org/downloads/point/last-month/' + enc)
       if (meta === null) { out.push({ kind: 'registry 不可达', name, detail: '无法获取元数据', severity: 'info' }); continue }
       const time = meta.time as Record<string, string> | undefined
@@ -967,7 +946,17 @@ export class DepsecService extends TypertRemoteService {
     const depNames = Object.keys(depMap)
     const projScripts = this.scriptsOf(pkg)
     const nm = await this.scanNodeModules(root)
-    const typos = this.typosquatting(depNames)
+    // 动态近名宇宙：静态流行包榜单 + 该项目四处放行位置里的已信任包名（自己信任的不被自己的检测器误报）
+    const trusted = new Set<string>([
+      ...(((pkg.pnpm as Record<string, unknown> | undefined)?.onlyBuiltDependencies as string[] | undefined) ?? []),
+      ...((pkg.trustedDependencies as string[] | undefined) ?? []),
+      ...Object.entries((pkg.allowScripts as Record<string, unknown> | undefined) ?? {})
+        .filter(([, v]) => v === true)
+        .map(([k]) => k),
+    ])
+    const wsParse = parseAllowBuildsYaml(await this.readTextFile(this.joinPath(root, 'pnpm-workspace.yaml')) ?? undefined)
+    if (wsParse.ok) for (const [k, v] of wsParse.entries) if (v === true) trusted.add(k)
+    const typos = typosquatFindings(depNames, [...new Set([...TOP_PACKAGES, ...trusted])])
     const rep = await this.fetchReputation(depNames)
 
     let findings: DepsecFinding[] = []
