@@ -33,6 +33,7 @@ import type {
 import { parseCargoAudit, parseGoVulncheck, parsePipAudit } from './vuln-parsers.ts'
 
 import { analyzeInstallScript, referencedScriptFiles, renderSignals } from './script-analysis.ts'
+import { mergeAllowBuildsYaml, mergeAllowScriptsDoc, parseAllowBuildsYaml } from './trust-writeback.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -256,31 +257,61 @@ export class DepsecService extends TypertRemoteService {
     const pkgPath = this.joinPath(root, 'package.json')
     const doc = await this.readJson(pkgPath)
     if (doc === null) return { ok: false, error: '无法读取 package.json' }
+    // pnpm 11：allowBuilds 在工作区根的 pnpm-workspace.yaml；缺文件视为空表（写入时创建）
+    const wsPath = this.joinPath(root, 'pnpm-workspace.yaml')
+    const wsText = await this.readTextFile(wsPath)
+    const wsParse = parseAllowBuildsYaml(wsText ?? undefined)
+    if (!wsParse.ok) return { ok: false, error: `pnpm-workspace.yaml 的 allowBuilds 块形态未知，已放弃写入（${wsParse.error}）` }
+
     const pnpmField = (doc.pnpm as Record<string, unknown> | undefined) ?? {}
+    const allowScriptsField = (doc.allowScripts as Record<string, unknown> | undefined) ?? {}
     const existing = new Set<string>([
       ...((pnpmField.onlyBuiltDependencies as string[] | undefined) ?? []),
       ...((doc.trustedDependencies as string[] | undefined) ?? []),
+      ...[...wsParse.entries].filter(([, v]) => v === true).map(([k]) => k),
+      ...Object.entries(allowScriptsField)
+        .filter(([, v]) => v === true)
+        .map(([k]) => k),
     ])
-    const added = [...new Set(packages)].filter((p) => !existing.has(p)).sort()
-    if (added.length === 0) return { ok: true, added: [], existing: [...existing].sort(), total: existing.size, note: '放行清单已是最新。' }
-    if (request.dryRun === true) return { ok: true, added, existing: [...existing].sort(), total: existing.size + added.length, note: 'dryRun：仅计算，未写入。' }
-    const merged = [...new Set([...existing, ...packages])].sort()
+    // 显式拒绝（false）是用户的决定：不翻转、不入任何放行清单
+    const denied = [...new Set(packages)].filter(
+      (p) => allowScriptsField[p] === false || wsParse.entries.get(p) === false,
+    )
+    const wanted = [...new Set(packages)].filter((p) => !denied.includes(p))
+    const added = wanted.filter((p) => !existing.has(p)).sort()
+    const targets = [
+      'package.json：pnpm.onlyBuiltDependencies（pnpm 10）+ allowScripts（npm 12）+ trustedDependencies（bun）',
+      'pnpm-workspace.yaml：allowBuilds（pnpm 11）',
+    ]
+    if (added.length === 0) {
+      return { ok: true, added: [], existing: [...existing].sort(), total: existing.size, denied, note: '放行清单已是最新。' }
+    }
+    if (request.dryRun === true) {
+      return { ok: true, added, existing: [...existing].sort(), total: existing.size + added.length, denied, targets, note: 'dryRun：仅计算，未写入。' }
+    }
+    const merged = [...new Set([...existing, ...wanted])].sort()
+    const wb = mergeAllowBuildsYaml(wsText ?? undefined, wanted)
+    if (!wb.ok) return { ok: false, error: `pnpm-workspace.yaml 写入放弃：${wb.error}` }
+    const as = mergeAllowScriptsDoc(doc, wanted)
     const next: Record<string, unknown> = {
-      ...doc,
-      pnpm: { ...pnpmField, onlyBuiltDependencies: merged },
+      ...as.doc,
+      pnpm: { ...(as.doc.pnpm as Record<string, unknown> | undefined), onlyBuiltDependencies: merged },
       trustedDependencies: merged,
     }
     try {
       await this.ctx.fs.writeText(await this.ctx.fs.resolve(pkgPath), JSON.stringify(next, null, 2) + '\n')
+      await this.ctx.fs.writeText(await this.ctx.fs.resolve(wsPath), wb.text!)
     } catch (e) {
-      return { ok: false, error: `写入 package.json 失败：${e instanceof Error ? e.message : String(e)}` }
+      return { ok: false, error: `写回失败：${e instanceof Error ? e.message : String(e)}` }
     }
     return {
       ok: true,
       added,
       existing: merged,
       total: merged.length,
-      note: `已写入 package.json：pnpm.onlyBuiltDependencies 与 trustedDependencies（bun）共 ${merged.length} 项。仅自动放行「脚本全 PASS 且无其他中高危信号」的包；WARN/BLOCK 不会入单。pnpm 11 的 approvedBuilds 与 npm v12 的 opt-in 键名以官方文档为准，需要时手动同步。`,
+      denied,
+      targets,
+      note: `已写入 package.json（pnpm.onlyBuiltDependencies / allowScripts / trustedDependencies（bun））与 pnpm-workspace.yaml（allowBuilds），共 ${merged.length} 项。仅自动放行「脚本全 PASS 且无其他中高危信号」的包；WARN/BLOCK 不会入单${denied.length > 0 ? `；${denied.length} 项显式拒绝（false）保持拒绝` : ''}。`,
     }
   }
 

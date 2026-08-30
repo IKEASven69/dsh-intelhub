@@ -30,14 +30,14 @@ Settings → **Trust List** → pick a mode → **Run**. Leave the path empty to
 | **WARN** | Script touches shell or environment in unfamiliar ways; or there is a typosquat candidate (Levenshtein 1–2 against an 80-name popular-packages list, **not exhaustive**); or registry shows <30 days old or <100 downloads. |
 | **BLOCK** | Script does `curl … | sh` to an IP or unknown host, prints env vars to a network sink, decodes a base64/encoded payload into a shell or node, or posts to a paste/discord/telegram webhook. |
 
-Evidence is shown as a redacted snippet plus file:line. Anything that fails this check is never written into `onlyBuiltDependencies` by the one-click rewite.
+- `trust-list` mode reads every install script in the block, grades each **PASS / WARN / BLOCK**, and one-click rewrites all four approval stores: package.json `pnpm.onlyBuiltDependencies` (pnpm 10), `pnpm-workspace.yaml` `allowBuilds` (pnpm 11), package.json `allowScripts` (npm 12), and `trustedDependencies` (bun) — PASS-graded packages only.
 
 ## Honest limits
 
 - `typosquatting` checks against a hand-curated list of 80 popular package names — typos outside that list are not detected. This is a triage signal, not a registry integrity proof.
 - `sast` ships 9 base rules. Depth and dataflow analysis are not in scope; for serious code-audit work, wire in `semgrep` or `codeql`.
 - `secrets` regex + entropy is a triage signal. The same shape a real key uses is also what high-entropy placeholders look like — expect false positives on test fixtures; use `.depsecignore` for them.
-- `onlyBuiltDependencies` is the pnpm 10+ / npm 12+ way to allow install scripts. pnpm 11 also exposes `approvedBuilds` and npm v12 has its own opt-in — both are documented in their respective changelogs. `dsh-trust-list` writes the supported one(s); other opt-ins need manual sync.
+- **写回覆盖**（2026-08 核实键名）：package.json 的 `pnpm.onlyBuiltDependencies`（pnpm 10）与 `trustedDependencies`（bun）、pnpm 11 的 pnpm-workspace.yaml `allowBuilds`（名→布尔映射，与 deepseek-harness 官方参考文档一致）、npm 12 的 package.json `allowScripts`——四处一并写回，无需手动同步。两条边界：你在任何一处写下的显式 `false`（拒绝）永不翻转、也不入单；`allowScripts` 写 name 条目而非 `pkg@version` pinned（npm 自己的 approve-scripts 默认 pinned，需要钉版本用 `npm approve-scripts`）。
 - `plugin roster` audits by walking the profile directory — it sees what pnpm has materialized. Plugins installed via `link:` (local source), `file:`, or `git:` are scanned against their on-disk tree; a fresh source clone with a build step that pnpm already gated is graded against the **source** state, not the built artifact.
 
 ## Building from source
@@ -49,6 +49,8 @@ pnpm install            # only build/test deps — peers are injected by the dsh
 pnpm test               # vitest: install-script corpus + 4 audit-output parsers (35 cases)
 node .build-tools/build.cjs   # local verification build: SWC (stage-3 decorators) + esbuild
 ```
+
+没有 dsh 运行时的环境（CI / 贡献者本机）：`pnpm install --config.auto-install-peers=false`，避免 pnpm 自动安装未公开发布的 `@deepseek-ai/*` peers 导致整树 404。首次 install 后 pnpm 11 会留下 `allowBuilds` 占位提示，把 `@swc/core` 与 `esbuild` 填为 `true`（或交互式 `pnpm approve-builds`）——这正是本插件替用户回答的那道题。
 
 `@deepseek-ai/*` is never a devDependency here — its transitive deps include unpublished packages and the whole tree 404s on install.
 

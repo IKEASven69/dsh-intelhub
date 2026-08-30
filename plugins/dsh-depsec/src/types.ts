@@ -131,6 +131,10 @@ export interface WriteApprovalsResult {
   added?: string[]
   existing?: string[]
   total?: number
+  /** 显式拒绝（allowScripts / allowBuilds 为 false）而未被自动放行的包。 */
+  denied?: string[]
+  /** 本次写入（或 dryRun 将写入）的落点描述。 */
+  targets?: string[]
   error?: string
   note?: string
 }
