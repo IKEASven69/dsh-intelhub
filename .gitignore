@@ -7,3 +7,4 @@ dist/
 package-lock.json
 tmp-client.cjs
 tmp-src/
+spikes/
