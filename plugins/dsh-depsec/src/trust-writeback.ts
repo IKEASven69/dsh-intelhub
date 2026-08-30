@@ -44,10 +44,15 @@ export function parseAllowBuildsYaml(text: string | undefined): AllowBuildsParse
       break
     }
     const m = ln.match(ENTRY)
-    if (m === null) {
-      return { ok: false, error: `第 ${i + 1} 行不是「"包名": true|false」形态`, entries, block: { start, end } }
+    if (m !== null) {
+      entries.set(m[2], m[3] === 'true')
+      continue
     }
-    entries.set(m[2], m[3] === 'true')
+    // pnpm 11 拦截安装后会在 allowBuilds 里生成占位提示行（值就是这句原话），
+    // 语义是「未设置」而非「拒绝」——视为空，允许工具安全写入真实决定。
+    const ph = ln.match(/^(\s+)"?([^":]+?)"?\s*:\s*(.+)$/)
+    if (ph !== null && ph[3].trim() === 'set this to true or false') continue
+    return { ok: false, error: `第 ${i + 1} 行不是「"包名": true|false」形态`, entries, block: { start, end } }
   }
   return { ok: true, entries, block: { start, end } }
 }

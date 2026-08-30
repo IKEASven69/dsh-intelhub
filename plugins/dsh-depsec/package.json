@@ -1,6 +1,6 @@
 {
   "name": "dsh-trust-list",
-  "description": "Dependency trust list for DeepSeek Harness: when pnpm blocks an install script, audit every script, grade PASS/WARN/BLOCK with file-line evidence, and rewrite onlyBuiltDependencies / trustedDependencies with verifiably-safe packages.",
+  "description": "Dependency trust list for DeepSeek Harness: when pnpm blocks an install script, audit every script, grade PASS/WARN/BLOCK with file-line evidence, and write only PASS-graded packages to pnpm.onlyBuiltDependencies (pnpm 10), allowBuilds (pnpm 11), allowScripts (npm 12) and trustedDependencies (bun).",
   "version": "0.3.0",
   "publishConfig": {
     "access": "public"
@@ -62,6 +62,7 @@
   "devDependencies": {
     "@swc/core": "^1.16.1",
     "@types/react": "~18.3.1",
+    "@vitest/coverage-v8": "^3.2.7",
     "esbuild": "^0.25.0",
     "react": "^18.2.0",
     "typescript": "^5.6.0",

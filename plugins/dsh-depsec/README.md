@@ -46,7 +46,7 @@ Standard Cordis plugin (host `TypertRemoteService` + client `dsh.client`).
 
 ```sh
 pnpm install            # only build/test deps — peers are injected by the dsh runtime
-pnpm test               # vitest: install-script corpus + 4 audit-output parsers (35 cases)
+pnpm test               # vitest: install-script corpus + audit-output parsers + trust write-back (46 cases)
 node .build-tools/build.cjs   # local verification build: SWC (stage-3 decorators) + esbuild
 ```
 

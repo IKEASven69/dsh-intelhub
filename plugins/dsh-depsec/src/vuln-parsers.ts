@@ -30,7 +30,10 @@ function severityOf(s: unknown): string {
 
 function summarize(list: DepsecVulnerability[]): VulnParseResult {
   const counts = { critical: 0, high: 0, moderate: 0, low: 0, info: 0 } as Record<string, number>
-  for (const v of list) counts[v.severity] = (counts[v.severity] ?? 0) + 1
+  for (const v of list) {
+    /* v8 ignore next — severityOf 已归一化为五档；?? 仅为防御未来新增来源 */
+    counts[v.severity] = (counts[v.severity] ?? 0) + 1
+  }
   return {
     total: list.length,
     critical: counts.critical, high: counts.high, moderate: counts.moderate, low: counts.low, info: counts.info,

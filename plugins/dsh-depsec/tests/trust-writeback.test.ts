@@ -69,6 +69,38 @@ describe('mergeAllowBuildsYaml', () => {
     expect(w.text).toContain('"bad": false')
     expect(w.added).toEqual([])
   })
+
+  it('块形态未知 → 合并放弃（ok:false），不产出文本', () => {
+    const w = mergeAllowBuildsYaml('allowBuilds:\n  foo: bar\n', ['esbuild'])
+    expect(w.ok).toBe(false)
+    expect(w.error).toContain('形态')
+    expect(w.text).toBeUndefined()
+  })
+
+  it('多包写入按 Ordinal 排序（双向比较都有序）', () => {
+    const w = mergeAllowBuildsYaml(undefined, ['zod', 'abc', 'mch'])
+    expect(w.ok).toBe(true)
+    const i1 = w.text!.indexOf('"abc"')
+    const i2 = w.text!.indexOf('"mch"')
+    const i3 = w.text!.indexOf('"zod"')
+    expect(i1).toBeLessThan(i2)
+    expect(i2).toBeLessThan(i3)
+  })
+
+  it('原文末行非空 → 先补空行再追加块', () => {
+    const w = mergeAllowBuildsYaml('packages:\n  - "x"', ['esbuild'])
+    expect(w.text).toBe('packages:\n  - "x"\n\nallowBuilds:\n  "esbuild": true\n')
+  })
+
+  it('pnpm 11 占位提示行视为「未设置」，可被安全写入真实决定', () => {
+    const w = mergeAllowBuildsYaml(
+      "allowBuilds:\n  '@swc/core': set this to true or false\n  esbuild: set this to true or false\n",
+      ['@swc/core', 'esbuild'],
+    )
+    expect(w.ok).toBe(true)
+    expect(w.added).toEqual(['@swc/core', 'esbuild'])
+    expect(w.text).toBe('allowBuilds:\n  "@swc/core": true\n  "esbuild": true\n')
+  })
 })
 
 describe('mergeAllowScriptsDoc', () => {

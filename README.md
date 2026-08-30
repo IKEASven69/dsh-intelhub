@@ -7,7 +7,7 @@
 ```
 dsh-plugin/
 ├── plugins/     # 自己开发的插件
-│   ├── dsh-depsec/        # 依赖安全审计（漏洞/投毒/密钥/SAST 四合一）
+│   ├── dsh-depsec/        # dsh-trust-list 0.3.0——依赖信任清单：脚本审计 PASS/WARN/BLOCK + 四处放行写回（pnpm10/11、npm12、bun）+ 漏洞/密钥/SAST/插件花名册
 │   ├── agentforge-brain/  # 会话 3D 大脑可视化
 │   ├── dsh-dashboard/     # 活动仪表盘 & IM 桥接（设计蓝本仓库）
 │   ├── dsh-polymarket/    # Polymarket 插件
