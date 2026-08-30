@@ -15,7 +15,7 @@ import {
   withEngine, makeTurn, extractCandidates,
 } from './hippo/engine.js'
 import { makeResolver, renderText } from './tools.ts'
-import { workDigest } from './project-awareness.ts'
+import { workDigest, fullBrief } from './project-awareness.ts'
 
 
 /** 生活流 LLM 入口：走 dsh 配的模型（ctx.llm），无 dsh llm 服务时降级直连 ollama。
@@ -104,8 +104,9 @@ export async function summonResident(
 
   // K2：记忆召回（与当前话题相关的之前对话）
   const memoryContext = await recallMemories(name, userText)
-  // 工作感知：主人最近在忙什么（用户主动召唤——值得注入近况）
-  const work = workDigest()
+  // 工作感知：主人最近在忙什么（用户主动召唤——完整简报：记忆近况+任务，
+  // 失败/超时自动降级零锁的 workDigest）
+  const work = await fullBrief()
 
   try {
     const reply = await llmComplete(ctx, residentSystemPrompt(name, resident.persona) + channelContext + memoryContext + (work !== '' ? '\n\n' + work : ''), userText) || '……'

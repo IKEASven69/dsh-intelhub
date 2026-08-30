@@ -14,10 +14,19 @@ export const APP_DIR = process.env.HIPPO_DATA_DIR
   ? path.resolve(process.env.HIPPO_DATA_DIR)
   : path.join(os.homedir(), '.hippo');
 
+/** 当前生效的数据目录。运行时读 env（不是模块加载时快照）——测试在
+ * 进程中途切换 HIPPO_DATA_DIR 也能生效；生产路径行为不变。 */
+export function dataDir(): string {
+  return process.env.HIPPO_DATA_DIR
+    ? path.resolve(process.env.HIPPO_DATA_DIR)
+    : path.join(os.homedir(), '.hippo');
+}
+
 export function ensureAppDir(): void {
-  if (!fs.existsSync(APP_DIR)) fs.mkdirSync(APP_DIR, { recursive: true });
+  const dir = dataDir();
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
 
 export function appPath(...segments: string[]): string {
-  return path.join(APP_DIR, ...segments);
+  return path.join(dataDir(), ...segments);
 }

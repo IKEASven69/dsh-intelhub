@@ -135,7 +135,10 @@ export async function diagnose(storeIn?: { scan(): [any, number][]; count(): num
   try {
     // vec0 virtual tables need the extension loaded even for read-only access.
     try {
-      const { load: loadVec } = await import('sqlite-vec');
+      // 非字面量说明符:尽力探测旧存储的 vec 扩展,包不存在属预期
+      // (TS 也因此不做严格类型解析)。
+      const vecMod = 'sqlite-vec';
+      const { load: loadVec } = await import(vecMod);
       loadVec(db);
     } catch {
       // extension missing — vec_* queries will fail below, but plain SQLite checks still run

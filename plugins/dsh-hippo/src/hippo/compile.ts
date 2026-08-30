@@ -97,11 +97,20 @@ export function renderAgentsMdBody(g: GroupedMemories): string {
     lines.push('');
   }
 
-  // Project-scoped facts
+  // Project-scoped facts — latest-first: 近 7 天蒸馏的记忆标 ⭐ 置顶
+  // （读 AGENTS.md 的 agent 最先看到"现在到哪了"），更早的沉淀跟后面。
   const projects = [...g.byProject.keys()].sort();
+  const RECENT_MS = 7 * 86400 * 1000;
   for (const proj of projects) {
     lines.push(`## Project: ${proj}`, '');
-    for (const r of g.byProject.get(proj)!) {
+    const list = g.byProject.get(proj)!.slice().sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0));
+    const recent = list.filter(r => Date.now() - (r.created_at ?? 0) * 1000 < RECENT_MS);
+    const older = list.filter(r => !recent.includes(r));
+    for (const r of recent) {
+      const mark = r.strength > 1 ? ` (reinforced ×${r.strength.toFixed(0)})` : '';
+      lines.push(`- ⭐ ${r.text}${mark}`);
+    }
+    for (const r of older) {
       const mark = r.strength > 1 ? ` (reinforced ×${r.strength.toFixed(0)})` : '';
       lines.push(`- ${r.text}${mark}`);
     }

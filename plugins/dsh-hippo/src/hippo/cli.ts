@@ -279,6 +279,24 @@ program
     }
   });
 
+// ── brief ─────────────────────────────────────────
+
+program
+  .command('brief')
+  .description('project brief: integrate memories/tasks across sessions into a "where are we now" digest (time-aware, latest first)')
+  .option('-p, --project <project>', 'project scope (omit = all projects)')
+  .action(async (options) => {
+    const { projectBrief } = await import('./brief.js');
+    const { store, close } = openEngine();
+    try {
+      const records = exportRecords(store, {}) as unknown as import('./memory.js').MemoryRecord[];
+      const out = projectBrief(records, { project: options.project ?? '' });
+      console.log(out !== '' ? out : `no memories or tasks${options.project ? ` for project "${options.project}"` : ''} — run \`hippo distill\` first`);
+    } finally {
+      close();
+    }
+  });
+
 // ── distill ───────────────────────────────────────
 
 program

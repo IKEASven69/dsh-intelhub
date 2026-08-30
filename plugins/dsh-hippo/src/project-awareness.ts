@@ -16,7 +16,7 @@
  * loadTasks 是旁挂 JSON 读取，不经过 zvec 引擎——零锁开销，K3 每分钟
  * 调用也无压力。
  */
-import { loadTasks, type TaskRecord } from './hippo/engine.js'
+import { loadTasks, projectBriefAuto, type TaskRecord } from './hippo/engine.js'
 
 /** 项目在多少天内有任务更新算"活跃"。与引擎 project-card 的 7 天阈值一致。 */
 const ACTIVE_DAYS = 7
@@ -98,4 +98,19 @@ export function workDigest(opts: { project?: string; onlyIfRecent?: boolean } = 
   }
   lines.push('（自然聊到时可提一句，别像项目经理一样罗列任务）')
   return lines.join('\n')
+}
+
+/**
+ * 完整版简报（summon 路径用）：引擎的 projectBriefAuto（含记忆近况/
+ * 休眠状态/任务完成度，时间感知），失败或超时降级零锁的 workDigest。
+ * 尾部补行为约束（brief 本体不带——它是给终端/编译用的）。
+ */
+export async function fullBrief(): Promise<string> {
+  try {
+    const b = await projectBriefAuto('')
+    if (b === '') return ''
+    return `--- 主人近况 ---\n${b}\n（自然聊到时可提一句，别像项目经理一样罗列任务）`
+  } catch {
+    return workDigest()
+  }
 }
