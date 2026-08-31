@@ -231,6 +231,23 @@ window.__ModuleLoader__.load({
     }
 
     // ── 知识台·复盘 ──
+    function KbGraph() {
+      const [html, setHtml] = useState(null)
+      const [err, setErr] = useState(null)
+      useEffect(() => {
+        let alive = true
+        API.read('kb', 'docs/graph.html').then((j) => {
+          if (!alive) return
+          if (j.ok) setHtml(j.content); else setErr(j.error)
+        }).catch((e) => { if (alive) setErr(String(e)) })
+        return () => { alive = false }
+      }, [])
+      if (err !== null) return h(Err, null, '读取失败：' + err + '（跑 scripts/graph.ps1 生成）')
+      if (html === null) return h(Note, null, '加载图谱中…')
+      return h('div', { style: { flex: 1, minHeight: 0, borderRadius: 12, overflow: 'hidden', border: '1px solid var(--color-border-1,#2a2e37)' } },
+        h('iframe', { sandbox: 'allow-scripts', srcDoc: html, style: { width: '100%', height: '100%', border: 'none', background: '#0d1117' } }))
+    }
+
     function KbReview() {
       const [html, setHtml] = useState(null)
       const [stat, setStat] = useState(null)
@@ -479,7 +496,7 @@ window.__ModuleLoader__.load({
         : h('iframe', { sandbox: '', srcDoc: html, className: 'dk-frame' }))
     }
 
-    const KB_TABS = [['quick', '📊 速览'], ['search', '🔍 搜索'], ['browse', '📚 文库'], ['ideas', '💡 点子'], ['tasks', '📋 任务'], ['review', '🧾 审阅'], ['lessons', '🔁 复盘']]
+    const KB_TABS = [['quick', '📊 速览'], ['search', '🔍 搜索'], ['browse', '📚 文库'], ['ideas', '💡 点子'], ['tasks', '📋 任务'], ['review', '🧾 审阅'], ['lessons', '🔁 复盘'], ['graph', '🕷 图谱']]
 
     function KbQuick({ onOpenFile }) {
       const [qv, setQv] = useState(null)
@@ -538,6 +555,7 @@ window.__ModuleLoader__.load({
           : tab === 'ideas' ? h(KbIdeas)
           : tab === 'tasks' ? h(TaskBoard, { projectId: 'builtin-kb', onGoReview: () => setTab('review') })
           : tab === 'review' ? h(ReviewFlow, { projectId: 'builtin-kb', root: 'kb' })
+          : tab === 'graph' ? h(KbGraph)
           : h(KbReview)),
       )
     }
