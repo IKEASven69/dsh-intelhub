@@ -205,7 +205,7 @@ function Shell() {
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <BrowserRouter>
+    <BrowserRouter basename={window.__HIPPO_BASE__ || undefined}>
       <DetailProvider>
         <Shell />
       </DetailProvider>

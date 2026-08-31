@@ -7,7 +7,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FolderOpen, RefreshCw, Search, TerminalSquare, Download, FileJson, FileText, FlaskConical, Trash2 } from 'lucide-react';
-import { api, workspaceOf, type SessionListItem, type SessionDetail, type SessionDistillPreview, type SyncStatus } from '../api';
+import { api, workspaceOf, type SessionListItem, type SessionDetail, type SessionDistillPreview, type SyncStatus, BASE } from '../api';
 import { AgentIcon, agentLabel } from '../components/AgentIcon';
 import FolderPicker, { underPath } from '../components/FolderPicker';
 import Pagination from '../components/Pagination';
@@ -386,7 +386,7 @@ function SessionDetailDrawer({ id, onClose, onDistilled }: { id: string; onClose
           <button className="btn ghost" title="强制重跑蒸馏（旧记忆保留，新候选走去重）"
               onClick={async () => {
                 try {
-                  const r = await fetch(`/api/sessions/${encodeURIComponent(id)}/redistill`, { method: 'POST' });
+                  const r = await fetch(`${BASE}/api/sessions/${encodeURIComponent(id)}/redistill`, { method: 'POST' });
                   const d = await r.json();
                   setToast(`重蒸馏：新建 ${d.created ?? 0} · 强化 ${d.reinforced ?? 0}`);
                   onDistilled();

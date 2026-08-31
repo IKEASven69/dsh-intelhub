@@ -4,6 +4,11 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>hippo 🦛 — memory store</title>
+  <script>
+    // 挂载点探测：dsh 插件把整个工作台桥接在 /dsh-hippo/app 前缀下；
+    // 独立 GUI（hippo gui）在根路径。API 请求与 Router basename 都用它。
+    window.__HIPPO_BASE__ = location.pathname.indexOf('/dsh-hippo/app') === 0 ? '/dsh-hippo/app' : '';
+  </script>
 </head>
 <body>
   <div id="root"></div>

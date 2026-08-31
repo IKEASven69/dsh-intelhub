@@ -4,7 +4,7 @@
 // The typed helpers here multiply by 1000 when exposing to React so the rest
 // of the app can use Date objects directly without remembering this footgun.
 
-const BASE = import.meta.env.DEV ? '' : '';  // dev: vite proxy; prod: same origin
+export const BASE = (window as unknown as { __HIPPO_BASE__?: string }).__HIPPO_BASE__ ?? '';  // dsh 桥接=前缀；独立 GUI=根
 
 export type MemoryType = 'fact' | 'decision' | 'lesson' | 'preference';
 export const MEMORY_TYPES: MemoryType[] = ['fact', 'decision', 'lesson', 'preference'];
@@ -362,7 +362,7 @@ export const api = {
   shelvedDiscard: (indices: number[]) => postJSON<{ remaining: number }>('/api/shelved/discard', { indices }),
 
   deleteSession: (id: string, deleteSource = false) =>
-    fetch(`/api/sessions/${encodeURIComponent(id)}${deleteSource ? '?deleteSource=true' : ''}`, { method: 'DELETE' })
+    fetch(`${BASE}/api/sessions/${encodeURIComponent(id)}${deleteSource ? '?deleteSource=true' : ''}`, { method: 'DELETE' })
       .then(r => r.json()) as Promise<{ removedIndex: boolean; ignored: boolean; sourceDeleted: boolean; note?: string }>,
 
   memoryValue: () => getJSON<MemoryValueReport>('/api/memories/value'),
