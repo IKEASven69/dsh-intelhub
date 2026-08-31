@@ -158,6 +158,7 @@ window.__ModuleLoader__.load({
       const [entries, setEntries] = useState(null)
       const [file, setFile] = useState(null)
       const [err, setErr] = useState(null)
+      const [split, setSplit] = useState(false)
       useEffect(() => { setDir(base) }, [root, base])
       useEffect(() => {
         let alive = true
@@ -168,9 +169,31 @@ window.__ModuleLoader__.load({
         }).catch((e) => { if (alive) setErr(String(e)) })
         return () => { alive = false }
       }, [root, dir])
+      if (split) {
+        return h('div', { style: { display: 'flex', gap: 12, flex: 1, minHeight: 0 } },
+          h('div', { style: { width: 340, flexShrink: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 } },
+            h('div', { className: 'dk-toolbar', style: { marginBottom: 4 } },
+              h('button', { className: 'dk-chip', onClick: () => setSplit(false) }, '⇔ 单栏'),
+              h('span', { className: 'dk-fine', style: { alignSelf: 'center', marginLeft: 6 } }, dir || '根')),
+            (entries ?? []).map((e) =>
+              h('div', {
+                key: e.name,
+                style: { padding: '6px 10px', borderRadius: 8, cursor: 'pointer', fontSize: 13,
+                  background: file === (dir === '' ? e.name : dir + '/' + e.name) ? 'color-mix(in srgb, var(--dk-accent,#5b6cff) 12%, transparent)' : 'var(--color-bg-1,#14161c)',
+                  border: '1px solid var(--color-border-1,#2a2e37)', fontWeight: e.type === 'dir' ? 600 : 400 },
+                onClick: () => { const next = dir === '' ? e.name : dir + '/' + e.name; if (e.type === 'dir') { setDir(next); setFile(null) } else { setFile(next) } },
+              }, (e.type === 'dir' ? '📁 ' : '📄 ') + e.name)),
+          ),
+          h('div', { style: { flex: 1, minWidth: 0, overflowY: 'auto' } },
+            file !== null
+              ? h(Preview, { root, path: file, title: file.split('/').pop(), onBack: () => setFile(null) })
+              : h(Note, null, '← 点文件预览')),
+        )
+      }
       if (file !== null) return h(Preview, { root, path: file, title: file.split('/').pop(), onBack: () => setFile(null) })
       return h('div', { className: 'dk-col' },
         h('div', { className: 'dk-toolbar' },
+          h('button', { className: 'dk-chip', onClick: () => setSplit(true), title: '左列表+右预览' }, '⇔ 分屏'),
           dir === base && layers !== null
             ? layers.map(([slug, label]) => h('button', { key: slug, className: 'dk-chip', onClick: () => setDir(slug) }, label))
             : h('span', { className: 'dk-crumbrow' },
