@@ -573,6 +573,42 @@ export function buildHttpApp(opts: HttpServerOptions & { autoTimer?: boolean } =
     }
   }));
 
+  // ── H7 M5：handoff 收件箱（工作台 ⇪ 按钮 / skill 取件共用）──
+  app.get('/api/handoff/inbox', async (_req, res) => {
+    const { listInbox } = await import('./handoff-inbox.js');
+    res.json({ pending: listInbox() });
+  });
+
+  app.post('/api/handoff/push', async (req, res) => {
+    const { sessionId, to } = req.body ?? {};
+    if (typeof sessionId !== 'string' || sessionId === '') {
+      res.status(400).json({ error: 'sessionId required' });
+      return;
+    }
+    try {
+      const { pushHandoff } = await import('./handoff-inbox.js');
+      const item = pushHandoff(sessionId, typeof to === 'string' ? { to } : {});
+      res.json({ id: item.id, title: item.from.title, candidates: item.candidates.length, tasks: item.activeTasks.length, changed: item.git.changed.length });
+    } catch (err) {
+      res.status(400).json({ error: (err as Error).message });
+    }
+  });
+
+  app.post('/api/handoff/load', async (req, res) => {
+    const { id } = req.body ?? {};
+    if (typeof id !== 'string' || id === '') {
+      res.status(400).json({ error: 'id required' });
+      return;
+    }
+    try {
+      const { loadHandoff } = await import('./handoff-inbox.js');
+      const { text } = loadHandoff(id);
+      res.json({ text });
+    } catch (err) {
+      res.status(404).json({ error: (err as Error).message });
+    }
+  });
+
   // 编译配置管理：查看 / 删除自动重编译的目标
   app.get('/api/compile-config', async (_req, res) => {
     const { getCompileTargets } = await import('./compile-config.js');

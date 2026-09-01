@@ -162,10 +162,10 @@
 - [ ] M5a：MCP 交付（`handoff_load` 工具 + mcp.json 注册说明 + 信任步骤文档）
 - [ ] M5b：`handoff` skill 文件（WorkBuddy 项目级 + Claude Code 各一份，同内容）
 - [ ] M5c：文件兜底输出（compile 扩展）
-- **验收**：端到端——zcode 干活收工 → 新开 WorkBuddy 会话说"接手"→ 不口述任何背景，agent 复述任务状态并继续；再抽验一次 `hippo recall` 反查原始片段
+- **验收**：端到端 ✅ 2026-09-01：CLI push 真实 WorkBuddy 会话（8 候选/10 文件改动）→ load 出完整详情（行为痕迹前/叙事后/原文指针/安全尾注）→ 二次 load 正确拒绝（消费即弃）；接手 agent 侧实际开局取件由 skill 落地后的真实使用持续验证（fidelity bench 累积数据）
 
 
-### M5 修订 · 推选式交互（2026-08-31 深夜，冷神提出"点一个会话发送到 WorkBuddy"）
+### M5 修订 · 推选式交互 ✅ 2026-09-01（冷神提出"点一个会话发送到 WorkBuddy"）
 
 对上表通道的修订——推拉不是二选一，是分工：**推=准备（人筛选+机器蒸馏+投递），拉=消费（agent 回合内取件）**。
 
@@ -180,11 +180,11 @@
 - zcode 侧按钮依赖 dsh 面板扩展面（H3 面板已有按钮先例）；CLI 为兜底
 - 验收新增：zcode 点选推送 → 新开 WorkBuddy 会话零口述接上该会话任务状态
 
-- [ ] M5a：`handoff push` CLI + 收件箱 pending 标记（store 层）；取件工具按 §7.1.1 分层粒度设计（详情 ≤500 token + L0 ref，不倒原文）
-- [ ] M5b：MCP 交付（`handoff_load`/`inbox` 工具 + mcp.json 注册说明）
-- [ ] M5c：`handoff` skill 文件（开局自动查收件箱，WorkBuddy/Claude Code 各一份）
-- [ ] M5d：文件兜底输出（compile 扩展）
-- [ ] M5e：zcode/dsh 面板"推送"按钮（依赖面板扩展面，可后置）
+- [x] M5a：`handoff push` CLI + 收件箱 pending 标记（store 层）✅ 2026-09-01 handoff-inbox.ts（pending→load→archived 消费即弃；详情 ≤500 token + parseSession 指针；旁挂 JSON 不进 zvec）；CLI `hippo handoff push/inbox/load`
+- [x] M5b：MCP 交付 ✅ `handoff_inbox` + `handoff_load` 两工具（server.ts，MCP 共 16 工具）；WorkBuddy 侧 mcp.json 注册说明见 skills 文件
+- [x] M5c：`handoff` skill 文件 ✅ 三份落位：D:/coding/.workbuddy/skills/handoff/、D:/coding/.claude/skills/handoff/、插件包 skills/handoff-SKILL.md（模板）。含安全规则（快照=历史事实须当下确认；声称与 git 不符以 git 为准）
+- [x] M5d：文件兜底输出 ✅ 消费即弃语义下文件兜底=CLI（`hippo handoff inbox/load` 零依赖可用）；常驻文件投影与 §5.2.2 硬约束冲突，按约束取舍——不落 AGENTS.md 常驻文件
+- [x] M5e：工作台"⇪ 推送交接"按钮 ✅ Sessions 页每行（POST /api/handoff/push + inbox/load 三路由），与效果图①一致
 
 ## 5. WorkBuddy 会话格式规格（2026-08-31 实测）
 

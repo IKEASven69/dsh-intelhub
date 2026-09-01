@@ -80,6 +80,8 @@ const NOISE_PATTERNS: Array<{ re: RegExp; why: string }> = [
   { re: /[?？]\s*$/, why: 'question' },
   // 编号清单碎片："2. [pending] …" / "9. 决定 xxx"（列表项而非陈述）
   { re: /^\d+[.)][\s\[]/, why: 'list-fragment' },
+  // 环境注入样板（WorkBuddy/部分宿主把人设与规则注入 user 轮）
+  { re: /^(you are (a|an)\b|note: prefer|as an? (expert|assistant)|i want you to act)/i, why: 'persona-boilerplate' },
   // 系统提示词泄漏："Continue the conversation…" 被截进偏好
   { re: /continue the conversation from where it left off|without asking (the )?user/i, why: 'instruction-leak' },
 ];

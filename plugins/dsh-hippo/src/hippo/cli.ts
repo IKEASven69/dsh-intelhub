@@ -297,6 +297,37 @@ program
     }
   });
 
+// ── handoff（H7 M5a）：推准备、拉消费的寄存层 ──────
+
+program
+  .command('handoff')
+  .description('cross-agent handoff inbox: push a session snapshot, list pending, load (consume) one')
+  .argument('<action>', 'push | inbox | load')
+  .option('-s, --session <sessionId>', 'session file path or id (push)')
+  .option('-t, --to <agent>', 'target agent label (push, metadata only)', 'any')
+  .argument('[itemId]', 'inbox item id (load)')
+  .action(async (action: string, itemId: string | undefined, options: { session?: string; to?: string }) => {
+    const { pushHandoff, listInbox, loadHandoff } = await import('./handoff-inbox.js');
+    if (action === 'push') {
+      if (options.session === undefined) { console.error('--session required for push'); process.exitCode = 1; return; }
+      try {
+        const item = pushHandoff(options.session, { to: options.to });
+        console.log(`已推送 ${item.id} ← ${item.from.agent}「${item.from.title}」（候选 ${item.candidates.length} · 任务 ${item.activeTasks.length} · ${item.git.changed.length} 文件改动）`);
+        console.log(`接手方取件：hippo handoff load ${item.id}`);
+      } catch (e) { console.error((e as Error).message); process.exitCode = 1; }
+    } else if (action === 'inbox') {
+      const items = listInbox();
+      if (items.length === 0) { console.log('收件箱为空'); return; }
+      for (const it of items) console.log(`${it.id}  ← ${it.from.agent}「${it.from.title}」 ${new Date(it.pushedAt * 1000).toLocaleString()} → ${it.to}`);
+    } else if (action === 'load') {
+      if (itemId === undefined) { console.error('load 需要 itemId（hippo handoff inbox 查看待取）'); process.exitCode = 1; return; }
+      try { console.log(loadHandoff(itemId).text); }
+      catch (e) { console.error((e as Error).message); process.exitCode = 1; }
+    } else {
+      console.error(`未知动作：${action}（push | inbox | load）`); process.exitCode = 1;
+    }
+  });
+
 // ── distill ───────────────────────────────────────
 
 program

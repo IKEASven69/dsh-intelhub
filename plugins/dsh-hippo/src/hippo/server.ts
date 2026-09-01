@@ -233,6 +233,31 @@ export function createHippoMcpServer(engine: McpEngine, opts: { distillUnavailab
     return { tasks: tasks.map(t => ({ text: t.text, status: t.status, priority: t.priority, updatedAt: t.updatedAt })) };
   }));
 
+  // ── H7 M5b：handoff 收件箱（推准备、拉消费；消费即弃）──
+  server.registerTool('handoff_inbox', {
+    description:
+      'List pending handoff snapshots pushed from other agent sessions (cross-agent context handoff). ' +
+      'Check this at conversation start; each item is a distilled task/git/candidate snapshot with an id for handoff_load.',
+    inputSchema: {},
+  }, safe(async () => {
+    const { listInbox } = await import('./handoff-inbox.js');
+    const items = listInbox();
+    if (items.length === 0) return '收件箱为空（无待取交接快照）';
+    return items.map(it => `${it.id} ← ${it.from.agent}「${it.from.title}」 ${new Date(it.pushedAt * 1000).toISOString().slice(0, 16).replace('T', ' ')}（候选${it.candidates.length}·任务${it.activeTasks.length}）`).join('\n') + '\n取件：handoff_load(item_id)';
+  }));
+
+  server.registerTool('handoff_load', {
+    description:
+      'Load (consume) one pending handoff snapshot by id. Returns a <=500-token detail (tasks/blocker/distilled candidates ' +
+      'plus a session pointer for on-demand原文反查). Consume-once: the item is archived after loading — 快照是历史事实，执行前须当下确认。',
+    inputSchema: {
+      item_id: z.string().describe('id from handoff_inbox'),
+    },
+  }, safe(async ({ item_id }: { item_id: string }) => {
+    const { loadHandoff } = await import('./handoff-inbox.js');
+    return loadHandoff(item_id).text;
+  }));
+
   server.registerTool('task_update', {
     description:
       'Update a task status (mark complete, start working on it, etc). ' +

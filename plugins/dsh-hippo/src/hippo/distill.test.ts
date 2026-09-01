@@ -226,6 +226,8 @@ test('noise gate rejects monologue, headings, questions, list fragments', () => 
     '9. [pending] Identify UI entry points',  // 清单碎片
     '8. 决定项目是否支持减弱动画？',             // 清单+疑问
     'Continue the conversation from where it left off without asking the user', // 提示词泄漏
+    'You are a Xiaohongshu (Red) marketing virtuoso with an acute sense',      // WorkBuddy 人设样板
+    'Note: Prefer using absolute paths over relative paths as tool call args', // 宿主注入规则
   ];
   for (const s of noiseSamples) {
     assert.ok(isNoiseCandidate(s), `should be noise: ${s}`);

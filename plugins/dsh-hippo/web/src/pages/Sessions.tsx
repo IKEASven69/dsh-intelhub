@@ -293,10 +293,16 @@ export default function SessionsPage() {
 }
 
 function SessionRow({ s, active, onOpen }: { s: SessionListItem; active: boolean; onOpen: () => void }) {
+  const [pushed, setPushed] = useState<string | null>(null);
+  const doPush = (ev: React.MouseEvent) => {
+    ev.stopPropagation();
+    setPushed('…');
+    api.handoffPush(s.id).then(r => setPushed(`已推送 ${r.id}（候选${r.candidates}·任务${r.tasks}）`)).catch(e => setPushed(String(e)));
+  };
   return (
     <div className={`card clickable${active ? ' active' : ''}`} onClick={onOpen}
       style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 12 }}>
-      <AgentIcon agent={s.agent} size={24} />
+      <AgentIcon agent={ s.agent } size={24} />
       <div style={{ minWidth: 0, flex: 1 }}>
         <div style={{ fontWeight: 600, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {s.title || s.id.slice(0, 24)}
@@ -308,6 +314,11 @@ function SessionRow({ s, active, onOpen }: { s: SessionListItem; active: boolean
       </div>
       {s.distilled > 0 && (
         <span className="chip" data-color="fact" title="已蒸馏记忆数" style={{ flex: 'none' }}>✦ {s.distilled}</span>
+      )}
+      <button className="icon-btn" title="推送交接：蒸馏本会话（任务/git/候选）进收件箱，接手方开局取件"
+        onClick={doPush} style={{ flex: 'none' }}>⇪</button>
+      {pushed !== null && (
+        <span className="meta" style={{ flex: 'none', fontSize: 11.5, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={pushed}>{pushed}</span>
       )}
     </div>
   );

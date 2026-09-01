@@ -365,6 +365,11 @@ export const api = {
     fetch(`${BASE}/api/sessions/${encodeURIComponent(id)}${deleteSource ? '?deleteSource=true' : ''}`, { method: 'DELETE' })
       .then(r => r.json()) as Promise<{ removedIndex: boolean; ignored: boolean; sourceDeleted: boolean; note?: string }>,
 
+  handoffPush: (sessionId: string, to?: string) =>
+    postJSON<{ id: string; title: string; candidates: number; tasks: number; changed: number }>('/api/handoff/push', { sessionId, ...(to ? { to } : {}) }),
+  handoffInbox: () => getJSON<{ pending: Array<{ id: string; from: { agent: string; title: string }; pushedAt: number; to: string }> }>('/api/handoff/inbox'),
+  handoffLoad: (id: string) => postJSON<{ text: string }>('/api/handoff/load', { id }),
+
   memoryValue: () => getJSON<MemoryValueReport>('/api/memories/value'),
 
   doctor: () => getJSON<Diagnostics>('/api/doctor'),
