@@ -92,6 +92,61 @@ window.__ModuleLoader__.load({
     }
 
     // ── 通用小组件 ──
+
+    // ── SVG 图标系统（Lucide 风格线性图标 + CSS 动画）──
+    const ICON_PATHS = {
+      hub: 'M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z',
+      content: 'M4 4h16v2H4zM4 9h16v2H4zM4 14h10v2H4zM4 19h7v2H4z',
+      kb: 'M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2z M12 20c-4.4 0-8-3.6-8-8 0-1.8.6-3.5 1.7-4.8C7 5.7 9.4 4.7 12 4.7s5 1 6.3 2.5C19.4 8.5 20 10.2 20 12c0 4.4-3.6 8-8 8z',
+      research: 'M11 4a7 7 0 0 1 7 7 7 7 0 0 1-7 7 7 7 0 0 1-7-7 7 7 0 0 1 7-7zM21 21l-4.35-4.35',
+      msg: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z',
+      room: 'M3 3h18v14H3zM8 21h8M12 17v4',
+      search: 'M11 4a7 7 0 0 1 7 7 7 7 0 0 1-7 7 7 7 0 0 1-7-7 7 7 0 0 1 7-7zM21 21l-4.35-4.35',
+      library: 'M4 19.5A2.5 2.5 0 0 1 6.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z',
+      ideas: 'M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z',
+      tasks: 'M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11',
+      review: 'M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z',
+      lessons: 'M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15',
+      graph: 'M12 2a10 10 0 1 0 10 10h-10V2z',
+      send: 'M22 2L11 13M22 2l-7 20-4-9-9-4z',
+      terminal: 'M4 17l6-6-6-6M12 19h8',
+      chat: 'M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z',
+      publish: 'M3 11l18-5v12L3 14v-3zM11.6 16.8a3 3 0 1 1-5.8-1.6',
+      play: 'M5 3l14 9-14 9V3z',
+      read: 'M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2zM22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z',
+      plus: 'M12 5v14M5 12h14',
+      trash: 'M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6',
+      edit: 'M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4z',
+      check: 'M20 6L9 17l-5-5',
+      warn: 'M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9v4M12 17h.01',
+      close: 'M18 6L6 18M6 6l12 12',
+      chevronR: 'M9 18l6-6-6-6',
+      chevronL: 'M15 18l-6-6 6-6',
+      split: 'M3 3h18v18H3zM12 3v18',
+      copy: 'M20 9h-9a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2zM5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1',
+      settings: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z',
+      refresh: 'M1 4v6h6M23 20v-6h-6M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15',
+      dot: 'M12 12m-2 0a2 2 0 1 0 4 0 2 2 0 1 0-4 0',
+      clock: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 6v6l4 2',
+      eye: 'M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z',
+      file: 'M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z M13 2v7h7',
+      folder: 'M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z',
+      arrowUp: 'M12 19V5M5 12l7-7 7 7',
+      arrowDown: 'M12 5v14M19 12l-7 7-7-7',
+      bookmark: 'M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z',
+      link: 'M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71',
+      user: 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z',
+      calendar: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 6v6l4 2',
+      grid: 'M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z',
+    }
+    function Icon({ name, size = 18, className = '', style = {} }) {
+      const d = ICON_PATHS[name] || ICON_PATHS.dot
+      return h('svg', { width: size, height: size, viewBox: '0 0 24 24', fill: 'none',
+        stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round',
+        className: 'dk-icon-svg ' + className, style,
+        dangerouslySetInnerHTML: { __html: '<path d="' + d + '"/>' } })
+    }
+
     function Note({ children }) { return h('div', { className: 'dk-note' }, children) }
     function Err({ children }) { return h('div', { className: 'dk-note dk-err' }, children) }
 
@@ -519,7 +574,7 @@ window.__ModuleLoader__.load({
         : h('iframe', { sandbox: '', srcDoc: html, className: 'dk-frame' }))
     }
 
-    const KB_TABS = [['quick', '📊 速览'], ['search', '🔍 搜索'], ['browse', '📚 文库'], ['ideas', '💡 点子'], ['tasks', '📋 任务'], ['review', '🧾 审阅'], ['lessons', '🔁 复盘'], ['graph', '🕷 图谱']]
+    const KB_TABS = [['quick', '📊 速览'], ['search', 'search', '搜索'], ['browse', 'library', '文库'], ['ideas', 'ideas', '点子'], ['tasks', 'tasks', '任务'], ['review', 'review', '审阅'], ['lessons', 'lessons', '复盘'], ['graph', 'graph', '图谱']]
 
     function KbQuick({ onOpenFile }) {
       const [qv, setQv] = useState(null)
@@ -570,7 +625,7 @@ window.__ModuleLoader__.load({
       }
       return h('div', { className: 'dk-desk' },
         h('div', { className: 'dk-deskbar' }, KB_TABS.map(([id, label]) =>
-          h('button', { key: id, className: tab === id ? 'on' : '', onClick: () => setTab(id) }, label))),
+          h('button', { key: id, className: tab === id ? 'on' : '', onClick: () => setTab(id) }, h(Icon, { name: label, size: 14, style: { marginRight: 5, verticalAlign: -2 } }), label === 'search' ? '搜索' : label === 'library' ? '文库' : label === 'ideas' ? '点子' : label === 'tasks' ? '任务' : label === 'review' ? '审阅' : label === 'lessons' ? '复盘' : label === 'graph' ? '图谱' : label))),
         h('div', { className: 'dk-deskmain' },
           tab === 'quick' ? h(KbQuick, { onOpenFile: (f) => setQuickFile(f) })
           : tab === 'search' ? h(KbSearch)
@@ -598,7 +653,7 @@ window.__ModuleLoader__.load({
       return h('div', { className: 'dk-desk' },
         h('div', { className: 'dk-deskbar' },
           [['board', '📋 看板'], ['new', '➕ 选题'], ['files', '📚 文件'], ['tasks', '🧾 任务']].map(([id, label]) =>
-            h('button', { key: id, className: tab === id ? 'on' : '', onClick: () => setTab(id) }, label))),
+            h('button', { key: id, className: tab === id ? 'on' : '', onClick: () => setTab(id) }, h(Icon, { name: label, size: 14, style: { marginRight: 5, verticalAlign: -2 } }), label === 'search' ? '搜索' : label === 'library' ? '文库' : label === 'ideas' ? '点子' : label === 'tasks' ? '任务' : label === 'review' ? '审阅' : label === 'lessons' ? '复盘' : label === 'graph' ? '图谱' : label))),
         h('div', { className: 'dk-deskmain' },
           tab === 'board' ? h(MediaBoard)
           : tab === 'new' ? h(NewTopic, { onDone: () => setTab('board') })
@@ -1378,7 +1433,7 @@ function openSession(id) { try { deckCtx && deckCtx.sessions && deckCtx.sessions
     }
 
     // ── 工作台外壳（v4 五台）──
-    const APPS = [['hub', '🏠', '总台'], ['content', '🎬', '内容台'], ['kb', '🧠', '知识库'], ['research', '📡', '调研台'], ['msg', '💬', '消息台']]
+    const APPS = [['hub', 'hub', '总台'], ['content', 'content', '内容台'], ['kb', 'kb', '知识库'], ['research', 'research', '调研台'], ['msg', 'msg', '消息台']]
     const THEMES = [['glass', '#2dd4ff'], ['term', '#39ff6e'], ['cyber', '#fcee0a'], ['paper', '#d8c9a3']]
     const FLOW_STEPS = ['灵感', '任务', '创作', '待发', '发布']
     const stepOfTask = (st) => st === 'queued' ? 1 : (st === 'running' || st === 'review') ? 2 : 4
@@ -1415,7 +1470,7 @@ function openSession(id) { try { deckCtx && deckCtx.sessions && deckCtx.sessions
         h('div', { className: 'dk-rail-brand' }, 'DECK'),
         APPS.map(([id, icon, label]) =>
           h('button', { key: id, className: 'dk-rail-btn' + (app === id ? ' on' : ''), title: label, onClick: () => setApp(id) },
-            h('span', { className: 'dk-rail-icon' }, icon),
+            h(Icon, { name: icon, size: 22, className: 'dk-rail-icon' }),
             h('span', { className: 'dk-rail-label' }, label))),
         userProjects.length > 0 ? h('div', { className: 'dk-rail-sep' }) : null,
         userProjects.map((p) =>
@@ -1680,7 +1735,26 @@ function openSession(id) { try { deckCtx && deckCtx.sessions && deckCtx.sessions
 `
       const el = document.createElement('style')
       el.id = 'dsh-deck-style'
-      el.textContent = css + `/* ═══ v4：Hub/会话右条/主题/启动器 ═══ */
+      el.textContent = css + `
+/* ═══ SVG 图标 + 动画系统 ═══ */
+.dk-icon-svg{display:inline-block;vertical-align:middle;transition:transform .18s ease,filter .18s ease,opacity .18s ease;}
+.dk-icon-svg:hover{transform:scale(1.12);filter:drop-shadow(0 0 4px color-mix(in srgb,var(--dk-accent,#5b6cff) 60%,transparent));}
+.dk-rail-btn .dk-icon-svg{transition:transform .2s cubic-bezier(.34,1.56,.64,1),filter .2s ease;}
+.dk-rail-btn:hover .dk-icon-svg{transform:scale(1.18) translateY(-1px);filter:drop-shadow(0 0 6px color-mix(in srgb,var(--dk-accent,#5b6cff) 70%,transparent));}
+.dk-rail-btn.on .dk-icon-svg{transform:scale(1.1);filter:drop-shadow(0 0 8px color-mix(in srgb,var(--dk-accent,#5b6cff) 80%,transparent));animation:iconPulse 2.4s ease-in-out infinite;}
+@keyframes iconPulse{0%,100%{filter:drop-shadow(0 0 4px color-mix(in srgb,var(--dk-accent,#5b6cff) 50%,transparent));}50%{filter:drop-shadow(0 0 10px color-mix(in srgb,var(--dk-accent,#5b6cff) 90%,transparent));}}
+.dk-deskbar button .dk-icon-svg{transition:transform .15s ease;}
+.dk-deskbar button:hover .dk-icon-svg{transform:scale(1.15) rotate(-5deg);}
+.dk-deskbar button.on .dk-icon-svg{transform:scale(1.1);animation:iconBounce .3s ease;}
+@keyframes iconBounce{0%{transform:scale(.8);}60%{transform:scale(1.2);}100%{transform:scale(1.1);}}
+.dk-card-actions .dk-icon-svg,.dk-mini .dk-icon-svg{transition:transform .12s ease;}
+.dk-card-actions button:hover .dk-icon-svg,.dk-mini:hover .dk-icon-svg{transform:scale(1.2) rotate(8deg);}
+.dk-brand{animation:brandFloat 3s ease-in-out infinite;}
+@keyframes brandFloat{0%,100%{transform:translateY(0);}50%{transform:translateY(-2px);}}
+.dk-loading{animation:spin 1s linear infinite;}
+@keyframes spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
+.dk-rail-icon{width:22px;height:22px;display:flex;align-items:center;justify-content:center;}
+` + `/* ═══ v4：Hub/会话右条/主题/启动器 ═══ */
 .dk-todo{display:flex;align-items:center;gap:14px;padding:14px 20px;}
 .dk-todo.urgent{border-color:rgba(251,191,36,.5);background:linear-gradient(145deg,rgba(251,191,36,.10),transparent 60%),var(--color-bg-1,#14161c);}
 .dk-todo .ico{font-size:24px;}.dk-todo .nm{font-size:15.5px;font-weight:700;}
