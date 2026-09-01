@@ -93,7 +93,9 @@
 ### M0 · 真物冲刺 ✅ 2026-09-01 `（0.5 天内完成）`
 - [x] 用真实会话跑通最小蒸馏：`scripts/m0-handoff.py`（零 LLM，规则抽取 + git 对账）✅ 2026-09-01
 - [x] 产出真实快照：`dsh-plugin/.handoff/HANDOFF.md`（来源 sess_94519137「hippo记忆」，4104 条消息）✅ 2026-09-01
-- [x] 接手测试：冷神在 zcode（cwd=dsh-plugin）说「读取 .handoff/HANDOFF.md 接手，复述任务状态和下一步，不要重新探索仓库」⏳ 待冷神执行
+- [x] 接手测试：冷神在 zcode（cwd=dsh-plugin）说「读取 .handoff/HANDOFF.md 接手，复述任务状态和下一步，不要重新探索仓库」✅ 2026-09-01 由 zcode 侧接手执行
+  - **保真度报告**：幻觉 0；commit 链/Next 指引/Verbatim 约束全部命中；Blocked 诚实标注未编造。
+  - 新增缺陷 2 条（累计 6）：⑤ Changed 节自相矛盾（列 3 个未提交项后又写"无未提交改动"）；⑥ 单会话视角局限——快照只含生成会话的任务，另一条 H7 线完全不在场（M1+M2 落地后由持续采集+多源对账解决）
 - **M0 暴露的真实缺陷（比任何设计推演值钱）**：
   1. verbatim 近重复未去重（同句三种微差变体各保留一条）——精确匹配去重不够，M1 须加归一化
   2. `git diff --stat HEAD` 不含未跟踪文件，对账层把 untracked 判成"无改动"——对账规则要补 untracked 维度
@@ -125,12 +127,12 @@
 - [x] **硬约束测试（2026-09-01 补，与 §5.2.2 交互）**：autoRecompile 闭环（记忆变更→自动重编 AGENTS.md）已上线——须有测试保证收件箱 pending 项**永不**进 compile 投影（M3 回流的 decision/lesson 进 AGENTS.md 属知识沉淀、合规；快照/handoff 产物违规）✅ 测试 `compile 常驻投影：活跃层可见，历史层/归档产物永不泄漏`（历史层双侧断言：全量投影 + 薄索引）；收件箱本体 M4 落地后扩展同类断言
 - **验收**：能查询历史会话的任务状态（CLI 或接口均可）✅ 真实回放 14 个含 TodoWrite 的 zcode 会话（2026-06-29 → 09-01）：活跃层 4 条、历史层归档 34 条（含 sessionId/完成日期/当时分支/改动文件数），`taskHistory(project, sessionId)` 轨迹查询正常；测试 127/127 全过
 
-### M3 · 完成回流 distill `（约 0.5–1 天）`
-- [ ] 钩子点：`updateTaskStatus()` 置 completed 时，组装 distill 候选——`任务内容 + 卡点(Blocked) + 解法 + 当时 changed 文件`
-- [ ] **必须组装为 `distill.ts` 的 Candidate 类型走既有管线**（§0.2 判断 3：Candidate 是事件→知识的唯一车票），模式参照 `team/distill.ts`（distillTeamEvents）的复刻
-- [ ] 候选入 zvec 后带溯源（来源 sessionId + 时间戳，复用 L0 可回溯）
-- [ ] **边界**：任务状态本身不进 zvec（维持 §3 出界声明）
-- **验收**：完成一个任务后 `hippo recall` 可召回该条，且带当时上下文
+### M3 · 完成回流 distill ✅ 2026-09-01 `（约 0.5–1 天）`
+- [x] 钩子点：`updateTaskStatus()` 置 completed 时，组装 distill 候选 ✅ 2026-09-01 双路：MCP task_update（server.ts，proxy 模式跳过）+ auto-distill 归档回流（auto-distill-run.ts）
+- [x] **必须组装为 `distill.ts` 的 Candidate 类型走既有管线** ✅ task-reflux.ts（2026-09-01）
+- [x] 候选入 zvec 后带溯源 ✅ 每条完成记录独立 L0 事件源 blob，验收验证 blob 含 sessionId+changed（2026-09-01）
+- [x] **边界**：任务状态本身不进 zvec ✅ 只有完成事实（含 git 痕迹）作为 Candidate 入库（2026-09-01）
+- **验收**：完成一个任务后 `hippo recall` 可召回该条，且带当时上下文 ✅ scripts/m3-accept.ts：回放 14 真实会话 → 26 条回流候选（带分支/改动）、L0 溯源通过、dry-run 分档正确；132 测试全过
 - **这是"传递→沉淀"的关键一环**：每次交接自动喂记忆库，记忆里的决策从此带上下文
 
 ### M4 · WorkBuddy 适配器 `（约 1 天）`
@@ -319,7 +321,7 @@ GSD 交接机制实测：`/gsd:pause-work` 手动触发 → agent 收集状态�
 ## 6. 执行顺序与拍板项
 
 - 默认顺序 M1 → M2 → M3 → M4 → M5；如冷神想先见 WorkBuddy 支持，M4/M5 可提前并行（M5 的 A/B 通道依赖 handoff 数据模型，M1-M3 是其地基，但 skill 文件与 mcp.json 注册说明可先写）。
-- **M2 是设计决策变更**（推翻文档化的"快照"策略），需冷神明确点头。
+- **M2 是设计决策变更**（推翻文档化的"快照"策略），需冷神明确点头。→ ✅ 2026-09-01 冷神授权（"你看着来"），两层归档语义已追认。
 - tasks.json 老格式迁移策略：直接切 + 容错读（装机量小）。
 
 ## 7. 面向对象、使用方法与使用效果（2026-08-31 调研结论）
