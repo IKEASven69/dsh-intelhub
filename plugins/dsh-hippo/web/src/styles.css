@@ -520,3 +520,48 @@ body.has-detail-panel .topbar { margin-right: 400px; }
 }
 .stat-line b { font-size: 18px; font-weight: 700; color: var(--ink-1); font-variant-numeric: tabular-nums; }
 .stat-line i { font-style: normal; color: var(--border); margin: 0 4px; font-size: 12px; }
+
+/* ══ 动效补强（2026-09-01）：有用途的动画——反馈、引导、空间感 ══ */
+
+/* 推送按钮：hover 抬起 + 按压回弹，成功后图标弹跳 */
+.push-btn { transition: transform .15s ease, background .15s ease; }
+.push-btn:hover { transform: translateY(-1px) scale(1.08); background: var(--primary-soft); color: var(--primary); }
+.push-btn:active { transform: translateY(0) scale(.92); }
+.push-btn.pushed { color: var(--success); animation: push-pop .45s cubic-bezier(.34,1.56,.64,1); }
+@keyframes push-pop {
+  0% { transform: scale(.8); }
+  55% { transform: scale(1.25) rotate(-8deg); }
+  100% { transform: scale(1) rotate(0); }
+}
+
+/* 推送回执：滑入 + 渐显 */
+.push-receipt { animation: receipt-in .25s ease-out; }
+@keyframes receipt-in {
+  from { opacity: 0; transform: translateX(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* 卡片 hover 微抬（空间层级感；可点击卡片专属，静态卡片不动） */
+.card.clickable { transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease; }
+.card.clickable:hover { transform: translateY(-1px); }
+
+/* StatusBar 待审徽标：温和呼吸（引导注意，不闪烁骚扰） */
+.attention-pulse { animation: attention 2.4s ease-in-out infinite; }
+@keyframes attention {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .55; }
+}
+
+/* 页面切换：新页面内容轻微上浮进场（FadeIn 的 CSS 兜底变体，供非 framer 场景） */
+.page-enter { animation: page-rise .22s ease-out; }
+@keyframes page-rise {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* 无障碍：用户要求减少动画时全部关闭（不只是 spin） */
+@media (prefers-reduced-motion: reduce) {
+  .push-btn, .push-btn:hover, .push-btn:active, .push-btn.pushed,
+  .push-receipt, .card.clickable, .card.clickable:hover,
+  .attention-pulse, .page-enter { animation: none !important; transition: none !important; }
+}

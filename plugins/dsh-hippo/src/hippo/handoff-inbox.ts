@@ -15,7 +15,7 @@ import { join } from 'node:path'
 import { appPath } from '../core/paths.js'
 import { discoverAll, parseSession } from '../agents/index.js'
 import { extractCandidates } from './distill.js'
-import { collectGitContext, loadTasks, type TaskRecord } from './task-context.js'
+import { collectGitContext, extractTasksFromTurns, loadTasks, type TaskRecord } from './task-context.js'
 
 export interface InboxItem {
   id: string
@@ -69,10 +69,20 @@ export function pushHandoff(sessionId: string, opts: { to?: string } = {}): Inbo
     .slice(0, 8)
     .map(c => c.text.slice(0, 100))
   const project = ref.cwd.split(/[\\/]/).pop() ?? 'global'
-  const activeTasks = loadTasks()
+  // 任务快照双源：目标会话 transcript 现场提取（TodoWrite 在活会话里，
+  // auto-distill 异步填 tasks.json——push 时现场提才不空）+ tasks.json 沉淀
+  const live = extractTasksFromTurns(turns, ref.id, project)
+    .filter(t => t.status !== 'completed')
+    .slice(0, 5)
+    .map(t => ({ text: t.text, status: t.status, priority: t.priority }))
+  const stored = loadTasks()
     .filter(t => t.project === project && t.status !== 'completed')
     .slice(0, 5)
     .map(t => ({ text: t.text, status: t.status, priority: t.priority }))
+  const seen = new Set<string>()
+  const activeTasks = [...live, ...stored]
+    .filter(t => { const k = t.text.slice(0, 30); if (seen.has(k)) return false; seen.add(k); return true })
+    .slice(0, 5)
   const git = (() => {
     try {
       const g = collectGitContext(ref.cwd)

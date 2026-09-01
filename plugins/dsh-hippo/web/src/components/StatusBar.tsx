@@ -79,7 +79,7 @@ export default function StatusBar() {
           onClick={() => { navigate('/distill'); }}
           title="点击去蒸馏页处理">
           <Clock size={13} color="var(--warning)" />
-          <b style={{ color: 'var(--warning)' }}>{health.shelvedQueue} 条待审</b>
+          <b className="attention-pulse" style={{ color: 'var(--warning)' }}>{health.shelvedQueue} 条待审</b>
         </span>
       )}
 

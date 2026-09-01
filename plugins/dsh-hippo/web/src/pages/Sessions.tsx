@@ -315,10 +315,10 @@ function SessionRow({ s, active, onOpen }: { s: SessionListItem; active: boolean
       {s.distilled > 0 && (
         <span className="chip" data-color="fact" title="已蒸馏记忆数" style={{ flex: 'none' }}>✦ {s.distilled}</span>
       )}
-      <button className="icon-btn" title="推送交接：蒸馏本会话（任务/git/候选）进收件箱，接手方开局取件"
-        onClick={doPush} style={{ flex: 'none' }}>⇪</button>
+      <button className={`icon-btn push-btn${pushed !== null ? ' pushed' : ''}`} title="推送交接：蒸馏本会话（任务/git/候选）进收件箱，接手方开局取件"
+        onClick={doPush} style={{ flex: 'none' }}>{pushed !== null ? '✓' : '⇪'}</button>
       {pushed !== null && (
-        <span className="meta" style={{ flex: 'none', fontSize: 11.5, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={pushed}>{pushed}</span>
+        <span className="meta push-receipt" style={{ flex: 'none', fontSize: 11.5, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={pushed}>{pushed}</span>
       )}
     </div>
   );
