@@ -112,7 +112,7 @@
 - [ ] 理由：冷神需要能回答"昨天卡在哪"——纯快照语义天然丢历史
 - [ ] 归档模式参照 team 线的 retirement 简化版（completed 任务按 sessionId 归档，含完成时刻与当时 git 状态）
 - [ ] 查询做在 **store 层**（扩展 `tasksForProject` 一族，如 `taskHistory(project, sessionId?)`），CLI/dashboard/compile 各自消费——不绑死 compile（§0.2 判断 5）
-- [ ] `compile.ts:154` 适配：AGENTS.md 仍只展示当前活跃层
+- [ ] `compile.ts:154` 适配：AGENTS.md 只展示活跃层，且**默认走 index 模式**（§7.1.1：常驻预算 ≤100 token，全量投影 opt-in）
 - [ ] 容错：老格式 tasks.json 读入自动迁移
 - [ ] **硬约束测试（2026-09-01 补，与 §5.2.2 交互）**：autoRecompile 闭环（记忆变更→自动重编 AGENTS.md）已上线——须有测试保证收件箱 pending 项**永不**进 compile 投影（M3 回流的 decision/lesson 进 AGENTS.md 属知识沉淀、合规；快照/handoff 产物违规）
 - **验收**：能查询历史会话的任务状态（CLI 或接口均可）
@@ -170,7 +170,7 @@
 - zcode 侧按钮依赖 dsh 面板扩展面（H3 面板已有按钮先例）；CLI 为兜底
 - 验收新增：zcode 点选推送 → 新开 WorkBuddy 会话零口述接上该会话任务状态
 
-- [ ] M5a：`handoff push` CLI + 收件箱 pending 标记（store 层）
+- [ ] M5a：`handoff push` CLI + 收件箱 pending 标记（store 层）；取件工具按 §7.1.1 分层粒度设计（详情 ≤500 token + L0 ref，不倒原文）
 - [ ] M5b：MCP 交付（`handoff_load`/`inbox` 工具 + mcp.json 注册说明）
 - [ ] M5c：`handoff` skill 文件（开局自动查收件箱，WorkBuddy/Claude Code 各一份）
 - [ ] M5d：文件兜底输出（compile 扩展）
@@ -339,6 +339,26 @@ GSD 交接机制实测：`/gsd:pause-work` 手动触发 → agent 收集状态�
 
 **UX 设计原则**（对齐竞品已验证的形态）：采集与沉淀必须零动作（ai-memory 的 hooks 被动采集模式）；接手成本必须为零（memento 的 inject 模式）；交互只允许发生在"查询 / 验收"时刻。
 
+#### 7.1.1 双约束定稿：无感 × 上下文预算（2026-09-01，冷神定调"要的效果是无感 + 最大限度减少上下文"）
+
+两条约束合起来推翻一个隐含假设——交接的默认形态**不是"注入一份快照文档"**（GSD 式 1-3K token 全文常驻），而是**薄索引常驻 + 按需取件**（progressive disclosure）：
+
+**上下文预算三层（agent 侧）：**
+
+| 层 | 常驻成本预算 | 内容 | 进入时机 |
+|---|---|---|---|
+| L-索引（常驻） | **≤100 token** | 活跃任务名×3 + 卡点一行 + "记忆库/收件箱可用"指针 | 开局自动，无需触发词 |
+| L-取件（回合） | 按需 0-500 token | `handoff_load`/`memory_recall` 返回的蒸馏详情 + L0 ref | agent 判断需要时一次工具调用 |
+| L-溯源（原文） | 0（不常驻） | L0 原文片段 | 极少数情况反查 |
+
+**无感四环节闭环**：①采集无感（auto-distill 事后扫描，已有）→ ②注入无感（开局薄索引自动就位，不用说"接手"）→ ③消费即弃（注入当轮用完归档，不残留）→ ④沉淀无感（completed 自动回流，M3）。
+
+**对既有设计的两处修正推论**：
+1. **compile 默认产 index 模式**（`renderIndexMd` 已实现，indexMode 已有）——全量 AGENTS.md 降为显式 opt-in；handoff 相关内容**永不**进常驻投影（与 §5.2.2 硬约束同源，M2 测试项覆盖）
+2. **MCP 工具粒度按"拉一层"设计**：`handoff_load` 返回蒸馏详情（几百 token）而非原始会话，响应内带 L0 ref 供按需再拉——不一次倒完
+
+**验收量化**：接手会话开局常驻注入 ≤100 token；agent 首轮动作正确率不因薄索引下降（fidelity bench 照跑）；用户全程无感知词（无触发词、无确认对话）。
+
 ### 7.2 使用效果（前后对比）
 
 | 维度 | 现状（前） | H7 后 |
@@ -359,6 +379,7 @@ GSD 交接机制实测：`/gsd:pause-work` 手动触发 → agent 收集状态�
 4. **开工仪式**：接手先读 §4 勾选状态与 §6 拍板项，不凭记忆开工。
 
 ### 8.1 变更日志
+- 2026-09-01 **§7.1.1 双约束定稿（冷神："要的效果是无感 + 最大限度减少上下文"）**：交接默认形态从"注入快照文档"改为"薄索引常驻（≤100 token）+ 按需取件（0-500 token/次）+ 溯源不常驻"三层预算；无感四环节闭环（采集/注入/消费即弃/沉淀）；两处设计修正——compile 默认 index 模式（renderIndexMd 已有）、MCP 工具按"拉一层"粒度设计；验收量化（开局常驻 ≤100 token + 无触发词 + fidelity bench 不降）。M2/M5 勾选项已挂钩。
 - 2026-09-01 **同步修订（H7 立项当日另一线完成的工作入档）**：①LLM 叙事层（§5.2.1 方案 A）已实现——llmRefine 规则粗筛→LLM 判决/改写接入 auto-distill+import，dsh-llm 桥跟随 agent-default-model（当日接通 minimax Token Plan/MiniMax-M3），失败降级纯规则；②代码基线合并——hippo-skills 仓库归档，全部引擎代码迁至 `plugins/dsh-hippo/`，§2 现状表路径与阈值（0.92/0.75→0.93/0.8）已校正；③噪音闸门上线（过程自语/标题/疑问/清单碎片规则层拦截，存量清理 643→511）；④M2 补硬约束测试项——autoRecompile 与"handoff 产物禁写 AGENTS.md"的交互须有测试兜底；⑤M0 缺陷 #3（Next 推导）标注已被叙事层落地解除。对 H7 的净影响：M5 摘要零新增依赖、M3 回流候选质量前置提升、面板按钮（M5e）宿主（/dsh-hippo/app 工作台）就绪。
 - 2026-09-01 上午 §5.2.2 定位修订（冷神两轮质询："AGENTS.md 加会爆吗"→"还是没弄明白文章的问题"）：①病根重判——AGENTS.md 膨胀是所有权错位非工程问题，定位升级为"hippo=个人工作上下文所有权层，agent 是租客"，交接本质=寄存（归还+取件）非点对点传递；②上下文定义修正——文章说上下文是做事痕迹（一手），会话是转述（二手），M0 快照价值重判：git/todo 升一等公民、会话蒸馏降解释层；③硬约束落定：handoff 产物禁写 AGENTS.md，消费即弃。§1 背景判断同步改写。
 - 2026-09-01 M0 真物冲刺完成：scripts/m0-handoff.py（zcode sqlite 四表 + git 对账，零 LLM）→ .handoff/HANDOFF.md 真实快照（sess_94519137）。暴露 4 缺陷：verbatim 近重复、diff 不含 untracked、Next 需人工播种（印证 LLM 叙事层必要性）、单源标题薄（印证多源对账）。接手测试待冷神在 zcode 执行。
