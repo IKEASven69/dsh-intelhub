@@ -8,3 +8,6 @@ package-lock.json
 tmp-client.cjs
 tmp-src/
 spikes/
+
+# 语料 tarball 缓存（CI/本地评测可重建）
+plugins/dsh-depsec/research/cache/

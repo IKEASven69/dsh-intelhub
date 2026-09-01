@@ -1,0 +1,77 @@
+name: trust-list 语料回归
+
+# 每周一 05:00（UTC）重跑 dsh-trust-list 判定质量评测：
+# 1) 单元/语料回归测试必须全绿
+# 2) 重拉 npm 人气 top 包语料，跑全链路 tarball 判定，误拦截必须为 0
+# 3) 漏报探针（9 种真实投毒 TTP）必须全数拦截
+# 数字漂移（warn 率上涨/新增 block）会在产物里可见，作为规则调整的依据。
+
+on:
+  schedule:
+    - cron: '0 5 * * 1'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  corpus-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: plugins/dsh-depsec
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: 安装测试依赖
+        run: npm install -g vitest || true
+
+      - name: 测试全绿（含语料误报/漏报回归）
+        run: npx vitest run
+
+      - name: 重拉语料（npm top 包 install scripts）
+        run: node research/collect.mjs
+
+      - name: 全链路 tarball 判定
+        run: node research/run-tarball.mjs
+
+      - name: 漏报探针（必须 9/9 拦截）
+        run: |
+          out=$(node --experimental-strip-types research/probe-evasion.mjs || true)
+          echo "$out"
+          # 放行 = 漏报，出现即失败
+          if echo "$out" | grep -q "放行"; then
+            echo "::error::漏报探针出现放行（漏报），见上方输出"
+            exit 1
+          fi
+          blocked=$(echo "$out" | grep -c "拦截" || true)
+          if [ "$blocked" -lt 9 ]; then
+            echo "::error::探针拦截数 $blocked < 9"
+            exit 1
+          fi
+
+      - name: 误拦截必须为 0
+        run: |
+          dist=$(node --experimental-strip-types research/run.mjs | grep "判定分布" || true)
+          echo "$dist"
+          blocks=$(echo "$dist" | grep -oE "block=[0-9]+" | grep -oE "[0-9]+" || echo 0)
+          if [ "$blocks" != "0" ]; then
+            echo "::error::npm top 包语料出现 $blocks 条误拦截，红线规则回归"
+            exit 1
+          fi
+
+      - name: 上传评测产物
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: corpus-evaluation
+          path: |
+            plugins/dsh-depsec/research/results.json
+            plugins/dsh-depsec/research/results-tarball.json
+            plugins/dsh-depsec/research/corpus.json
+          retention-days: 90

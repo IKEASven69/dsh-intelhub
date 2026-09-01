@@ -36,7 +36,7 @@ const KNOWN_DOWNLOAD_HOSTS = new Set([
  * .env 用负向后行断言排除 process.env / import.meta.env 等属性访问(E2E 实测 esbuild 误报)。
  * Login Data / Chrome User Data 为浏览器凭据库(调研报告漏报#6)。 */
 const SENSITIVE_PATH_RE =
-  /(\.ssh\/|id_rsa|id_ed25519|\.aws\/credentials|\.npmrc|\.gnupg|\/etc\/passwd|cookies\.sqlite|Login[ _]Data|Chrome[^\n]{0,40}User Data|MetaMask|metamask|wallet\.dat|(?<![\w])\.env\b)/i
+  /(\.ssh\/|id_rsa|id_ed25519|\.aws\/credentials|\.npmrc|\.gnupg|\/etc\/passwd|cookies\.sqlite|Login[ _]Data|Chrome[^\n]{0,40}User Data|MetaMask|metamask|wallet\.dat|(?<![\w)])\.env\b)/i
 
 const FETCHER_RE = /\b(curl|wget|fetch|Invoke-WebRequest|iwr|Invoke-RestMethod|irm)\b/i
 const INTERPRETER_AFTER_PIPE_RE = /\|\s*(\S*(?:ba|z|da|fi)?sh|node|python3?|powershell|pwsh|perl|ruby)\b/i
