@@ -171,11 +171,12 @@ export function createHippoMcpServer(engine: McpEngine, opts: { distillUnavailab
     description:
       'Compile memories into an AGENTS.md / CLAUDE.md file for a project. ' +
       'The file is what agents read at startup to preload your experience. ' +
-      'Use indexMode=true for a compact one-line-per-memory index (saves tokens).',
+      'Defaults to index mode: a compact one-line-per-memory index (saves tokens). ' +
+      'Pass indexMode=false only when a full-text projection is explicitly needed.',
     inputSchema: {
       target: z.enum(['agents-md', 'claude-md', 'cursor', 'all']).default('agents-md'),
       project: z.string().optional(),
-      indexMode: z.boolean().default(false),
+      indexMode: z.boolean().default(true),
       outPath: z.string().optional(),
     },
   }, safe(async ({ target, project, indexMode, outPath }: { target: string; project?: string; indexMode: boolean; outPath?: string }) => {
@@ -186,7 +187,7 @@ export function createHippoMcpServer(engine: McpEngine, opts: { distillUnavailab
     const { exportRecords } = await import('./transfer.js');
     const recs = exportRecords(store as never, { project }) as unknown as Array<Record<string, unknown> & { superseded_by?: string }>;
     const active = recs.filter(r => !r.superseded_by);
-    const result = compileTarget(target as never, active as never, { outPath, indexMode });
+    const result = compileTarget(target as never, active as never, { outPath, indexMode: indexMode !== false });
     return result;
   }));
 
@@ -242,8 +243,21 @@ export function createHippoMcpServer(engine: McpEngine, opts: { distillUnavailab
       status: z.enum(['pending', 'in_progress', 'completed']),
     },
   }, safe(async ({ project, task_text, status }: { project: string; task_text: string; status: string }) => {
-    const { updateTaskStatus } = await import('./task-context.js');
+    const { updateTaskStatus, loadTasks } = await import('./task-context.js');
     const ok = updateTaskStatus(project, task_text, status as 'pending' | 'in_progress' | 'completed');
+    // M3 完成回流：置 completed 时组装 Candidate 走既有蒸馏管线（独立 L0 事件源）。
+    // 失败不影响状态更新本身；HTTP 代理模式（无本地 embedder/store）自动跳过。
+    if (ok && status === 'completed' && !opts.distillUnavailable) {
+      try {
+        const task = loadTasks().find(t => t.project === project
+          && t.status === 'completed' && t.text.includes(task_text.slice(0, 20)));
+        const full = engine as MemoryEngine;
+        if (task && engine.store) { // embedder 是方法引用恒真（TS2774）；proxy 由 distillUnavailable 挡
+          const { taskRefluxCandidates } = await import('./task-reflux.js');
+          await runDistill(full, taskRefluxCandidates([task]), { apply: true, agent: 'distill:task' });
+        }
+      } catch { /* 回流失败不阻塞 task_update */ }
+    }
     return { ok, message: ok ? `Task "${task_text}" -> ${status}` : `Task not found: "${task_text}" in ${project}` };
   }));
 

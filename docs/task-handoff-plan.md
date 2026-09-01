@@ -100,22 +100,30 @@
   3. Next 无法可靠自动推导（人工播种可用，快照已标注来源）——印证 §5.2.1「LLM 叙事层」存在的必要性；**该层已于 2026-09-01 落地**（llmRefine），M5 摘要可直接复用
   4. 会话标题「hippo记忆」信息量薄，任务真实含义在 todo+commit 里——多源对账（而非单源标题）是对的核心
 
-### M1 · git 维度采集 `（约 0.5 天）`
-- [ ] `task-context.ts`：`TaskRecord` **新增** `changed?: string[]` 与 `branch?: string` 字段（现为 project/text/status/priority/updatedAt/sessionId）
-- [ ] 采集时执行 `git status --short`、`git diff --stat`、`git rev-parse --abbrev-ref HEAD`，填入新字段
-- [ ] 非 git 目录静默降级（字段留空，不报错）
-- [ ] 单测：临时 git 仓库夹具验证三条命令解析
-- **验收**：真实会话采集后，tasks.json 中可见 changed 文件列表与分支名
+### M1 · git 维度采集 ✅ 2026-09-01 `（约 0.5 天）`
+- [x] `task-context.ts`：`TaskRecord` **新增** `changed?: string[]` 与 `branch?: string` 字段（现为 project/text/status/priority/updatedAt/sessionId）✅ 2026-09-01
+- [x] 采集时执行 `git status --short`（**含 untracked**，规避 M0 缺陷 #2 的 TS 侧根源）、`git rev-parse --abbrev-ref HEAD`，填入新字段（`collectGitContext()`；changed 上限 50 条防膨胀）✅ 2026-09-01
+- [x] 非 git 目录静默降级（字段留空，不报错；先 rev-parse 探活再 status，非 git 目录只付一次子进程成本）✅ 2026-09-01
+- [x] 单测：临时 git 仓库夹具验证命令解析（`task-context.test.ts` 8 项，含 zcode 拼接 text 回归）✅ 2026-09-01
+- [x] 采集接线：`auto-distill-run.ts` 有 TodoWrite 任务时才调 `collectGitContext(sessCwd)`（省一次子进程），填充在调用点、`extractTasksFromTurns` 纯解析签名不动（§0.2 判断 2）✅ 2026-09-01
+- **验收 ✅ 2026-09-01**：真实 zcode 会话 sess_94519137（6540 turns）→ 3 条任务全部带 `branch=master` + changed 列表，tasks.json 往返无损
+- **验收路上修掉的存量 bug**：zcode 适配器 tool text = `input\noutput` 拼接（zcode.ts:78），TodoWrite 的 output 是 `{oldTodos:...}`，整段 JSON.parse 失败 → **任务提取对 zcode 一直是 0 条**（§2"半通"的真实原因）。修复：extractTasksFromTurns 整段 parse 失败退化为首行解析。
+- **真实发现（留给 M3 对账）**：会话 cwd 为大仓根（如 D:\coding）时 changed 全是 .codegraph/ 等杂物目录——cap 50 兜住了膨胀但信噪比低，M3 回流对账时应过滤点目录/无扩展名条目
+- **环境备忘**：better-sqlite3 编译于 node 24（ABI 137），node 22 下 tsx 测试报 ABI 不匹配（3 个 sqlite 测试假失败）——跑测试用 `PATH=$(version-fox node24) npx tsx`；宿主运行时用 node 24 无影响
 
 ### M2 · 任务轨迹 `（约 0.5 天）`
-- [ ] **设计决策变更**（原策略是文档化的有意设计，此处推翻需记录理由）：`mergeTasks()` 从"同项目整体替换"改为"当前活跃 + 历史归档"两层——活跃层仍走全量快照（保持 TodoWrite 语义），历史层按 sessionId 追加归档
-- [ ] 理由：冷神需要能回答"昨天卡在哪"——纯快照语义天然丢历史
-- [ ] 归档模式参照 team 线的 retirement 简化版（completed 任务按 sessionId 归档，含完成时刻与当时 git 状态）
-- [ ] 查询做在 **store 层**（扩展 `tasksForProject` 一族，如 `taskHistory(project, sessionId?)`），CLI/dashboard/compile 各自消费——不绑死 compile（§0.2 判断 5）
-- [ ] `compile.ts:154` 适配：AGENTS.md 只展示活跃层，且**默认走 index 模式**（§7.1.1：常驻预算 ≤100 token，全量投影 opt-in）
-- [ ] 容错：老格式 tasks.json 读入自动迁移
-- [ ] **硬约束测试（2026-09-01 补，与 §5.2.2 交互）**：autoRecompile 闭环（记忆变更→自动重编 AGENTS.md）已上线——须有测试保证收件箱 pending 项**永不**进 compile 投影（M3 回流的 decision/lesson 进 AGENTS.md 属知识沉淀、合规；快照/handoff 产物违规）
-- **验收**：能查询历史会话的任务状态（CLI 或接口均可）
+- [x] **设计决策变更**（原策略是文档化的有意设计，此处推翻需记录理由）：`mergeTasks()` 从"同项目整体替换"改为"当前活跃 + 历史归档"两层——活跃层仍走全量快照（保持 TodoWrite 语义），历史层按 sessionId 追加归档 ✅ 2026-09-01
+  - 实现：`tasks.json` 升级 v2 结构 `{version:2, active, history}`；`loadStore/saveStore/mergeStoreTasks` 三件套，`mergeTasks` 老签名降级为兼容包装
+  - 归档规则：上一版活跃层中从快照**消失**的任务 → 历史层（dedupe 键 `project\0sessionId\0text` 留 updatedAt 最新）；全局上限 2000 条防膨胀
+- [x] 理由：冷神需要能回答"昨天卡在哪"——纯快照语义天然丢历史 ✅
+- [x] 归档模式参照 team 线的 retirement 简化版（completed 任务按 sessionId 归档，含完成时刻与当时 git 状态）✅ 历史记录带 `updatedAt`（完成时刻）+ `branch`/`changed`（当时 git 状态，M1 字段直接复用）
+- [x] 查询做在 **store 层**（扩展 `tasksForProject` 一族，如 `taskHistory(project, sessionId?)`），CLI/dashboard/compile 各自消费——不绑死 compile（§0.2 判断 5）✅
+- [x] `compile.ts:154` 适配：AGENTS.md 只展示活跃层，且**默认走 index 模式**（§7.1.1：常驻预算 ≤100 token，全量投影 opt-in）✅
+  - `compileTarget` 的 `indexMode` 默认翻转为 true（`opts.indexMode !== false`），MCP `compile` 工具与 HTTP `/api/compile` 同步默认
+  - 新增 `renderIndexCurrentState()`：薄索引也带 L-索引层 Current State（活跃任务 ×3 + in_progress 卡点行 + 按需取回指针）
+- [x] 容错：老格式 tasks.json 读入自动迁移 ✅（裸数组 → `{version:2, active, history:[]}`，`loadTasks` 语义不变）
+- [x] **硬约束测试（2026-09-01 补，与 §5.2.2 交互）**：autoRecompile 闭环（记忆变更→自动重编 AGENTS.md）已上线——须有测试保证收件箱 pending 项**永不**进 compile 投影（M3 回流的 decision/lesson 进 AGENTS.md 属知识沉淀、合规；快照/handoff 产物违规）✅ 测试 `compile 常驻投影：活跃层可见，历史层/归档产物永不泄漏`（历史层双侧断言：全量投影 + 薄索引）；收件箱本体 M4 落地后扩展同类断言
+- **验收**：能查询历史会话的任务状态（CLI 或接口均可）✅ 真实回放 14 个含 TodoWrite 的 zcode 会话（2026-06-29 → 09-01）：活跃层 4 条、历史层归档 34 条（含 sessionId/完成日期/当时分支/改动文件数），`taskHistory(project, sessionId)` 轨迹查询正常；测试 127/127 全过
 
 ### M3 · 完成回流 distill `（约 0.5–1 天）`
 - [ ] 钩子点：`updateTaskStatus()` 置 completed 时，组装 distill 候选——`任务内容 + 卡点(Blocked) + 解法 + 当时 changed 文件`
@@ -383,6 +391,9 @@ GSD 交接机制实测：`/gsd:pause-work` 手动触发 → agent 收集状态�
 4. **开工仪式**：接手先读 §4 勾选状态与 §6 拍板项，不凭记忆开工。
 
 ### 8.1 变更日志
+
+- **2026-09-01（M2 完成）**：任务轨迹两层化——`tasks.json` v2（活跃快照 + 历史归档 dedupe+cap2000）、`taskHistory()` store 层查询、`compileTarget` 默认 index 模式 + 薄索引带 Current State（≤3 任务 + 卡点行）、老格式自动迁移、历史层不泄漏进常驻投影的硬约束测试。真实回放验收：14 会话 → 活跃 4 + 历史 34。全量测试 127/127。
+- 2026-09-01 **M1 git 维度采集完成**：TaskRecord 新增 branch/changed（可选字段，老数据兼容）；collectGitContext（status --short 含 untracked + rev-parse 探活，cap 50，非 git 静默降级）；接线 auto-distill-run（有任务才采集）。验收：真实会话 sess_94519137 → 3 任务带 branch+changed，全量测试 118/118（node 24）。**顺手修掉存量 bug**：zcode tool text="input\noutput" 拼接致 TodoWrite 整段 parse 失败、任务提取对 zcode 一直 0 条——修复为整段失败退化首行解析。真实发现：大仓 cwd 下 changed 噪声大，留给 M3 对账过滤；环境备忘：better-sqlite3 为 node 24 ABI，node 22 下测试假失败。下一步 M2（需冷神拍板 mergeTasks 轨迹策略）。
 - 2026-09-01 功能效果图落盘：docs/h7-feature-mockup-2026-09-01.svg（一次完整交接四画面：推送⇪/开局无感注入/按需取件/完成沉淀闭环），§7.1.1 挂引用。
 - 2026-09-01 效果图落盘：docs/h7-handoff-ux-2026-09-01.svg（§7.1.1 四面板可视化——开局 85 token 薄索引实样、三层预算栈、无感四环节闭环、口述/GSD/H7 常驻成本对比条），§7.1.1 挂引用。
 - 2026-09-01 **§7.1.1 双约束定稿（冷神："要的效果是无感 + 最大限度减少上下文"）**：交接默认形态从"注入快照文档"改为"薄索引常驻（≤100 token）+ 按需取件（0-500 token/次）+ 溯源不常驻"三层预算；无感四环节闭环（采集/注入/消费即弃/沉淀）；两处设计修正——compile 默认 index 模式（renderIndexMd 已有）、MCP 工具按"拉一层"粒度设计；验收量化（开局常驻 ≤100 token + 无触发词 + fidelity bench 不降）。M2/M5 勾选项已挂钩。

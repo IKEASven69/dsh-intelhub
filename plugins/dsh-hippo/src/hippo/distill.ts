@@ -259,7 +259,7 @@ export async function distill(
     const hits = await engine.store.search(vec, projects, 1);
     const sim = hits.length ? hits[0][1] : 0.0;
     cand.similarity = Math.round(sim * 10000) / 10000;
-    if (sourceId) cand.source_id = sourceId; // 无 turns 时保留候选自带值（搁置补入库）
+    if (sourceId && !cand.source_id) cand.source_id = sourceId; // 保留候选自带值（task 回流按任务溯源）
 
     const hitRecord = hits.length ? hits[0][0] : null;
     const isDecisionFlip =
@@ -279,7 +279,7 @@ export async function distill(
     try {
       const r = await engine.remember(cand.text, {
         type: cand.type, project: cand.project, agent,
-        sourceId,
+        sourceId: cand.source_id || sourceId, // 候选自带溯源优先（task 回流按任务落 L0）
         sourceOffset: cand.source_offset >= 0 ? cand.source_offset : undefined,
       });
       if (r.status === 'created') result.created += 1;

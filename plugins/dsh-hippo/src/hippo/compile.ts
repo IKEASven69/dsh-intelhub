@@ -186,6 +186,8 @@ export function renderCurrentState(project?: string): string {
 export function renderIndexMdBody(g: GroupedMemories): string {
   const lines: string[] = [];
   const date = new Date().toISOString().slice(0, 10);
+  // 薄索引常驻也要带上操作性上下文（活跃任务 ×3 + 卡点），但严格限预算（§7.1.1）
+  lines.push(renderIndexCurrentState(g.project ?? undefined));
   lines.push('## Memory index', '');
   lines.push('这是记忆库的**索引**（非全文）。需要某条的完整内容与上下文时，');
   lines.push('用 `memory_recall` 工具（或 `hippo recall "关键词"`）按语义检索，不要凭摘要行事。', '');
@@ -216,6 +218,26 @@ export function renderIndexMdBody(g: GroupedMemories): string {
 /** Wrap the index body in the same section markers. */
 export function renderIndexMd(g: GroupedMemories): string {
   return [SECTION_START, renderIndexMdBody(g), SECTION_END].join('\n');
+}
+
+/** 薄索引版 Current State（§7.1.1 L-索引层，预算 ≤100 token）：
+ * 活跃任务名 ×3 + 卡点一行 + 按需取回指针。历史层/已完成不进常驻投影。 */
+export function renderIndexCurrentState(project?: string): string {
+  const lines: string[] = [];
+  lines.push('## Current State', '');
+  if (project) {
+    const open = tasksForProject(project).filter(t => t.status !== 'completed');
+    if (open.length > 0) {
+      const focus = open.find(t => t.status === 'in_progress');
+      if (focus) lines.push(`**Current focus:** ${focus.text}`, '');
+      lines.push('Active tasks:');
+      for (const t of open.slice(0, 3)) lines.push(`- ${t.text}`);
+      lines.push('');
+    }
+  }
+  lines.push('详情（记忆全文 / 任务轨迹 / 交接上下文）用 `memory_recall`（或 `hippo recall`）按需取回，不要凭摘要行事。');
+  lines.push('');
+  return lines.join('\n');
 }
 
 // ── idempotent file injection ──────────────────────────────────────────────
@@ -397,6 +419,8 @@ export function compileTarget(
   records: MemoryRecord[],
   opts: { outPath?: string; minStrength?: number; project?: string; dryRun?: boolean; indexMode?: boolean } = {},
 ): CompileResult {
+  // §7.1.1 推论 1：compile 默认产 index 模式（薄索引常驻 ≤100 token），全量投影显式 opt-in
+  const indexMode = opts.indexMode !== false;
   const groups = groupMemories(records, { project: opts.project, minStrength: opts.minStrength });
   const memoryCount = groups.always.length + groups.onDemand.length
     + [...groups.byProject.values()].reduce((s, l) => s + l.length, 0);
@@ -404,7 +428,7 @@ export function compileTarget(
 
   let files: string[];
   if (target === 'agents-md' || target === 'claude-md' || target === 'copilot') {
-    if (opts.indexMode) {
+    if (indexMode) {
       files = [writeSectionMd(outPath, renderIndexMd(groups), opts.dryRun)].filter(Boolean);
     } else {
       files = [writeAgentsMd(outPath, groups, { dryRun: opts.dryRun })].filter(Boolean);

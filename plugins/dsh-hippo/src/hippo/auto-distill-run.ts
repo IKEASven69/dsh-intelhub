@@ -19,7 +19,8 @@ import {
   loadAutoSettings, saveAutoSettings, appendShelved,
   type AutoDistillSettings, type ShelvedCandidate,
 } from './auto-distill.js';
-import { extractTasksFromTurns, mergeTasks, loadTasks, saveTasks } from './task-context.js';
+import { extractTasksFromTurns, mergeStoreTasks, loadStore, saveStore, collectGitContext, taskKey } from './task-context.js';
+import { taskRefluxCandidates } from './task-reflux.js';
 
 const STABLE_MS = 10 * 60 * 1000; // 会话文件 10 分钟内动过 → 还在聊，下轮再说
 
@@ -96,14 +97,24 @@ async function runOnceInner(st: AutoDistillSettings, stats: AutoRunStats): Promi
     // 决定句漏进 global；claude 的 ref.cwd 是目录名推导也不可靠）
     const sessCwd = turns.find(t => t.cwd)?.cwd ?? ref.cwd;
     const project = cwdToProject(sessCwd);
-    const candidates = extractCandidates(turns, { projectOverride: project });
-    // 任务上下文提取（TodoWrite 调用 → tasks.json，快照覆盖）
+    // 任务上下文提取（TodoWrite 调用 → tasks.json）；M2 起两层结构（活跃快照 +
+    // 历史归档）。M3 回流：本轮**新归档**的 completed 任务组装为 Candidate 走
+    // 既有蒸馏管线（与 LLM 精炼/分档/搁置同待遇），每条带独立 L0 事件源。
+    let reflux: Candidate[] = [];
     {
       const tasks = extractTasksFromTurns(turns, ref.id, project);
       if (tasks.length > 0) {
-        saveTasks(mergeTasks(loadTasks(), tasks));
+        const git = collectGitContext(sessCwd);
+        if (git.branch || git.changed) {
+          for (const t of tasks) { t.branch = git.branch; t.changed = git.changed; }
+        }
+        const beforeKeys = new Set(loadStore().history.map(taskKey));
+        saveStore(mergeStoreTasks(loadStore(), tasks));
+        const newlyArchived = loadStore().history.filter(t => !beforeKeys.has(taskKey(t)));
+        try { reflux = taskRefluxCandidates(newlyArchived); } catch { /* 溯源失败不阻塞蒸馏 */ }
       }
     }
+    const candidates = [...extractCandidates(turns, { projectOverride: project }), ...reflux];
     if (candidates.length === 0) {
       // 没有候选也记录，避免反复解析
       try { recordSessionDistill({ id: ref.id, sourceId: '' }); } catch { /* 尽力 */ }
@@ -138,7 +149,7 @@ async function runOnceInner(st: AutoDistillSettings, stats: AutoRunStats): Promi
         stats.superseded += applied.candidates.filter(c => c.duplicate === 'supersede').length;
       }
       for (const { c, reason } of toShelve) {
-        appendShelved({ candidate: { ...c, source_id: sourceId }, sessionId: ref.id, sourceId, reason, createdAt: Date.now() / 1000 } satisfies ShelvedCandidate);
+        appendShelved({ candidate: { ...c, source_id: c.source_id || sourceId }, sessionId: ref.id, sourceId, reason, createdAt: Date.now() / 1000 } satisfies ShelvedCandidate);
         stats.shelved += 1;
       }
 

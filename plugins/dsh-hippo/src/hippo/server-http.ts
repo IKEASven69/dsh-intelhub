@@ -554,7 +554,7 @@ export function buildHttpApp(opts: HttpServerOptions & { autoTimer?: boolean } =
       let memoryCount = 0;
       for (const t of targets) {
         const r = compileTarget(t, records, {
-          indexMode: indexMode === true,
+          indexMode: indexMode !== false,
           outPath: outPath !== undefined ? outPath : defaultOutPath(t),
         });
         // 编译自动化：记住配置，自动蒸馏后重编
