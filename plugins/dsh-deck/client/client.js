@@ -574,7 +574,7 @@ window.__ModuleLoader__.load({
         : h('iframe', { sandbox: '', srcDoc: html, className: 'dk-frame' }))
     }
 
-    const KB_TABS = [['quick', '📊 速览'], ['search', 'search', '搜索'], ['browse', 'library', '文库'], ['ideas', 'ideas', '点子'], ['tasks', 'tasks', '任务'], ['review', 'review', '审阅'], ['lessons', 'lessons', '复盘'], ['graph', 'graph', '图谱']]
+    const KB_TABS = [['quick', 'hub', '速览'], ['search', 'search', '搜索'], ['browse', 'library', '文库'], ['ideas', 'ideas', '点子'], ['tasks', 'tasks', '任务'], ['review', 'review', '审阅'], ['lessons', 'lessons', '复盘'], ['graph', 'graph', '图谱']]
 
     function KbQuick({ onOpenFile }) {
       const [qv, setQv] = useState(null)
