@@ -591,8 +591,8 @@ window.__ModuleLoader__.load({
         h('div', { className: 'dk-fine' }, k), h('div', { style: { fontSize: 26, fontWeight: 750 } }, v), sub !== undefined ? h('div', { className: 'dk-fine' }, sub) : null)
       return h('div', { className: 'dk-col' },
         h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))', gap: 10 } },
-          stat('已提炼 Skills', S.skills), stat('精选素材', S.collections), stat('今日新增', S.todayNew, '篇'),
-          stat('待处理 all/', S.raw), stat('判断回看', S.lessonsWarn, '⚠️待验证'), stat('关注渠道', S.watchChannels)),
+          stat('✈ Skills', S.skills), stat('📁 精选', S.collections), stat('↑ 今日新增', S.todayNew, '篇'),
+          stat('○ 待处理', S.raw), stat('目 回看', S.lessonsWarn, '待验证'), stat('→ 关注', S.watchChannels)),
         h('div', { className: 'dk-field-label' }, '🔥 收藏 Top（互动量降序，点卡预览）'),
         h('div', { className: 'dk-grid' }, qv.hot.slice(0, 8).map((x, i) =>
           h('div', { key: x.file, className: 'dk-card', onClick: () => onOpenFile(x.file) },
@@ -762,8 +762,8 @@ window.__ModuleLoader__.load({
         }).catch(() => {})
         return () => { alive = false }
       }, [item.slug])
-      if (pptHtml !== null) return h(PPTViewer, { html: pptHtml, title: item.title, onClose: () => setPptHtml(null) })
-      if (artMd !== null) return h(ArticleReader, { md: artMd, title: item.title, onClose: () => setArtMd(null) })
+      if (pptHtml !== null) return h(PPTViewer, { html: pptHtml, title: item.title, onClose: () => { setPptHtml(null); onClose() } })
+      if (artMd !== null) return h(ArticleReader, { md: artMd, title: item.title, onClose: () => { setArtMd(null); onClose() } })
       const advance = () => {
         const next = NEXT_STATUS[item.status]
         if (next === null) return
@@ -1264,7 +1264,7 @@ function openSession(id) { try { deckCtx && deckCtx.sessions && deckCtx.sessions
           : h('div', { className: 'dk-col', style: { gap: 8 } },
               reviewCards.map(({ b, c }) =>
                 h('div', { key: 'r' + b.id + c.id, className: 'dk-card dk-todo urgent', onClick: goReview },
-                  h('span', { className: 'ico' }, '🧾'), h('span', { className: 'nm' }, '审阅落库'),
+                  h(Icon, { name: 'review', size: 26, style: { color: 'var(--dk-accent)' } }), h('span', { className: 'nm' }, '审阅落库'),
                   h('span', { className: 'pv' }, c.title + '（' + b.name + '）→ LESSONS'),
                   h('button', { className: 'dk-mini', onClick: (e) => { e.stopPropagation(); goReview() } }, '去审阅'))),
               readyItems.map((i) =>
@@ -1283,14 +1283,14 @@ function openSession(id) { try { deckCtx && deckCtx.sessions && deckCtx.sessions
                 real < 4 ? h('span', { className: 'dk-stepline ' + (real < step ? 'done' : '') }) : null)
             })),
             c.status === 'queued' ? h('span', null,
-              h('button', { className: 'dk-mini', onClick: () => { window.__dkDispatchProject = b.id; window.__dkNeedLaunch = (window.__dkLaunchSeen !== '1'); notify() } }, '🚀 派发'),
+              h('button', { className: 'dk-mini', onClick: () => { window.__dkDispatchProject = b.id; window.__dkNeedLaunch = (window.__dkLaunchSeen !== '1'); notify() } }, null, h(Icon, { name: 'send', size: 12, style: { marginRight: 3 } }), ' 派发'),
               h('button', { className: 'dk-mini', style: { marginLeft: 5 }, onClick: async () => {
                 const proj = stateStore.projects.find((p) => p.id === b.id)
                 const sid = (proj && proj.bindSession) || sessionsStore.current
                 if (!sid) { window.alert('先在控制室绑定会话'); return }
                 const text = '【dsh-deck 任务派发】\n任务：' + c.title + '\n读 TASK.md 找 queued 卡→干活→写 RESULT.md→改 review'
                 try { await promptIntoSession(sid, text); openSession(sid) } catch (e) { window.alert(String(e.message || e)) }
-              } }, '💬 会话')) : null)),
+              } }, null, h(Icon, { name: 'chat', size: 12, style: { marginRight: 3 } }), ' 会话')) : null)),
         drafting.map((i) =>
           h('div', { key: i.slug, className: 'dk-flowrow' },
             h('span', { className: 'ftt' }, i.title),
@@ -1742,7 +1742,40 @@ function openSession(id) { try { deckCtx && deckCtx.sessions && deckCtx.sessions
 `
       const el = document.createElement('style')
       el.id = 'dsh-deck-style'
-      el.textContent = css + `/* ═══ 缩放系统 ═══ */
+      el.textContent = css + `
+/* ═══ 展开动画+组件层级优化 ═══ */
+.dk-main > .dk-desk{animation:deskSlideIn .22s cubic-bezier(.25,.46,.45,.94);}
+@keyframes deskSlideIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
+.dk-todo{animation:cardIn .3s cubic-bezier(.25,.46,.45,.94) both;}
+.dk-todo:nth-child(2){animation-delay:.06s;}
+.dk-todo:nth-child(3){animation-delay:.12s;}
+@keyframes cardIn{from{opacity:0;transform:translateX(-12px);}to{opacity:1;transform:none;}}
+.dk-flowrow{animation:rowIn .25s ease both;}
+.dk-flowrow:nth-child(2){animation-delay:.04s;}
+.dk-flowrow:nth-child(3){animation-delay:.08s;}
+@keyframes rowIn{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:none;}}
+.dk-modal-back{animation:fadeIn .15s ease;}
+.dk-modal{animation:modalIn .22s cubic-bezier(.34,1.2,.64,1);}
+@keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
+@keyframes modalIn{from{opacity:0;transform:scale(.94) translateY(10px);}to{opacity:1;transform:none;}}
+.dk-card{transition:transform .16s cubic-bezier(.25,.46,.45,.94),border-color .16s,box-shadow .16s;}
+.dk-card:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,.25);}
+.dk-idea{transition:transform .18s cubic-bezier(.34,1.3,.64,1),border-color .18s;}
+.dk-idea:hover{transform:translateY(-3px) scale(1.02);}
+.dk-sessbar .sess{transition:transform .14s ease,border-color .14s,box-shadow .14s;}
+.dk-sessbar .sess:hover{transform:translateX(-2px);}
+.dk-field-label{letter-spacing:.3px;text-transform:none;}
+/* 层级尺寸规范 */
+.dk-todo .nm{font-weight:700;}
+.dk-todo .pv{font-weight:400;}
+.dk-flowrow .ftt{font-weight:600;}
+.dk-step.now{text-shadow:0 0 8px color-mix(in srgb,var(--dk-accent,#5b6cff) 40%,transparent);}
+/* 统计卡数字强调 */
+.dk-shell .stat .v,.dk-shell [style*="fontWeight: 750"],.dk-shell [style*="fontWeight:750"]{font-variant-numeric:tabular-nums;letter-spacing:-.5px;}
+/* 按钮触感 */
+button{transition:transform .1s ease,filter .1s ease,box-shadow .15s ease;}
+button:active{transform:scale(.97);}
+` + `/* ═══ 缩放系统 ═══ */
 .dk-shell{font-size:calc(13px * var(--dk-zoom,1)) !important;}
 .dk-shell .dk-icon-svg{width:calc(18px * var(--dk-zoom,1));height:calc(18px * var(--dk-zoom,1));}
 .dk-shell .dk-rail-btn .dk-icon-svg{width:calc(22px * var(--dk-zoom,1));height:calc(22px * var(--dk-zoom,1));}
