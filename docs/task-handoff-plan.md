@@ -135,11 +135,11 @@
 - **验收**：完成一个任务后 `hippo recall` 可召回该条，且带当时上下文 ✅ scripts/m3-accept.ts：回放 14 真实会话 → 26 条回流候选（带分支/改动）、L0 溯源通过、dry-run 分档正确；132 测试全过
 - **这是"传递→沉淀"的关键一环**：每次交接自动喂记忆库，记忆里的决策从此带上下文
 
-### M4 · WorkBuddy 适配器 `（约 1 天）`
-- [ ] 新建 `src/agents/workbuddy.ts`，参照 `zcode.ts` 实现 SessionAdapter
-- [ ] 数据源与格式规格见 §5
-- [ ] 注册 `src/agents/index.ts`，`agents.test.ts` 补测试（格式映射用真实样本截取做夹具）
-- **验收**：对 D:\coding 的真实 WorkBuddy 会话跑 distill / patterns，产出合理 Turn 序列
+### M4 · WorkBuddy 适配器 ✅ 2026-09-01 `（约 1 天）`
+- [x] 新建 `src/agents/workbuddy.ts`，参照 `zcode.ts` 实现 SessionAdapter ✅ discover 只读头部 64KB 提取 ai-title/cwd（大文件不全读）
+- [x] 数据源与格式规格见 §5 ✅ 实测补充：reasoning 与 function_call 交织密度高故跳过（并入会打乱轮次）；status!==completed 即 toolFailed
+- [x] 注册 `src/agents/index.ts` ✅；workbuddy.test.ts 4 测试，夹具从真实会话截取（15 条覆盖全 6 类型+人造失败条）
+- **验收**：对 D:\coding 的真实 WorkBuddy 会话跑 distill / patterns，产出合理 Turn 序列 ✅ 12 会话被发现；「探讨豆包工作的办公 Agent 启示」860 turns → 20 候选；标题/cwd/时间戳全对
 
 ### M5 · 交付通道——快照怎么"进入"目标 agent（2026-08-31 新增）
 
