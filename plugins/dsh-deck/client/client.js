@@ -1478,7 +1478,12 @@ function openSession(id) { try { deckCtx && deckCtx.sessions && deckCtx.sessions
             h('span', { className: 'dk-rail-icon' }, p.icon || '📁'),
             h('span', { className: 'dk-rail-label' }, p.name.slice(0, 6)))),
         h('div', { className: 'dk-rail-fill' }),
-        h('div', { className: 'dk-thdots' }, THEMES.map(([id, color]) =>
+        h('div', { className: 'dk-thdots' },
+          h('button', { className: 'dk-thdot', title: '\u7f29\u653e ' + (zoomStore.z * 100) + '% (\u70b9\u51fb\u5207\u6362 85/100/115/130%)',
+            onClick: () => zoomStore.cycle(),
+            style: { background: zoomStore.z === 1 ? 'var(--color-text-1,#e6e6e6)' : 'var(--dk-accent,#5b6cff)', color: zoomStore.z === 1 ? 'var(--color-bg-1,#14161c)' : '#fff', fontSize: '8px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', width: 15, height: 15, borderRadius: '50%', border: '2px solid rgba(255,255,255,.25)', cursor: 'pointer', padding: 0 } },
+            Math.round(zoomStore.z * 100)),
+          THEMES.map(([id, color]) =>
           h('button', { key: id, className: 'dk-thdot' + (themeStore.th === id ? ' on' : ''), style: { background: color, color }, title: '主题 ' + id, onClick: () => themeStore.set(id) }))),
         h('button', { className: 'dk-rail-btn' + (app === 'room' ? ' on' : ''), title: '控制室', onClick: () => setApp('room') },
           h('span', { className: 'dk-rail-icon' }, '🖥️'),
@@ -1507,7 +1512,7 @@ function openSession(id) { try { deckCtx && deckCtx.sessions && deckCtx.sessions
           : null
       }
       const proj = app.startsWith('p:') ? (stateStore.projects.find((p) => p.id === app.slice(2)) ?? null) : null
-      return h('div', { className: 'dk-shell', 'data-th': themeStore.th, style: { '--dk-chatw': chatStore.w + 'px' } },
+      return h('div', { className: 'dk-shell', 'data-th': themeStore.th, style: { '--dk-chatw': chatStore.w + 'px', '--dk-zoom': zoomStore.z } },
         h(Rail, { app, setApp }),
         h('div', { className: 'dk-main' },
           app === 'hub' ? h(HubDesk)
@@ -1534,6 +1539,8 @@ function openSession(id) { try { deckCtx && deckCtx.sessions && deckCtx.sessions
       )
     }
 
+    const ZOOMS = [0.85, 1, 1.15, 1.3]
+    const zoomStore = { z: Number(localStorage.getItem('dk-zoom')) || 1, set(v) { this.z = v; try { localStorage.setItem('dk-zoom', String(v)) } catch {} notify() }, cycle() { const i = ZOOMS.indexOf(this.z); this.set(ZOOMS[(i + 1) % ZOOMS.length]) } }
     const themeStore = { th: (() => { try { return localStorage.getItem('dk-theme') || 'glass' } catch { return 'glass' } })(), set(t) { this.th = t; try { localStorage.setItem('dk-theme', t) } catch {} notify() } }
     const chatStore = { w: Number(localStorage.getItem('dk-chatw')) || 420, setW(v) { this.w = Math.round(v); try { localStorage.setItem('dk-chatw', String(this.w)) } catch {} notify() } }
 
@@ -1735,7 +1742,25 @@ function openSession(id) { try { deckCtx && deckCtx.sessions && deckCtx.sessions
 `
       const el = document.createElement('style')
       el.id = 'dsh-deck-style'
-      el.textContent = css + `
+      el.textContent = css + `/* ═══ 缩放系统 ═══ */
+.dk-shell{font-size:calc(13px * var(--dk-zoom,1)) !important;}
+.dk-shell .dk-icon-svg{width:calc(18px * var(--dk-zoom,1));height:calc(18px * var(--dk-zoom,1));}
+.dk-shell .dk-rail-btn .dk-icon-svg{width:calc(22px * var(--dk-zoom,1));height:calc(22px * var(--dk-zoom,1));}
+.dk-shell .dk-card{padding:calc(12px * var(--dk-zoom,1)) calc(14px * var(--dk-zoom,1));}
+.dk-shell .dk-deskbar button{font-size:calc(12.5px * var(--dk-zoom,1));}
+.dk-shell .dk-searchbar input{font-size:calc(13px * var(--dk-zoom,1));}
+.dk-shell .dk-note{font-size:calc(12.5px * var(--dk-zoom,1));}
+.dk-shell .dk-card-title{font-size:calc(13.5px * var(--dk-zoom,1));}
+.dk-shell .dk-card-sub{font-size:calc(11.5px * var(--dk-zoom,1));}
+.dk-shell .dk-mini{font-size:calc(12px * var(--dk-zoom,1));}
+.dk-shell .dk-grid{gap:calc(10px * var(--dk-zoom,1));grid-template-columns:repeat(auto-fill,minmax(calc(300px * var(--dk-zoom,1)),1fr));}
+.dk-shell .dk-rail{width:calc(84px * var(--dk-zoom,1));}
+.dk-shell .dk-todo .nm{font-size:calc(15.5px * var(--dk-zoom,1));}
+.dk-shell .dk-todo .pv{font-size:calc(13.5px * var(--dk-zoom,1));}
+.dk-shell .dk-h1{font-size:calc(21px * var(--dk-zoom,1));}
+@media (max-width:1400px){.dk-shell .dk-grid{grid-template-columns:repeat(auto-fill,minmax(calc(260px * var(--dk-zoom,1)),1fr));}}
+@media (max-width:1100px){.dk-shell .dk-grid{grid-template-columns:1fr;}.dk-shell .dk-board{grid-template-columns:repeat(2,1fr);}}
+@media (max-width:800px){.dk-shell .dk-board{grid-template-columns:1fr;}.dk-shell .dk-rail{width:calc(64px * var(--dk-zoom,1));}}` + `
 /* ═══ SVG 图标 + 动画系统 ═══ */
 .dk-icon-svg{display:inline-block;vertical-align:middle;transition:transform .18s ease,filter .18s ease,opacity .18s ease;}
 .dk-icon-svg:hover{transform:scale(1.12);filter:drop-shadow(0 0 4px color-mix(in srgb,var(--dk-accent,#5b6cff) 60%,transparent));}
