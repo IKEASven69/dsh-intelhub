@@ -32,18 +32,19 @@ export type CompleteFn = (system: string, user: string, opts?: CompleteOpts) => 
 const SYSTEM_PROMPT = `你是记忆库审核员。判断每条从 AI 编程会话提取的候选是否值得作为**长期记忆**（未来新会话能让 agent 做得更好/避坑）。
 
 必须 k:false 的：过程自语（"再决定"/"让我先看"）、指代不明的碎片（括号、表格行、列表符号）、疑问句、与项目无关的废话。
-值得保留的：具体技术决策、根因教训、用户偏好、技术事实；指代不明但信息可救的改写为自包含一句。
-宁枉勿纵：拿不准就 k:false——垃圾记忆污染召回的代价大于漏存。
+**实战新增必丢三类**（来自 388 条人工批审验证）：① 工具报错日志（"操作失败:"/error/exit code 开头的调用参数转贴）；② 调研转贴——assistant 引用的公开文档/竞品分析/网上的设计规范（公开知识不是用户特有记忆）；③ 调试推理碎片——逐句分析代码的中间思考（"Now/Actually/Wait/Hmm"开头的英文自言自语）。
+值得保留的：具体技术决策、根因教训、用户偏好、技术事实；指代不明的但信息可救的改写为自包含一句。**同一 bug 的多条碎片只留最完整一条**（改写凝练,其余 k:false）;项目归属太粗时（如目录名 CodingProjects）用 "p" 修正为真实项目名。
+宁枉勿纵：拿不准就 k:false——垃圾记忆污染召回的代价大于漏存（实测规则粗筛 598 条仅约 4% 值得留）。
 
 示例：
 输入: 0.[decision] 然后再决定  1.[lesson] 端口是 3456，测试都走这个口  2.[decision] （这决定写法）
 输出: [{"i":0,"k":false},{"i":1,"k":true},{"i":2,"k":false}]
 
-只输出 JSON 数组：[{"i":编号,"k":true|false,"t":"改写文本","y":"fact|decision|lesson|preference"}]，t/y 仅保留时可选。未列出的编号视为保留。`
+只输出 JSON 数组：[{"i":编号,"k":true|false,"t":"改写文本","y":"fact|decision|lesson|preference","p":"修正项目名"}]，t/y/p 仅保留时可选。未列出的编号视为保留。`
 
 /** 防御性解析 LLM 输出 → 按 i 索引的判决表。 */
-export function parseVerdicts(raw: string): Map<number, { keep: boolean; text?: string; type?: string }> {
-  const verdicts = new Map<number, { keep: boolean; text?: string; type?: string }>()
+export function parseVerdicts(raw: string): Map<number, { keep: boolean; text?: string; type?: string; project?: string }> {
+  const verdicts = new Map<number, { keep: boolean; text?: string; type?: string; project?: string }>()
   // 容错：模型可能把 JSON 包在 ```json 围栏或前后废话里
   const start = raw.indexOf('[')
   const end = raw.lastIndexOf(']')
@@ -58,12 +59,13 @@ export function parseVerdicts(raw: string): Map<number, { keep: boolean; text?: 
   const TYPES = new Set(['fact', 'decision', 'lesson', 'preference'])
   for (const v of arr) {
     if (typeof v !== 'object' || v === null) continue
-    const { i, k, t, y } = v as Record<string, unknown>
+    const { i, k, t, y, p } = v as Record<string, unknown>
     if (typeof i !== 'number' || !Number.isInteger(i) || typeof k !== 'boolean') continue
     verdicts.set(i, {
       keep: k,
       text: typeof t === 'string' && t.trim() !== '' ? t.trim().slice(0, 400) : undefined,
       type: typeof y === 'string' && TYPES.has(y) ? y : undefined,
+      project: typeof p === 'string' && p.trim() !== '' ? p.trim().slice(0, 60) : undefined,
     })
   }
   return verdicts
@@ -94,11 +96,12 @@ export async function llmRefine(candidates: Candidate[], complete: CompleteFn, t
     const v = verdicts.get(i)
     if (v === undefined || v.keep) {
       // 保留（含 LLM 漏判的）：应用改写文本/类型修正
-      if (v?.text !== undefined || v?.type !== undefined) {
+      if (v?.text !== undefined || v?.type !== undefined || v?.project !== undefined) {
         out.push({
           ...c,
           text: v.text ?? c.text,
           type: v.type ?? c.type,
+          project: v.project ?? c.project,
           confidence: Math.min(1, c.confidence + 0.1), // LLM 背书略提置信度
           source_rule: `${c.source_rule}+llm`,
         })
