@@ -38,11 +38,10 @@
   <text x="194" y="576" fill="#8b84a3" font-size="12" text-anchor="middle">会话内 agent 显式沉淀</text>
 
   <!-- 蒸馏管线（质量闸门） -->
-  <rect x="64" y="618" width="260" height="106" rx="10" fill="#1c1733" stroke="#fb923c"/>
-  <text x="194" y="644" fill="#fb923c" font-size="13" font-weight="700" text-anchor="middle">⚙ 蒸馏管线（两道质量闸）</text>
-  <text x="194" y="666" fill="#8b84a3" font-size="11.5" text-anchor="middle">① 规则抽取 + 噪音闸门（自语/样板文拦）</text>
-  <text x="194" y="686" fill="#8b84a3" font-size="11.5" text-anchor="middle">② LLM 精炼判决改写（minimax）</text>
-  <text x="194" y="708" fill="#5b5570" font-size="11" text-anchor="middle">失败自动降级纯规则 · 骨架不丢</text>
+  <rect x="64" y="616" width="260" height="88" rx="10" fill="#1c1733" stroke="#fb923c"/>
+  <text x="194" y="640" fill="#fb923c" font-size="13" font-weight="700" text-anchor="middle">⚙ 蒸馏管线（两道质量闸）</text>
+  <text x="194" y="661" fill="#8b84a3" font-size="11.5" text-anchor="middle">① 规则抽取 + 噪音闸门（自语/样板文拦）</text>
+  <text x="194" y="680" fill="#8b84a3" font-size="11.5" text-anchor="middle">② LLM 精炼判决（minimax，失败降级规则）</text>
 
   <path d="M194 284 L194 304" stroke="#a78bfa" stroke-width="2" marker-end="url(#arv)"/>
   <path d="M194 386 L194 406" stroke="#a78bfa" stroke-width="2" marker-end="url(#arv)"/>
@@ -77,10 +76,10 @@
   <text x="440" y="650" fill="#8b84a3" font-size="12">给检索：毫秒级语义召回 · 质量治理 · 强度演化</text>
 
   <!-- 双向同步箭头 -->
-  <path d="M622 412 L622 432" stroke="#4ade80" stroke-width="2.5" marker-end="url(#arg)"/>
-  <path d="M650 432 L650 412" stroke="#a78bfa" stroke-width="2.5" marker-end="url(#arv)"/>
-  <text x="404" y="428" fill="#4ade80" font-size="11.5" text-anchor="end">export ↓ 导出镜像</text>
-  <text x="836" y="428" fill="#a78bfa" font-size="11.5">↑ import 回导（去重同待遇）</text>
+  <path d="M600 412 L600 432" stroke="#4ade80" stroke-width="2.5" marker-end="url(#arg)"/>
+  <path d="M664 432 L664 412" stroke="#a78bfa" stroke-width="2.5" marker-end="url(#arv)"/>
+  <text x="586" y="426" fill="#4ade80" font-size="11" text-anchor="end">export 导出</text>
+  <text x="678" y="426" fill="#a78bfa" font-size="11">import 回导</text>
 
   <!-- 蒸馏管线 → zvec -->
   <path d="M324 695 Q360 695 404 600" stroke="#fb923c" stroke-width="2" fill="none" marker-end="url(#aro)"/>
@@ -118,10 +117,9 @@
   <text x="1240" y="462" fill="#8b84a3" font-size="12">· 收件箱/快照永不进投影</text>
   <text x="1360" y="494" fill="#4ade80" font-size="12" text-anchor="middle">知识层 → 治理后出口</text>
 
-  <!-- zvec → 消费 -->
-  <path d="M848 540 Q880 540 910 480" stroke="#a78bfa" stroke-width="2" fill="none" marker-end="url(#arv)"/>
-  <path d="M848 560 Q890 600 924 560" stroke="#a78bfa" stroke-width="2" fill="none" marker-end="url(#arv)" opacity="0"/>
-  <path d="M848 500 C 880 480 890 420 924 380" stroke="#a78bfa" stroke-width="2" fill="none" marker-end="url(#arv)" transform="translate(0,60)"/>
+  <!-- zvec → 消费（单一直线，避开卡片） -->
+  <path d="M848 542 L924 542" stroke="#a78bfa" stroke-width="2" marker-end="url(#arv)"/>
+  <text x="886" y="534" fill="#a78bfa" font-size="11" text-anchor="middle">语义召回/治理出口</text>
 
   <!-- ════════ 底部：功能流程时间线 ═════════ -->
   <rect x="44" y="716" width="1472" height="330" rx="14" fill="#181427" stroke="#2a2150"/>
@@ -178,9 +176,9 @@
     <path d="M676 800 L874 800" stroke="#7c3aed" stroke-width="2"/>
     <path d="M926 800 L1124 800" stroke="#7c3aed" stroke-width="2"/>
     <path d="M1176 800 L1374 800" stroke="#7c3aed" stroke-width="2"/>
-    <path d="M1400 826 Q1400 946 775 946 Q150 946 150 826" stroke="#4ade80" stroke-width="2" stroke-dasharray="6 5" fill="none" marker-end="url(#arg)" transform="translate(0,-4)"/>
+    <path d="M1400 834 Q1400 972 775 972 Q114 972 150 834" stroke="#4ade80" stroke-width="2" stroke-dasharray="6 5" fill="none" marker-end="url(#arg)"/>
   </g>
 
-  <text x="68" y="964" fill="#5b5570" font-size="12.5">一致性约定：MD 层是 zvec 在某时刻的只读镜像（export 时点）；写入永远走管线进 zvec，再 export 刷新镜像——避免双写冲突。MD 层的手工编辑通过 import 回流（同样过治理管线），不直接改索引。</text>
-  <text x="68" y="990" fill="#5b5570" font-size="12.5">回退保障：zvec 索引可随时从 MD 层 + JSONL 重建（doctor rebuild 既有能力）——双份互为备份，单份损坏不丢数据。</text>
+  <text x="68" y="1004" fill="#5b5570" font-size="12.5">一致性约定：MD 层是 zvec 在某时刻的只读镜像（export 时点）；写入永远走管线进 zvec，再 export 刷新镜像——避免双写冲突。MD 层的手工编辑通过 import 回流（同样过治理管线），不直接改索引。</text>
+  <text x="68" y="1028" fill="#5b5570" font-size="12.5">回退保障：zvec 索引可随时从 MD 层 + JSONL 重建（doctor rebuild 既有能力）——双份互为备份，单份损坏不丢数据。</text>
 </svg>

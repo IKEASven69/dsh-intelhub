@@ -407,6 +407,8 @@ GSD 交接机制实测：`/gsd:pause-work` 手动触发 → agent 收集状态�
 4. **开工仪式**：接手先读 §4 勾选状态与 §6 拍板项，不凭记忆开工。
 
 ### 8.1 变更日志
+- 2026-09-01 双份存储架构图视觉优化（冷神反馈文字/卡片阻挡）：蒸馏管线卡片压缩防溢出面板、export/import 箭头标签分置双侧、zvec→消费改单直线加文字、时间线闭环弧线端点下移避开步骤文字。
+- 2026-09-01 **H8 memoryfield
 
 - **2026-09-02 收官核对（H7 全里程碑代码完成 = M0–M5 全绿，工作区干净）**：已提交 `43d64bf feat(H7-M5): 交付通道五件套` 与 `02a0e8e feat(H7): 活体验收收尾`。实测复核——手验 M5 五件套全部在位：`handoff-inbox.ts`（pending→load→archived 消费即弃）、CLI `hippo handoff push/inbox/load`、MCP `handoff_inbox`+`handoff_load`（共 16 工具）、三份 SKILL.md（WorkBuddy/Claude/插件模板，含"快照=历史事实须当下确认"安全规则）、HTTP 三路由 + 工作台 `推送交接` 按钮（`web/src/pages/Sessions.tsx:318`）；全量测试 **139/139**（node 24，ABI 备忘见 M1）。**同步修正**：§4 M5 通道表状态列原写"待实现"，与下方 M5a–e 已勾 ✅ 自相矛盾，已按实际改写（A=代码就绪待注册 / B=已落 / C=以 CLI 兑现）。**剩余最后一公里见 §8.2。**
 - **2026-09-01（M5 交付通道五件套）**：M5a 收件箱 + push CLI、M5b MCP 两工具、M5c 三份 handoff skill、M5d 文件兜底按 §5.2.2 硬约束取舍为 CLI（不落常驻投影）、M5e 工作台推送按钮。端到端验收：CLI push 真实 WorkBuddy 会话（8 候选/10 文件改动）→ load 出完整详情（行为痕迹前/叙事后/原文指针/安全尾注）→ 二次 load 正确拒绝（消费即弃）。
