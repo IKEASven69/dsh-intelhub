@@ -328,6 +328,46 @@ program
     }
   });
 
+// ── memoryfield（H8）：透明可移植镜像层 ───────────
+
+program
+  .command('memoryfield')
+  .description('export memories as a Memoryfields directory (one .md per memory, spec-compliant) or import one back')
+  .argument('<action>', 'export | import')
+  .option('-d, --dir <dir>', 'target directory (export) or source directory (import)')
+  .option('-p, --project <project>', 'project scope (export filter / import target)', '')
+  .action(async (action: string, options: { dir?: string; project?: string }) => {
+    if (options.dir === undefined || options.dir === '') { console.error('--dir required'); process.exitCode = 1; return; }
+    if (action === 'export') {
+      const { withEngine, exportMemoryfield } = await import('./engine.js');
+      const { listRecords } = await import('./transfer.js');
+      const { importMemoryfield } = await import('./memoryfield.js');
+      const dir = options.dir as string;
+      let stats = { pages: 0, skipped: 0, superseded: 0, bytes: 0 };
+      await withEngine(async ({ engine }) => {
+        const records = listRecords(engine.store as never, { project: options.project || undefined, includeSuperseded: true, limit: 0 }) as unknown as import('./memory.js').MemoryRecord[];
+        stats = exportMemoryfield(records, dir);
+      });
+      console.log(`已导出 ${stats.pages} 页 → ${options.dir}（${(stats.bytes / 1024).toFixed(0)} KB；跳过空 ${stats.skipped}，含被取代链 ${stats.superseded}）`);
+      console.log('目录即记忆：可用任何编辑器/grep 直接读写，也可按 memoryfield 规范同步/分发。');
+    } else if (action === 'import') {
+      const { importMemoryfield } = await import('./memoryfield.js');
+      const dir = options.dir as string;
+      const pages = importMemoryfield(dir, options.project ? { project: options.project } : {});
+      if (pages.length === 0) { console.log('目录无有效页面'); return; }
+      const { withEngine } = await import('./engine.js');
+      const { importJsonl } = await import('./transfer.js');
+      let counts = { created: 0, reinforced: 0, skipped: 0 };
+      await withEngine(async ({ engine }) => {
+        const jsonlText = pages.map((p: { text: string }) => JSON.stringify({ text: p.text, type: 'fact', project: options.project || 'memoryfield-import', agent: 'memoryfield' })).join('\n');
+        counts = await importJsonl(engine, jsonlText);
+      });
+      console.log(`导入 ${pages.length} 页：created=${counts.created} reinforced=${counts.reinforced} skipped=${counts.skipped}`);
+    } else {
+      console.error(`未知动作：${action}（export | import）`); process.exitCode = 1;
+    }
+  });
+
 // ── distill ───────────────────────────────────────
 
 program
