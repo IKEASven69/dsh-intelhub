@@ -84,6 +84,9 @@ export class OpencliService extends TypertRemoteService {
     // 示例：forum: { allowedDomains: ['example.com'], storageStatePath: 'D:/secrets/forum.json' }
   }
   private schedules: Array<{ id: string; site: string; cron: string; createdAt: string }> = []
+  private automationMode: 'read-only' | 'standard' | 'autonomous' | 'unrestricted' = 'standard'
+  private rulePacks: Array<{ matches: string[]; initScriptPath: string; initScriptSha256: string; steps: unknown[] }> = []
+  private automationAssets = { persistenceMode: 'suggest' as const, activationMode: 'manual' as const }
 
   constructor(ctx: Context) {
     super(ctx, 'opencli')
@@ -479,13 +482,46 @@ export class OpencliService extends TypertRemoteService {
     return { ok: true }
   }
 
+  @Remote('automation-mode-get')
+  async automationModeGet(): Promise<{ ok: boolean; mode: string }> {
+    return { ok: true, mode: this.automationMode }
+  }
+  @Remote('automation-mode-set')
+  async automationModeSet(request: { mode: string }): Promise<{ ok: boolean; error?: string }> {
+    const m = String(request.mode ?? '')
+    if (!['read-only','standard','autonomous','unrestricted'].includes(m)) return { ok: false, error: `未知模式:${m}` }
+    this.automationMode = m as typeof this.automationMode
+    return { ok: true }
+  }
+  @Remote('rulepacks-list')
+  async rulePacksList(): Promise<{ ok: boolean; packs: typeof this.rulePacks }> {
+    return { ok: true, packs: [...this.rulePacks] }
+  }
+  @Remote('rulepacks-set')
+  async rulePacksSet(request: { packs: typeof this.rulePacks }): Promise<{ ok: boolean; error?: string }> {
+    if (!Array.isArray(request.packs)) return { ok: false, error: 'packs 需为数组' }
+    for (const p of request.packs) {
+      if (typeof (p as Record<string, unknown>).initScriptSha256 !== 'string' || String((p as Record<string,unknown>).initScriptSha256).length !== 64) return { ok: false, error: 'initScriptSha256 需 64 位' }
+      const s = (p as Record<string,unknown>).initScriptPath
+      if (typeof s !== 'string' || s.length === 0) return { ok: false, error: 'initScriptPath 不能为空' }
+    }
+    this.rulePacks = request.packs as typeof this.rulePacks
+    return { ok: true }
+  }
+
   /** R1 审批门:site 的 write 命令(发帖/点赞/下单等)先经 dsh 原生审批(ask→allowed-once)。
    * 任何异常一律放行给 next(),绝不因审批门自身故障阻塞工具。 */
   private registerApprovalGate(): void {
     this.ctx.on('tools/pre-execute', async (exec, next) => {
       try {
+        if (this.automationMode === 'unrestricted') return await next()
         const a = (exec.arguments ?? {}) as { adapter?: unknown; command?: unknown }
         const argsOk = typeof a.adapter === 'string' && typeof a.command === 'string' && a.adapter.length > 0 && a.command.length > 0
+        if (this.automationMode === 'read-only' && exec.name === 'site' && argsOk) {
+          const acc = await this.lookupAccess(a.adapter as string, a.command as string)
+          if (acc !== 'read') return { kind: 'ask', reason: `只读模式：site ${String(a.adapter)} ${String(a.command)} 为写操作，已拦截。` }
+          return await next()
+        }
         // 只在确有可能 ask 时才付出缓存查询成本;其余情况 access 传占位值,判定函数自会放行
         const needsAccess = exec.name === 'site' && this.state.approval === 'on' && argsOk && !this.state.disabled.includes(a.adapter)
         const access = needsAccess ? await this.lookupAccess(a.adapter as string, a.command as string) : 'unknown'

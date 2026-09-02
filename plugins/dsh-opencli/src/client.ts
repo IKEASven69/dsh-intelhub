@@ -172,6 +172,7 @@ function Panel(): ReturnType<typeof createElement> {
   const [recordSteps, setRecordSteps] = useState<string[]>([])
   const [scheduleSite, setScheduleSite] = useState('')
   const [scheduleCron, setScheduleCron] = useState('0 9 * * *')
+  const [autoMode, setAutoMode] = useState<string>('standard')
 
   const setApproval = async (enabled: boolean): Promise<void> => {
     const r = await rpc<ApprovalSetResult>('approval-set', { request: { enabled } })
@@ -254,15 +255,17 @@ function Panel(): ReturnType<typeof createElement> {
   const reload = async () => {
     if (busy) return
     setBusy(true)
-    const [st, ad, se] = await Promise.all([
+    const [st, ad, se, am] = await Promise.all([
       rpc<OpencliStatus>('status'),
       rpc<AdaptersResult>('adapters'),
       rpc<SettingsResult>('settings'),
+      rpc<{ mode: string }>('automation-mode-get'),
     ])
     if (st.ok && st.value !== undefined) setStatus(st.value)
     else setStatus(st.value ?? { ok: false, bin: null, version: null, daemon: null, adapterSites: null, error: st.error.message })
     if (ad.ok && ad.value !== undefined) setAdapters(ad.value.adapters)
     if (se.ok && se.value !== undefined) setSettings(se.value)
+    if (am.ok && am.value !== undefined && typeof am.value.mode === 'string') setAutoMode(am.value.mode)
     setBusy(false)
   }
 
@@ -434,6 +437,42 @@ function Panel(): ReturnType<typeof createElement> {
         createElement('button', { className: 'ocp-btn ocp-btn-sm', onClick: () => { void addSchedule() } }, '创建'),
       ),
       createElement('div', { className: 'ocp-hint' }, '创建后可在 dsh schedule list 查看。本地适配器可在下方“Site命令”中通过禁用/启用管理，即“我的适配器”。'),
+    ),
+
+    // ── 高级自动化（脚本/配方/泛爬，默认收起）──
+    createElement('details', { className: 'ocp-adv', open: false } as unknown as Record<string, unknown>,
+      createElement('summary', null, '高级自动化（脚本/配方/泛爬）— 给需要的人'),
+      createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '12px' } },
+        createElement('div', { className: 'ocp-srow' },
+          createElement('span', { className: 'ocp-sk' }, '自动化自由度'),
+          createElement('select', {
+            className: 'ocp-input ocp-input-sm', style: { width: '160px', flex: 'none' }, value: autoMode,
+            onChange: async (e: { target: { value: string } }) => {
+              const m = e.target.value
+              const r = await rpc('automation-mode-set', { mode: m } as unknown as Record<string, unknown>)
+              if (r.ok) setAutoMode(m)
+            },
+          },
+            createElement('option', { value: 'read-only' }, '只读'),
+            createElement('option', { value: 'standard' }, '标准（默认）'),
+            createElement('option', { value: 'autonomous' }, '自主'),
+            createElement('option', { value: 'unrestricted' }, '无人值守'),
+          ),
+        ),
+        createElement('div', { className: 'ocp-srow' },
+          createElement('span', { className: 'ocp-sk' }, '限流'),
+          createElement('span', { className: 'ocp-hint' }, 'minDelay 750ms / 并发 2 / 突发 3 / 冷却 30s'),
+          createElement('span', { className: 'ocp-tag ocp-tag-read', style: { marginLeft: 'auto' } }, '已启用'),
+        ),
+        createElement('div', { className: 'ocp-srow' },
+          createElement('span', { className: 'ocp-sk' }, '限域登录'),
+          createElement('span', { className: 'ocp-hint' }, 'authProfiles: allowedDomains 限域，默认只读不回写'),
+        ),
+        createElement('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' } },
+          createElement('button', { className: 'ocp-btn ocp-btn-sm', onClick: async () => { const r = await rpc('script-catalog'); alert(JSON.stringify(r, null, 2)) } }, '脚本目录'),
+          createElement('button', { className: 'ocp-btn ocp-btn-sm', onClick: async () => { const r = await rpc('crawl', { url: 'https://example.com' } as unknown as Record<string, unknown>); alert(JSON.stringify(r, null, 2)) } }, '泛爬示例'),
+        ),
+      ),
     ),
 
     // ── 命令集合(对齐 App 同名页面)──
