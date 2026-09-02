@@ -1,0 +1,186 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1560" height="1080" viewBox="0 0 1560 1080" font-family="'Microsoft YaHei','PingFang SC',sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0e0b1a"/><stop offset="1" stop-color="#141026"/></linearGradient>
+    <linearGradient id="md" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#16a87a"/><stop offset="1" stop-color="#4ade80"/></linearGradient>
+    <linearGradient id="zv" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#7c3aed"/><stop offset="1" stop-color="#a78bfa"/></linearGradient>
+    <linearGradient id="ag" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ea6a33"/><stop offset="1" stop-color="#fb923c"/></linearGradient>
+    <marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="3.5" orient="auto"><path d="M0,0 L8,3.5 L0,7" fill="none" stroke-width="1.6"/></marker>
+    <marker id="arv" markerWidth="9" markerHeight="9" refX="7" refY="3.5" orient="auto"><path d="M0,0 L8,3.5 L0,7" fill="none" stroke="#a78bfa" stroke-width="1.6"/></marker>
+    <marker id="arg" markerWidth="9" markerHeight="9" refX="7" refY="3.5" orient="auto"><path d="M0,0 L8,3.5 L0,7" fill="none" stroke="#4ade80" stroke-width="1.6"/></marker>
+    <marker id="aro" markerWidth="9" markerHeight="9" refX="7" refY="3.5" orient="auto"><path d="M0,0 L8,3.5 L0,7" fill="none" stroke="#fb923c" stroke-width="1.6"/></marker>
+  </defs>
+  <rect width="1560" height="1080" fill="url(#bg)"/>
+  <text x="44" y="58" fill="#f4f2ff" font-size="28" font-weight="700">hippo 双份记忆架构 · MD 原文 + zvec 知识库</text>
+  <text x="44" y="88" fill="#8b84a3" font-size="14">一份给人（透明可移植 · Memoryfields 规范）· 一份给检索（语义引擎 · 治理管线）· 2026-09-01 · docs/hippo-dual-store-2026-09-01.svg</text>
+
+  <!-- ════════ 左：源头 ═════════ -->
+  <rect x="44" y="130" width="300" height="614" rx="14" fill="#181427" stroke="#2a2150"/>
+  <text x="68" y="166" fill="#c3bdd6" font-size="16" font-weight="700">源头 · 记忆从哪来</text>
+
+  <rect x="64" y="188" width="260" height="96" rx="10" fill="#241a4d" stroke="#7c3aed"/>
+  <text x="194" y="216" fill="#e8e4f5" font-size="13.5" font-weight="700" text-anchor="middle">6 个 agent 会话</text>
+  <text x="194" y="238" fill="#8b84a3" font-size="12" text-anchor="middle">zcode · Claude · Codex · opencode</text>
+  <text x="194" y="258" fill="#8b84a3" font-size="12" text-anchor="middle">pi · WorkBuddy（transcript + Todo + git）</text>
+
+  <rect x="64" y="304" width="260" height="82" rx="10" fill="#241a4d" stroke="#7c3aed"/>
+  <text x="194" y="332" fill="#e8e4f5" font-size="13.5" font-weight="700" text-anchor="middle">任务完成回流（M3）</text>
+  <text x="194" y="354" fill="#8b84a3" font-size="12" text-anchor="middle">completed 瞬间：卡点+解法+git 痕迹</text>
+  <text x="194" y="374" fill="#8b84a3" font-size="12" text-anchor="middle">Candidate 进管线</text>
+
+  <rect x="64" y="406" width="260" height="82" rx="10" fill="#241a4d" stroke="#7c3aed"/>
+  <text x="194" y="434" fill="#e8e4f5" font-size="13.5" font-weight="700" text-anchor="middle">memoryfield 目录导入</text>
+  <text x="194" y="454" fill="#8b84a3" font-size="12" text-anchor="middle">生态互通 / 备份回导</text>
+  <text x="194" y="474" fill="#8b84a3" font-size="12" text-anchor="middle">（外部 .md 目录直接吃进来）</text>
+
+  <rect x="64" y="508" width="260" height="82" rx="10" fill="#241a4d" stroke="#7c3aed"/>
+  <text x="194" y="536" fill="#e8e4f5" font-size="13.5" font-weight="700" text-anchor="middle">MCP / CLI 写入</text>
+  <text x="194" y="556" fill="#8b84a3" font-size="12" text-anchor="middle">remember（16 工具）</text>
+  <text x="194" y="576" fill="#8b84a3" font-size="12" text-anchor="middle">会话内 agent 显式沉淀</text>
+
+  <!-- 蒸馏管线（质量闸门） -->
+  <rect x="64" y="618" width="260" height="106" rx="10" fill="#1c1733" stroke="#fb923c"/>
+  <text x="194" y="644" fill="#fb923c" font-size="13" font-weight="700" text-anchor="middle">⚙ 蒸馏管线（两道质量闸）</text>
+  <text x="194" y="666" fill="#8b84a3" font-size="11.5" text-anchor="middle">① 规则抽取 + 噪音闸门（自语/样板文拦）</text>
+  <text x="194" y="686" fill="#8b84a3" font-size="11.5" text-anchor="middle">② LLM 精炼判决改写（minimax）</text>
+  <text x="194" y="708" fill="#5b5570" font-size="11" text-anchor="middle">失败自动降级纯规则 · 骨架不丢</text>
+
+  <path d="M194 284 L194 304" stroke="#a78bfa" stroke-width="2" marker-end="url(#arv)"/>
+  <path d="M194 386 L194 406" stroke="#a78bfa" stroke-width="2" marker-end="url(#arv)"/>
+  <path d="M194 488 L194 508" stroke="#a78bfa" stroke-width="2" marker-end="url(#arv)"/>
+  <path d="M194 590 L194 620" stroke="#a78bfa" stroke-width="2" marker-end="url(#arv)"/>
+
+  <!-- ════════ 中：双份存储 ═════════ -->
+  <rect x="392" y="130" width="480" height="560" rx="14" fill="#181427" stroke="#2a2150"/>
+  <text x="416" y="166" fill="#c3bdd6" font-size="16" font-weight="700">双份存储 · 一份两用，互为映照</text>
+
+  <!-- MD 原文 -->
+  <rect x="416" y="192" width="432" height="220" rx="12" fill="#12251c" stroke="url(#md)" stroke-width="1.5"/>
+  <text x="440" y="224" fill="#4ade80" font-size="16" font-weight="700">📄 MD 原文层（memoryfield 镜像）</text>
+  <text x="440" y="252" fill="#8b84a3" font-size="12.5">扁平目录 · 每条记忆一个 .md · 1.6MB/597 页</text>
+  <rect x="440" y="268" width="384" height="122" rx="8" fill="#0e0b1a"/>
+  <text x="456" y="292" fill="#4ade80" font-size="11.5" font-family="Consolas,monospace">--- title: [决策] 用 Zustand 不用 Redux</text>
+  <text x="456" y="312" fill="#4ade80" font-size="11.5" font-family="Consolas,monospace">    uuid: 5a83aa7c-…  created: '2026-09-01'</text>
+  <text x="456" y="332" fill="#c3bdd6" font-size="11.5" font-family="Consolas,monospace"># 决策</text>
+  <text x="456" y="352" fill="#c3bdd6" font-size="11.5" font-family="Consolas,monospace">状态管理用 Zustand，不用 Redux ——</text>
+  <text x="456" y="372" fill="#c3bdd6" font-size="11.5" font-family="Consolas,monospace">轻量、TS 友好、样板少…</text>
+  <text x="440" y="404" fill="#8b84a3" font-size="12">给人：可读可编辑可 grep · 可进 git/网盘同步 · 数据自主权</text>
+
+  <!-- zvec 知识库 -->
+  <rect x="416" y="432" width="432" height="232" rx="12" fill="#1c1633" stroke="url(#zv)" stroke-width="1.5"/>
+  <text x="440" y="464" fill="#a78bfa" font-size="16" font-weight="700">🧠 zvec 知识库（检索引擎）</text>
+  <text x="440" y="492" fill="#8b84a3" font-size="12.5">proxima 向量索引 + rocksdb FTS · bge-m3 本地嵌入</text>
+  <rect x="440" y="508" width="384" height="106" rx="8" fill="#0e0b1a"/>
+  <text x="456" y="532" fill="#a78bfa" font-size="11.5" font-family="Consolas,monospace">hybrid_search: 向量 KNN + BM25 → RRF 融合</text>
+  <text x="456" y="552" fill="#8b84a3" font-size="11.5" font-family="Consolas,monospace">治理：去重(0.93) / 强化 / 衰减 / 推翻链(superseded)</text>
+  <text x="456" y="572" fill="#8b84a3" font-size="11.5" font-family="Consolas,monospace">分档：≥0.93 强化 · 0.8-0.93 待审 · &lt;0.8 新建</text>
+  <text x="456" y="596" fill="#5b5570" font-size="11.5" font-family="Consolas,monospace">单写锁 · 引用计数短持（gui/插件共存）</text>
+  <text x="440" y="650" fill="#8b84a3" font-size="12">给检索：毫秒级语义召回 · 质量治理 · 强度演化</text>
+
+  <!-- 双向同步箭头 -->
+  <path d="M622 412 L622 432" stroke="#4ade80" stroke-width="2.5" marker-end="url(#arg)"/>
+  <path d="M650 432 L650 412" stroke="#a78bfa" stroke-width="2.5" marker-end="url(#arv)"/>
+  <text x="404" y="428" fill="#4ade80" font-size="11.5" text-anchor="end">export ↓ 导出镜像</text>
+  <text x="836" y="428" fill="#a78bfa" font-size="11.5">↑ import 回导（去重同待遇）</text>
+
+  <!-- 蒸馏管线 → zvec -->
+  <path d="M324 695 Q360 695 404 600" stroke="#fb923c" stroke-width="2" fill="none" marker-end="url(#aro)"/>
+  <text x="330" y="652" fill="#fb923c" font-size="11.5">入库</text>
+
+  <!-- ════════ 右：消费出口 ═════════ -->
+  <rect x="900" y="130" width="616" height="560" rx="14" fill="#181427" stroke="#2a2150"/>
+  <text x="924" y="166" fill="#c3bdd6" font-size="16" font-weight="700">消费 · 谁在用，怎么用</text>
+
+  <rect x="924" y="192" width="272" height="150" rx="10" fill="#241a4d" stroke="#7c3aed"/>
+  <text x="1060" y="220" fill="#e8e4f5" font-size="13.5" font-weight="700" text-anchor="middle">agent 运行时</text>
+  <text x="940" y="248" fill="#8b84a3" font-size="12">· memory_recall（开局/干活中）</text>
+  <text x="940" y="270" fill="#8b84a3" font-size="12">· handoff_load（交接取件）</text>
+  <text x="940" y="292" fill="#8b84a3" font-size="12">· AGENTS.md 常驻薄索引（≤100t）</text>
+  <text x="940" y="322" fill="#4ade80" font-size="12" text-anchor="middle">语义层消费 → 走 zvec</text>
+
+  <rect x="1224" y="192" width="272" height="150" rx="10" fill="#12251c" stroke="#4ade80"/>
+  <text x="1360" y="220" fill="#4ade80" font-size="13.5" font-weight="700" text-anchor="middle">人 &amp; 生态</text>
+  <text x="1240" y="248" fill="#8b84a3" font-size="12">· 编辑器/grep 直接读写 MD</text>
+  <text x="1240" y="270" fill="#8b84a3" font-size="12">· git/网盘同步（碎片过滤）</text>
+  <text x="1240" y="292" fill="#8b84a3" font-size="12">· 其他 memoryfield 工具互通</text>
+  <text x="1360" y="322" fill="#4ade80" font-size="12" text-anchor="middle">原文层消费 → 走 MD</text>
+
+  <rect x="924" y="362" width="272" height="150" rx="10" fill="#241a4d" stroke="#7c3aed"/>
+  <text x="1060" y="390" fill="#e8e4f5" font-size="13.5" font-weight="700" text-anchor="middle">交接寄存（H7）</text>
+  <text x="940" y="418" fill="#8b84a3" font-size="12">· ⇪ 推送：会话→收件箱（pending）</text>
+  <text x="940" y="440" fill="#8b84a3" font-size="12">· 取件：≤500 token 详情+L0 指针</text>
+  <text x="940" y="462" fill="#8b84a3" font-size="12">· 消费即弃 · 归档可审计</text>
+  <text x="1060" y="494" fill="#4ade80" font-size="12" text-anchor="middle">行为痕迹层（任务/git 一等公民）</text>
+
+  <rect x="1224" y="362" width="272" height="150" rx="10" fill="#241a4d" stroke="#7c3aed"/>
+  <text x="1360" y="390" fill="#e8e4f5" font-size="13.5" font-weight="700" text-anchor="middle">编译投影</text>
+  <text x="1240" y="418" fill="#8b84a3" font-size="12">· AGENTS.md 全量 / index 默认</text>
+  <text x="1240" y="440" fill="#8b84a3" font-size="12">· autoRecompile 记忆变更即触发</text>
+  <text x="1240" y="462" fill="#8b84a3" font-size="12">· 收件箱/快照永不进投影</text>
+  <text x="1360" y="494" fill="#4ade80" font-size="12" text-anchor="middle">知识层 → 治理后出口</text>
+
+  <!-- zvec → 消费 -->
+  <path d="M848 540 Q880 540 910 480" stroke="#a78bfa" stroke-width="2" fill="none" marker-end="url(#arv)"/>
+  <path d="M848 560 Q890 600 924 560" stroke="#a78bfa" stroke-width="2" fill="none" marker-end="url(#arv)" opacity="0"/>
+  <path d="M848 500 C 880 480 890 420 924 380" stroke="#a78bfa" stroke-width="2" fill="none" marker-end="url(#arv)" transform="translate(0,60)"/>
+
+  <!-- ════════ 底部：功能流程时间线 ═════════ -->
+  <rect x="44" y="716" width="1472" height="330" rx="14" fill="#181427" stroke="#2a2150"/>
+  <text x="68" y="752" fill="#c3bdd6" font-size="16" font-weight="700">功能流程 · 一次完整的记忆生命周期（双份同步）</text>
+
+  <!-- 生命线 -->
+  <path d="M100 800 L1460 800" stroke="#261f3d" stroke-width="3"/>
+
+  <g font-size="12">
+    <!-- step 1 -->
+    <circle cx="150" cy="800" r="26" fill="#241a4d" stroke="#7c3aed" stroke-width="2"/>
+    <text x="150" y="806" fill="#a78bfa" font-size="16" text-anchor="middle" font-weight="700">1</text>
+    <text x="150" y="848" fill="#e8e4f5" text-anchor="middle" font-weight="700">干活</text>
+    <text x="150" y="868" fill="#8b84a3" text-anchor="middle">agent 会话自然发生</text>
+    <text x="150" y="886" fill="#4ade80" text-anchor="middle">用户零动作</text>
+
+    <!-- step 2 -->
+    <circle cx="400" cy="800" r="26" fill="#241a4d" stroke="#7c3aed" stroke-width="2"/>
+    <text x="400" y="806" fill="#a78bfa" font-size="16" text-anchor="middle" font-weight="700">2</text>
+    <text x="400" y="848" fill="#e8e4f5" text-anchor="middle" font-weight="700">蒸馏入库</text>
+    <text x="400" y="868" fill="#8b84a3" text-anchor="middle">auto-distill 15 分钟轮 / 即时回流</text>
+    <text x="400" y="886" fill="#8b84a3" text-anchor="middle">噪音闸门 → LLM 精炼 → 去重分档 → zvec</text>
+
+    <!-- step 3 -->
+    <circle cx="650" cy="800" r="26" fill="#241a4d" stroke="url(#md)" stroke-width="2"/>
+    <text x="650" y="806" fill="#4ade80" font-size="16" text-anchor="middle" font-weight="700">3</text>
+    <text x="650" y="848" fill="#e8e4f5" text-anchor="middle" font-weight="700">镜像导出</text>
+    <text x="650" y="868" fill="#8b84a3" text-anchor="middle">hippo memoryfield export</text>
+    <text x="650" y="886" fill="#8b84a3" text-anchor="middle">一条一页 .md · grep 可查 · 可同步可 git</text>
+
+    <!-- step 4 -->
+    <circle cx="900" cy="800" r="26" fill="#241a4d" stroke="#7c3aed" stroke-width="2"/>
+    <text x="900" y="806" fill="#a78bfa" font-size="16" text-anchor="middle" font-weight="700">4</text>
+    <text x="900" y="848" fill="#e8e4f5" text-anchor="middle" font-weight="700">消费</text>
+    <text x="900" y="868" fill="#8b84a3" text-anchor="middle">agent 走 zvec 语义召回</text>
+    <text x="900" y="886" fill="#8b84a3" text-anchor="middle">人走 MD 直接读写 · 各取所长</text>
+
+    <!-- step 5 -->
+    <circle cx="1150" cy="800" r="26" fill="#241a4d" stroke="#7c3aed" stroke-width="2"/>
+    <text x="1150" y="806" fill="#a78bfa" font-size="16" text-anchor="middle" font-weight="700">5</text>
+    <text x="1150" y="848" fill="#e8e4f5" text-anchor="middle" font-weight="700">交接</text>
+    <text x="1150" y="868" fill="#8b84a3" text-anchor="middle">⇪ 推送收件箱 → 对方开局取件</text>
+    <text x="1150" y="886" fill="#8b84a3" text-anchor="middle">任何 MCP 宿主 / CLI / skill</text>
+
+    <!-- step 6 -->
+    <circle cx="1400" cy="800" r="26" fill="url(#zv)" filter="url(#none)"/>
+    <text x="1400" y="806" fill="#fff" font-size="16" text-anchor="middle" font-weight="700">6</text>
+    <text x="1400" y="848" fill="#e8e4f5" text-anchor="middle" font-weight="700">闭环</text>
+    <text x="1400" y="868" fill="#8b84a3" text-anchor="middle">完成→回流→镜像→消费</text>
+    <text x="1400" y="886" fill="#4ade80" text-anchor="middle">双份始终一致 · 越用越准</text>
+
+    <path d="M176 800 L374 800" stroke="#7c3aed" stroke-width="2"/>
+    <path d="M426 800 L624 800" stroke="#7c3aed" stroke-width="2"/>
+    <path d="M676 800 L874 800" stroke="#7c3aed" stroke-width="2"/>
+    <path d="M926 800 L1124 800" stroke="#7c3aed" stroke-width="2"/>
+    <path d="M1176 800 L1374 800" stroke="#7c3aed" stroke-width="2"/>
+    <path d="M1400 826 Q1400 946 775 946 Q150 946 150 826" stroke="#4ade80" stroke-width="2" stroke-dasharray="6 5" fill="none" marker-end="url(#arg)" transform="translate(0,-4)"/>
+  </g>
+
+  <text x="68" y="964" fill="#5b5570" font-size="12.5">一致性约定：MD 层是 zvec 在某时刻的只读镜像（export 时点）；写入永远走管线进 zvec，再 export 刷新镜像——避免双写冲突。MD 层的手工编辑通过 import 回流（同样过治理管线），不直接改索引。</text>
+  <text x="68" y="990" fill="#5b5570" font-size="12.5">回退保障：zvec 索引可随时从 MD 层 + JSONL 重建（doctor rebuild 既有能力）——双份互为备份，单份损坏不丢数据。</text>
+</svg>
