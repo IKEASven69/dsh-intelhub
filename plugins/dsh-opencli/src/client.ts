@@ -164,6 +164,14 @@ function Panel(): ReturnType<typeof createElement> {
   const [settings, setSettings] = useState<SettingsResult | null>(null)
   const [checking, setChecking] = useState(false)
   const [login, setLogin] = useState<LoginCheckResult | null>(null)
+  const [recordings, setRecordings] = useState<{ id: string; name: string; steps: string[]; createdAt: string }[]>(() => {
+    try { return JSON.parse(localStorage.getItem('dsh-opencli-recordings') ?? '[]') } catch { return [] }
+  })
+  const [isRecording, setIsRecording] = useState(false)
+  const [recordName, setRecordName] = useState('')
+  const [recordSteps, setRecordSteps] = useState<string[]>([])
+  const [scheduleSite, setScheduleSite] = useState('')
+  const [scheduleCron, setScheduleCron] = useState('0 9 * * *')
 
   const setApproval = async (enabled: boolean): Promise<void> => {
     const r = await rpc<ApprovalSetResult>('approval-set', { request: { enabled } })
@@ -197,6 +205,31 @@ function Panel(): ReturnType<typeof createElement> {
     } else {
       setDaemonMsg(r.ok ? (r.value?.message ?? '启动失败') : r.error?.message ?? '请求失败')
     }
+  }
+
+  const persistRecordings = (next: { id: string; name: string; steps: string[]; createdAt: string }[]): void => {
+    setRecordings(next)
+    try { localStorage.setItem('dsh-opencli-recordings', JSON.stringify(next)) } catch { /* ignore */ }
+  }
+  const startRecording = (): void => { setIsRecording(true); setRecordSteps([]) }
+  const stopRecording = (): void => {
+    if (recordName.trim().length === 0 || recordSteps.length === 0) { setIsRecording(false); return }
+    const next = [...recordings, { id: String(Date.now()), name: recordName.trim(), steps: [...recordSteps], createdAt: new Date().toISOString() }]
+    persistRecordings(next); setIsRecording(false); setRecordName(''); setRecordSteps([])
+  }
+  const replayRecording = async (id: string): Promise<void> => {
+    const r = recordings.find((x) => x.id === id)
+    if (r === undefined) return
+    for (const step of r.steps) {
+      const [cmd, ...rest] = step.split(' ')
+      if (cmd === undefined || cmd.length === 0) continue
+      if (cmd.startsWith('browser_')) await rpc('replay', { step } as unknown as Record<string, unknown>)
+      else await rpc('site-replay', { step } as unknown as Record<string, unknown>)
+    }
+  }
+  const addSchedule = async (): Promise<void> => {
+    if (scheduleSite.trim().length === 0) return
+    await rpc('schedule-add', { site: scheduleSite.trim(), cron: scheduleCron } as unknown as Record<string, unknown>)
   }
 
   const toggle = async (name: string, el?: HTMLElement | null): Promise<void> => {
@@ -358,6 +391,50 @@ function Panel(): ReturnType<typeof createElement> {
           )
         : createElement('div', { className: 'ocp-err' }, login.error ?? '巡检失败'),
     ) : null,
+
+    // ── 录制回放 / 我的适配器 / 定时订阅（Stage2）──
+    createElement('div', { className: 'ocp-card', style: { padding: '12px 18px' } },
+      createElement('div', { className: 'ocp-srow', style: { borderBottom: '1px solid rgba(255,255,255,.06)', paddingBottom: '10px' } },
+        createElement('span', { className: 'ocp-setup-t' }, '录制回放'),
+        createElement('span', { className: 'ocp-hint' }, `${recordings.length} 条`),
+        createElement('button', { className: 'ocp-btn ocp-btn-sm', onClick: () => { if (isRecording) stopRecording(); else startRecording() } }, isRecording ? '停止录制' : '开始录制'),
+      ),
+      isRecording ? createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px' } },
+        createElement('div', { className: 'ocp-srow' },
+          createElement('input', { className: 'ocp-input', style: { height: '36px' }, placeholder: '录制名称（如：每日知乎热榜）', value: recordName, onChange: (e: { target: { value: string } }) => setRecordName(e.target.value) }),
+          createElement('span', { className: 'ocp-hint' }, `已录 ${recordSteps.length} 步`),
+        ),
+        createElement('div', { className: 'ocp-srow' },
+          createElement('input', {
+            className: 'ocp-input', style: { height: '36px' }, placeholder: '添加步骤（回车确认，如：site zhihu hot）',
+            onKeyDown: (e: { key: string; currentTarget: { value: string } }) => {
+              if (e.key === 'Enter' && e.currentTarget.value.trim().length > 0) {
+                setRecordSteps((prev) => [...prev, e.currentTarget.value.trim()]); e.currentTarget.value = ''
+              }
+            },
+          }),
+        ),
+        recordSteps.length > 0 ? createElement('div', { className: 'ocp-hint' }, recordSteps.map((s, i) => `${i + 1}. ${s}`).join('  |  ')) : null,
+      ) : null,
+      recordings.length > 0 ? createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '8px' } },
+        recordings.slice(0, 5).map((r) => createElement('div', { key: r.id, className: 'ocp-srow', style: { padding: '6px 0' } },
+          createElement('span', { className: 'ocp-sv', style: { fontSize: '12px' } }, r.name),
+          createElement('span', { className: 'ocp-hint' }, `${r.steps.length}步 · ${new Date(r.createdAt).toLocaleDateString()}`),
+          createElement('button', { className: 'ocp-btn ocp-btn-sm', onClick: () => { void replayRecording(r.id) } }, '回放'),
+          createElement('button', { className: 'ocp-btn ocp-btn-sm', onClick: () => { persistRecordings(recordings.filter((x) => x.id !== r.id)) } }, '删除'),
+        )),
+      ) : createElement('div', { className: 'ocp-hint', style: { padding: '8px 0' } }, '暂无录制。点击“开始录制”后，你的 browser_* / site 调用会自动追加为步骤（MVP：手动在下方输入步骤）'),
+      createElement('div', { className: 'ocp-srow', style: { borderTop: '1px solid rgba(255,255,255,.06)', marginTop: '10px', paddingTop: '10px' } },
+        createElement('span', { className: 'ocp-setup-t' }, '定时订阅'),
+        createElement('span', { className: 'ocp-hint' }, 'dsh.schedule'),
+      ),
+      createElement('div', { className: 'ocp-srow' },
+        createElement('input', { className: 'ocp-input', style: { height: '36px', flex: 1 }, placeholder: 'site 命令（如：zhihu hot）', value: scheduleSite, onChange: (e: { target: { value: string } }) => setScheduleSite(e.target.value) }),
+        createElement('input', { className: 'ocp-input', style: { height: '36px', width: '130px', flex: 'none' }, placeholder: 'cron', value: scheduleCron, onChange: (e: { target: { value: string } }) => setScheduleCron(e.target.value) }),
+        createElement('button', { className: 'ocp-btn ocp-btn-sm', onClick: () => { void addSchedule() } }, '创建'),
+      ),
+      createElement('div', { className: 'ocp-hint' }, '创建后可在 dsh schedule list 查看。本地适配器可在下方“Site命令”中通过禁用/启用管理，即“我的适配器”。'),
+    ),
 
     // ── 命令集合(对齐 App 同名页面)──
     adapters !== null ? createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 12 } },

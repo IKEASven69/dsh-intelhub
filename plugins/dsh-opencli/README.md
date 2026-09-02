@@ -62,6 +62,11 @@ dsh plugin add IKEASven69/dsh-opencli
 - 命令白名单与参数校验;`browser_do` 仅放行只读/创作类子命令。
 - 全部输出经截断与噪声剥离(update 横幅等),防上下文污染。
 
+## 0.2.0 新增（Stage2，未发布）
+- **录制回放**：面板“录制回放”卡片，开始录制→输入步骤（`site` / `browser_*`）→停止→一键回放，步骤持久化到 `localStorage`（`dsh-opencli-recordings`），最多保留 5 条预览
+- **我的适配器**：Site/App 分段 tab + 禁用/启用即“我的适配器”管理，禁用状态持久化到 `~/.dsh/dsh-opencli-state.json` 并自动从 `systemPrompt` 目录收缩
+- **定时订阅**：面板“定时订阅”输入 `site 命令` + `cron`（默认 `0 9 * * *`），经 `rpc schedule-add` 接入 `dsh.schedule`（`dsh schedule list` 可见）
+
 ## 已验证的测试矩阵
 
 | 层面 | 方式 | 结果 |
