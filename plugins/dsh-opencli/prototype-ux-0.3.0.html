@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>dsh-opencli 0.3.0 UX 原型 — L1/L2/L3</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0F0F10;color:#F0F0F2;font-family:-apple-system,'Segoe UI',system-ui,sans-serif;padding:24px;max-width:900px;margin:0 auto}
+.ocp{display:flex;flex-direction:column;gap:16px}
+.ocp-head{display:flex;align-items:flex-start;gap:14px}
+.ocp-icon{flex:none;width:46px;height:46px;border-radius:12px;background:#4A9EFF;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;color:#fff}
+.ocp-title{font-size:20px;font-weight:700;line-height:1.35}
+.ocp-desc{font-size:12.5px;color:#9A9AA0;margin-top:3px;line-height:1.55}
+.ocp-btn{cursor:pointer;border:none;background:#3A3A3E;color:#F0F0F2;border-radius:8px;padding:8px 14px;font-size:12.5px;transition:background .15s;white-space:nowrap}
+.ocp-btn:hover{background:#46464B}
+.ocp-btn:disabled{opacity:.6;cursor:default}
+.ocp-btn-sm{padding:5px 11px;font-size:11.5px}
+.ocp-btn-primary{background:#4A9EFF;color:#fff}
+.ocp-btn-primary:hover{background:#3A8AE8}
+.ocp-card{background:#26262A;border:1px solid rgba(255,255,255,.05);border-radius:14px;padding:16px 18px}
+.ocp-srow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.06);font-size:13px}
+.ocp-srow:last-child{border-bottom:none}
+.ocp-sk{color:#9A9AA0;flex:none;font-size:12.5px}
+.ocp-sv{color:#F0F0F2}
+.ocp-hint{font-size:11.5px;color:#9A9AA0}
+.ocp-tag{font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:6px}
+.ocp-tag-read{background:rgba(74,158,255,.14);color:#4A9EFF}
+.ocp-tag-write{background:rgba(229,132,90,.15);color:#E5845A}
+.ocp-input{flex:1;min-width:0;height:44px;font-size:13px;padding:0 14px;border-radius:10px;border:1px solid rgba(255,255,255,.09);background:#1C1C1E;color:#F0F0F2;outline:none}
+.ocp-input:focus{border-color:rgba(74,158,255,.65)}
+.ocp-input::placeholder{color:#6A6A72}
+.ocp-input-sm{height:36px;font-size:12.5px}
+.ocp-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+@media(max-width:640px){.ocp-grid{grid-template-columns:1fr}}
+.ocp-use{border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:14px;background:#1E1E20}
+.ocp-use h4{font-size:13px;margin-bottom:6px}
+.ocp-use p{font-size:11.5px;color:#9A9AA0;line-height:1.6;margin-bottom:4px}
+.ocp-use code{font-family:ui-monospace,monospace;font-size:11px;background:#26262A;padding:2px 6px;border-radius:4px;color:#79B7FF}
+.ocp-dot{width:8px;height:8px;border-radius:50%;flex:none}
+.ocp-ok{background:#34C759}.ocp-bad{background:#FF453A}.ocp-mid{background:#9A9AA0}
+.ocp-adv{border:1px dashed rgba(255,255,255,.12);border-radius:12px;padding:12px 16px;background:rgba(255,255,255,.02)}
+.ocp-adv summary{cursor:pointer;font-size:13px;font-weight:600;list-style:none;display:flex;align-items:center;gap:8px}
+.ocp-adv summary::before{content:'▸';color:#9A9AA0;transition:transform .2s}
+.ocp-adv[open] summary::before{transform:rotate(90deg);color:#4A9EFF}
+.ocp-step{font-size:11.5px;color:#A6A6AE;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+</style>
+</head>
+<body>
+<div class="ocp">
+  <div class="ocp-head">
+    <span class="ocp-icon">OC</span>
+    <div>
+      <div class="ocp-title">dsh-opencli 0.3.0 — 登录态办事</div>
+      <div class="ocp-desc">不是第54个浏览器原语，是 170 个网站的确定性接口 + 越用越会自扩展。3 击开箱，专家再开工具箱。</div>
+    </div>
+    <button class="ocp-btn" onclick="location.reload()">刷新/诊断</button>
+  </div>
+
+  <!-- L1: 3 句用例 -->
+  <div class="ocp-card">
+    <div style="font-size:13px;font-weight:600;margin-bottom:10px">普通人 3 击开箱（0 配置）</div>
+    <div class="ocp-grid" id="l1-grid">
+      <div class="ocp-use">
+        <h4>👁️ 看热榜 <span class="ocp-tag ocp-tag-read">只读</span></h4>
+        <p><b>用处：</b>知乎今天热榜前10</p>
+        <p><b>效果：</b>结构化榜单转摘要</p>
+        <p><b>怎么用：</b>对 agent 说“知乎热榜前10摘要”</p>
+        <code>site zhihu hot</code>
+        <div style="margin-top:8px"><button class="ocp-btn ocp-btn-sm ocp-btn-primary" onclick="toast('已复制: site zhihu hot')">复制命令</button></div>
+      </div>
+      <div class="ocp-use">
+        <h4>🔍 搜视频 <span class="ocp-tag ocp-tag-read">只读</span></h4>
+        <p><b>用处：</b>B站搜罗翔</p>
+        <p><b>效果：</b>播放量前3 + 链接</p>
+        <p><b>怎么用：</b>搜“bilibili”→ 点 search</p>
+        <code>site bilibili search 罗翔</code>
+        <div style="margin-top:8px"><button class="ocp-btn ocp-btn-sm ocp-btn-primary" onclick="toast('已复制: site bilibili search 罗翔')">复制命令</button></div>
+      </div>
+      <div class="ocp-use">
+        <h4>📤 发动态 <span class="ocp-tag ocp-tag-write">写·审批</span></h4>
+        <p><b>用处：</b>把这个发我微博</p>
+        <p><b>效果：</b>在你的号真实发布</p>
+        <p><b>怎么用：</b>说“发我微博”→ 审批窗点允许</p>
+        <code>site weibo post …</code>
+        <div style="margin-top:8px"><button class="ocp-btn ocp-btn-sm" onclick="toast('写操作需审批：site weibo post')">预览审批</button></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 状态卡 -->
+  <div class="ocp-card">
+    <div class="ocp-srow"><span class="ocp-dot ocp-ok"></span><span class="ocp-sk">daemon</span><span class="ocp-sv">运行中</span><span class="ocp-hint">扩展已连接</span><button class="ocp-btn ocp-btn-sm" style="margin-left:auto" onclick="toast('daemon 已在运行')">启动 daemon</button></div>
+    <div class="ocp-srow"><span class="ocp-sk">write 审批门</span><span class="ocp-sv">开启</span><button class="ocp-btn ocp-btn-sm" style="margin-left:auto" onclick="this.textContent=this.textContent==='关闭'?'开启':'关闭'">关闭</button></div>
+    <div class="ocp-srow"><span class="ocp-sk">环境</span><span class="ocp-sv" style="font-family:monospace;font-size:12px">v0.3.0 · 170 站点 · 1276 命令</span></div>
+  </div>
+
+  <!-- L2: 录制回放 -->
+  <div class="ocp-card" id="card-record">
+    <div class="ocp-srow" style="border-bottom:1px solid rgba(255,255,255,.06);padding-bottom:10px">
+      <span style="font-size:13px;font-weight:600">录制回放</span><span class="ocp-hint" id="record-count">0 条</span>
+      <button class="ocp-btn ocp-btn-sm ocp-btn-primary" id="btn-record" style="margin-left:auto" onclick="toggleRecord()">开始录制</button>
+    </div>
+    <div id="record-input" style="display:none;flex-direction:column;gap:8px;margin-top:10px">
+      <input class="ocp-input ocp-input-sm" id="record-name" placeholder="录制名称（如：每日知乎热榜）">
+      <div style="display:flex;gap:8px">
+        <input class="ocp-input ocp-input-sm" id="record-step" placeholder="添加步骤（回车确认，如：site zhihu hot）" onkeydown="if(event.key==='Enter') addStep()">
+        <button class="ocp-btn ocp-btn-sm" onclick="addStep()">添加</button>
+      </div>
+      <div class="ocp-hint" id="record-steps"></div>
+    </div>
+    <div id="record-list" style="display:flex;flex-direction:column;gap:6px;margin-top:8px"></div>
+  </div>
+
+  <!-- L2: 定时订阅 -->
+  <div class="ocp-card">
+    <div class="ocp-srow" style="border-bottom:1px solid rgba(255,255,255,.06);padding-bottom:10px">
+      <span style="font-size:13px;font-weight:600">定时订阅</span><span class="ocp-hint">dsh.schedule</span>
+    </div>
+    <div class="ocp-srow">
+      <input class="ocp-input ocp-input-sm" id="sched-site" placeholder="site 命令（如：zhihu hot）">
+      <input class="ocp-input ocp-input-sm" id="sched-cron" value="0 9 * * *" style="width:130px;flex:none">
+      <button class="ocp-btn ocp-btn-sm ocp-btn-primary" onclick="addSchedule()">创建</button>
+    </div>
+    <div class="ocp-hint">创建后可在 <code>dsh schedule list</code> 查看</div>
+    <div id="sched-list" style="display:flex;flex-direction:column;gap:6px;margin-top:8px"></div>
+  </div>
+
+  <!-- L3: 高级抽屉 -->
+  <details class="ocp-adv" id="adv">
+    <summary>高级自动化（脚本/配方/泛爬）— 给需要的人 <span class="ocp-hint" style="margin-left:auto">默认收起</span></summary>
+    <div style="display:flex;flex-direction:column;gap:12px;margin-top:12px">
+      <div class="ocp-use">
+        <h4>📜 只读脚本 <span class="ocp-tag ocp-tag-read">只读</span></h4>
+        <p><b>用处：</b>读文章最稳，不跑外来代码</p>
+        <p><b>效果：</b>返回 `article/links/jsonld/forms`</p>
+        <p><b>怎么用：</b>点 <code>script_catalog</code> 选内置 → <code>run_builtin</code></p>
+        <button class="ocp-btn ocp-btn-sm" onclick="toast('script_catalog: article, links, jsonld')">查看脚本</button>
+      </div>
+      <div class="ocp-use">
+        <h4>🧩 配方 25步 <span class="ocp-tag ocp-tag-read">可审计</span></h4>
+        <p><b>用处：</b>多步操作可复现</p>
+        <p><b>效果：</b>`wait/click/fill/extract/assert/screenshot` 顺序执行</p>
+        <p><b>怎么用：</b>填模板 <code>fill #query + press Enter + extract main</code> → 运行</p>
+        <button class="ocp-btn ocp-btn-sm" onclick="toast('recipe_run: 3步模板已复制')">复制模板</button>
+      </div>
+      <div class="ocp-use">
+        <h4>👤 UserScript <span class="ocp-tag ocp-tag-write">审批</span></h4>
+        <p><b>用处：</b>跑外部 Tampermonkey</p>
+        <p><b>效果：</b>需 `@match + @grant none`，≤64KB</p>
+        <p><b>怎么用：</b>先 `validate` 看 SHA → 再 `userscript_run`</p>
+        <button class="ocp-btn ocp-btn-sm" onclick="toast('validate: @match https://example.com/*')">校验示例</button>
+      </div>
+      <div class="ocp-use">
+        <h4>🕷️ 泛爬 <span class="ocp-tag ocp-tag-read">限流</span></h4>
+        <p><b>用处：</b>有限广度遍历</p>
+        <p><b>效果：</b>同源默认，`maxPages20/maxDepth2`</p>
+        <p><b>怎么用：</b>填 URL + 滑块 → `crawl`</p>
+        <button class="ocp-btn ocp-btn-sm" onclick="toast('crawl: maxPages 20, maxDepth 2')">开始泛爬</button>
+      </div>
+      <div class="ocp-card" style="background:#1E1E20">
+        <div class="ocp-srow"><span class="ocp-sk">自动化自由度</span>
+          <select id="mode" class="ocp-input ocp-input-sm" style="width:160px;flex:none" onchange="toast('已切到 '+this.value)">
+            <option>只读</option><option selected>标准（默认）</option><option>无人值守</option>
+          </select>
+        </div>
+        <div class="ocp-srow"><span class="ocp-sk">限流</span><span class="ocp-hint">minDelay 750ms / 并发 2 / 突发 3 / 冷却 30s</span><span class="ocp-tag ocp-tag-read" style="margin-left:auto">已启用</span></div>
+        <div class="ocp-srow"><span class="ocp-sk">限域登录</span><input class="ocp-input ocp-input-sm" placeholder="allowedDomains 如 example.com" style="width:200px;flex:none"><span class="ocp-hint">默认只读不回写</span></div>
+      </div>
+    </div>
+  </details>
+
+  <div class="ocp-hint" style="text-align:center;padding:8px">anweat 给你 21 个扳手；dsh-opencli 给你 3 个一键 + 170 个现成接口 + 需要时再打开工具箱。</div>
+</div>
+
+<div id="toast" style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#4A9EFF;color:#fff;padding:8px 16px;border-radius:8px;font-size:12.5px;display:none"></div>
+<script>
+let isRecording=false, steps=[]
+let recordings=JSON.parse(localStorage.getItem('dsh-opencli-recordings')||'[]')
+let schedules=JSON.parse(localStorage.getItem('dsh-opencli-schedules')||'[]')
+function save(){localStorage.setItem('dsh-opencli-recordings',JSON.stringify(recordings));localStorage.setItem('dsh-opencli-schedules',JSON.stringify(schedules))}
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.style.display='block';setTimeout(()=>t.style.display='none',1600)}
+function render(){
+  document.getElementById('record-count').textContent=recordings.length+' 条'
+  const rl=document.getElementById('record-list');rl.innerHTML=recordings.slice(0,5).map(r=>`<div class="ocp-srow" style="padding:6px 0"><span style="font-size:12px">${r.name}</span><span class="ocp-hint">${r.steps.length}步 · ${new Date(r.createdAt).toLocaleDateString()}</span><button class="ocp-btn ocp-btn-sm" onclick="replay('${r.id}')">回放</button><button class="ocp-btn ocp-btn-sm" onclick="delRec('${r.id}')">删除</button></div>`).join('') || '<div class="ocp-hint" style="padding:8px 0">暂无录制。点击“开始录制”后添加步骤。</div>'
+  document.getElementById('record-steps').textContent=steps.map((s,i)=>`${i+1}. ${s}`).join(' | ')
+  const sl=document.getElementById('sched-list');sl.innerHTML=schedules.map(s=>`<div class="ocp-srow" style="padding:6px 0"><span style="font-size:12px">${s.site}</span><span class="ocp-hint">${s.cron}</span><button class="ocp-btn ocp-btn-sm" onclick="delSched('${s.id}')">删除</button></div>`).join('') || ''
+}
+function toggleRecord(){
+  isRecording=!isRecording
+  document.getElementById('btn-record').textContent=isRecording?'停止录制':'开始录制'
+  document.getElementById('btn-record').className=isRecording?'ocp-btn ocp-btn-sm':'ocp-btn ocp-btn-sm ocp-btn-primary'
+  document.getElementById('record-input').style.display=isRecording?'flex':'none'
+  if(!isRecording && steps.length>0){
+    const name=document.getElementById('record-name').value.trim()||'未命名录制'
+    recordings.push({id:String(Date.now()),name,steps:[...steps],createdAt:new Date().toISOString()});steps=[];document.getElementById('record-name').value='';save();render();toast('已保存: '+name)
+  }
+}
+function addStep(){
+  const el=document.getElementById('record-step');const v=el.value.trim();if(!v) return;steps.push(v);el.value='';render()
+}
+function replay(id){const r=recordings.find(x=>x.id===id);if(r) toast('回放: '+r.steps.join(' → '))}
+function delRec(id){recordings=recordings.filter(x=>x.id!==id);save();render()}
+function addSchedule(){
+  const site=document.getElementById('sched-site').value.trim(),cron=document.getElementById('sched-cron').value.trim()
+  if(!site) return; schedules.push({id:String(Date.now()),site,cron,createdAt:new Date().toISOString()});document.getElementById('sched-site').value='';save();render();toast('已创建定时: '+site)
+}
+function delSched(id){schedules=schedules.filter(x=>x.id!==id);save();render()}
+render()
+</script>
+</body>
+</html>
