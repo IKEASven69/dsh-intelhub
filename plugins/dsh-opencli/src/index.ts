@@ -74,7 +74,7 @@ export class OpencliService extends TypertRemoteService {
   private readonly statePath = join(homedir(), '.dsh', 'dsh-opencli-state.json')
   private loginCache: { at: number; results: LoginCheckResult } | null = null
   // usagePolicy：与 anweat 对齐的限流（并发/突发/冷却），默认与 anweat 一致
-  private usagePolicy = { minDelayMs: 750, maxConcurrency: 2, burst: 3, cooldownMs: 30000, retryLimit: 2 }
+  private usagePolicy = { minDelayMs: 750, maxConcurrency: 2, burst: 3, cooldownMs: 30000, retryLimit: 2, maxPagesPerRun: 20, maxDepth: 2 }
   private callTimestamps: number[] = []
   private concurrent = 0
   private cooldownUntil = 0
@@ -448,6 +448,35 @@ export class OpencliService extends TypertRemoteService {
       return { ok: out.exitCode === 0, error: out.exitCode !== 0 ? this.renderOut(out) : undefined }
     }
     return { ok: false, error: `未知步骤:${step}` }
+  }
+
+  // L3 高级自动化：脚本/配方/泛爬（对齐 anweat 21 工具，MVP 桩 + 透传）
+  @Remote('script-catalog')
+  async scriptCatalog(): Promise<{ ok: boolean; scripts: Array<{ name: string; sha256: string; description: string }> }> {
+    return { ok: true, scripts: [
+      { name: 'article', sha256: 'builtin-article', description: '只读：提取正文为 Markdown' },
+      { name: 'links', sha256: 'builtin-links', description: '只读：提取页面链接' },
+      { name: 'jsonld', sha256: 'builtin-jsonld', description: '只读：提取 JSON-LD' },
+      { name: 'forms', sha256: 'builtin-forms', description: '只读：提取表单结构' },
+    ] }
+  }
+  @Remote('script-run-builtin')
+  async scriptRunBuiltin(request: { name: string; url?: string }): Promise<{ ok: boolean; result?: string; error?: string }> {
+    const name = String(request.name ?? '')
+    if (!['article','links','jsonld','forms'].includes(name)) return { ok: false, error: `未知内置脚本:${name}` }
+    // 透传为 browser extract 变体
+    const out = await this.runOpencli(['browser', 'dsh', 'extract', ...(request.url !== undefined ? [request.url] : [])])
+    return { ok: out.exitCode === 0, result: this.renderOut(out), error: out.exitCode !== 0 ? this.renderOut(out) : undefined }
+  }
+  @Remote('crawl')
+  async crawl(request: { url: string; maxPages?: number; maxDepth?: number }): Promise<{ ok: boolean; error?: string }> {
+    const url = String(request.url ?? '').trim()
+    if (url.length === 0) return { ok: false, error: 'url 为空' }
+    const maxPages = Math.min(Number(request.maxPages ?? 20), this.usagePolicy.maxPagesPerRun ?? 20)
+    // MVP：单页提取，真实广度遍历后续接 browser_crawl
+    const out = await this.runOpencli(['browser', 'dsh', 'open', url])
+    if (out.exitCode !== 0) return { ok: false, error: this.renderOut(out) }
+    return { ok: true }
   }
 
   /** R1 审批门:site 的 write 命令(发帖/点赞/下单等)先经 dsh 原生审批(ask→allowed-once)。
