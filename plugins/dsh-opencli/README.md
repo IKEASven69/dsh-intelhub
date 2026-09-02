@@ -67,6 +67,11 @@ dsh plugin add IKEASven69/dsh-opencli
 - **我的适配器**：Site/App 分段 tab + 禁用/启用即“我的适配器”管理，禁用状态持久化到 `~/.dsh/dsh-opencli-state.json` 并自动从 `systemPrompt` 目录收缩
 - **定时订阅**：面板“定时订阅”输入 `site 命令` + `cron`（默认 `0 9 * * *`），经 `rpc schedule-add` 接入 `dsh.schedule`（`dsh schedule list` 可见）
 
+## 0.2.1 缺口补齐（对齐 anweat，2026-09-01）
+- **自包含 fallback**：`resolveBin()` 优先 `DSH_OPENCLI_BIN` → 插件本地 `@jackwener/opencli`（`node dist/src/main.js`）→ `node_modules/.bin/opencli` → 全局 `opencli`，与 anweat“本地优先/全局复用”同策略
+- **限流**：`usagePolicy`（`minDelayMs 750 / maxConcurrency 2 / burst 3 / cooldown 30000`）+ 429/502/503/504 自动冷却，与 anweat 359-browser-half 的节流对齐
+- **限域登录**：`site --authProfile` + `authProfiles`（`allowedDomains` / `storageStatePath`），`domainOf()` 校验，跨域拒绝；同时 `ctx.provide('browser', this)` 兼容 `inject: ['browser']` 生态
+
 ## 已验证的测试矩阵
 
 | 层面 | 方式 | 结果 |

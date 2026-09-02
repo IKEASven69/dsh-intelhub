@@ -14,7 +14,8 @@ import { TypertRemoteService, Remote } from '@deepseek-ai/dsh-typert-protocol'
 import type { ShellExecRequest } from '@deepseek-ai/dsh-shell'
 import { homedir } from 'node:os'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { existsSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import type {
   AdapterDetailRequest, AdapterDetailResult, AdapterDisableRequest, AdapterDisableResult,
   AdaptersResult, ApprovalSetRequest, ApprovalSetResult, DaemonStartResult, LoginCheckItem, LoginCheckResult,
@@ -60,6 +61,7 @@ interface ToolArgs {
   command?: string
   args?: string[]
   adapter?: string
+  authProfile?: string
 }
 
 export class OpencliService extends TypertRemoteService {
@@ -71,11 +73,33 @@ export class OpencliService extends TypertRemoteService {
   private state: PluginState = { approval: 'on', disabled: [] }
   private readonly statePath = join(homedir(), '.dsh', 'dsh-opencli-state.json')
   private loginCache: { at: number; results: LoginCheckResult } | null = null
+  // usagePolicy：与 anweat 对齐的限流（并发/突发/冷却），默认与 anweat 一致
+  private usagePolicy = { minDelayMs: 750, maxConcurrency: 2, burst: 3, cooldownMs: 30000, retryLimit: 2 }
+  private callTimestamps: number[] = []
+  private concurrent = 0
+  private cooldownUntil = 0
+  private queue: Array<() => void> = []
+  // 限域登录（与 anweat authProfiles 对齐）：按 profile 限 allowedDomains，默认只读不回写
+  private authProfiles: Record<string, { allowedDomains: string[]; storageStatePath?: string; persistState?: boolean }> = {
+    // 示例：forum: { allowedDomains: ['example.com'], storageStatePath: 'D:/secrets/forum.json' }
+  }
 
   constructor(ctx: Context) {
     super(ctx, 'opencli')
-    this.bin = process.env.DSH_OPENCLI_BIN ?? 'opencli'
+    this.bin = this.resolveBin()
     void this.loadState()
+  }
+
+  private resolveBin(): string {
+    if (process.env.DSH_OPENCLI_BIN !== undefined && process.env.DSH_OPENCLI_BIN.length > 0) return process.env.DSH_OPENCLI_BIN
+    // 优先插件本地依赖（与 anweat 同策略：本地优先/全局复用）
+    try {
+      // @ts-ignore - optional peer
+      const pkg = require.resolve('@jackwener/opencli/package.json')
+      const bin = join(dirname(pkg), 'dist', 'src', 'main.js')
+      if (existsSync(bin)) return `node ${bin}`
+    } catch { /* 无本地依赖则回退全局 */ }
+    return 'opencli'
   }
 
   protected async [Service.init](): Promise<void> {
@@ -83,6 +107,8 @@ export class OpencliService extends TypertRemoteService {
     this.registerSiteTool()
     this.registerApprovalGate()
     void this.injectSystemPrompt()
+    // 兼容 anweat 生态：其他插件 inject: ['browser'] 时共用本服务
+    try { (this.ctx as unknown as { provide: (n: string, v: unknown) => void }).provide('browser', this) } catch { /* ignore */ }
   }
 
   // ── 模型工具 ──────────────────────────────────────────────
@@ -205,11 +231,12 @@ export class OpencliService extends TypertRemoteService {
   private registerSiteTool(): void {
     this.ctx.tools.register(defineTool({
       name: 'site',
-      description: '调用站点适配器(在用户登录态上返回结构化结果,比逐页点击快且稳)。adapter/command 见 systemPrompt 里的适配器目录;示例:site bilibili search 关键词=罗翔',
+      description: '调用站点适配器(在用户登录态上返回结构化结果,比逐页点击快且稳)。adapter/command 见 systemPrompt 里的适配器目录;示例:site bilibili search 关键词=罗翔。authProfile 限域（需配置 allowedDomains）',
       parameters: {
         adapter: { type: 'string', description: '适配器名(如 bilibili/zhihu/arxiv)' },
         command: { type: 'string', description: '适配器子命令(如 search/hot/top)' },
         args: { type: 'array', items: { type: 'string' }, description: '子命令参数' },
+        authProfile: { type: 'string', description: '限域登录态 profile（需在配置中预设 allowedDomains，默认不回写 Cookie）' },
       },
       output: { schema: { type: 'json' }, render: (_a: unknown, v: { text: string }) => [{ type: 'text', text: v.text }] },
       execute: async (a: ToolArgs): Promise<{ text: string }> => {
@@ -221,6 +248,9 @@ export class OpencliService extends TypertRemoteService {
         if (this.state.disabled.includes(adapter)) {
           return { text: `适配器 ${adapter} 已被禁用(设置→浏览器代理 可重新启用)。` }
         }
+        const domain = await this.domainOf(adapter)
+        const authErr = this.checkAuthProfile(domain, a.authProfile !== undefined ? String(a.authProfile) : undefined)
+        if (authErr !== null) return { text: authErr }
         const out = await this.runOpencli([adapter, command, ...(a.args ?? [])])
         return { text: this.renderOut(out) }
       },
@@ -414,10 +444,63 @@ export class OpencliService extends TypertRemoteService {
 
   // ── 基础设施 ──────────────────────────────────────────────
 
+  private async acquireGovernor(): Promise<void> {
+    // 冷却期
+    const now = Date.now()
+    if (now < this.cooldownUntil) await new Promise((res) => setTimeout(res, this.cooldownUntil - now))
+    // 并发
+    if (this.concurrent >= this.usagePolicy.maxConcurrency) {
+      await new Promise<void>((res) => { this.queue.push(res) })
+    }
+    this.concurrent++
+    // 突发 + minDelay
+    const burstWindow = 1000
+    this.callTimestamps = this.callTimestamps.filter((t) => Date.now() - t < burstWindow)
+    if (this.callTimestamps.length >= this.usagePolicy.burst) {
+      const oldest = this.callTimestamps[0] ?? 0
+      const wait = burstWindow - (Date.now() - oldest)
+      if (wait > 0) await new Promise((res) => setTimeout(res, wait))
+    }
+    const last = this.callTimestamps[this.callTimestamps.length - 1]
+    if (last !== undefined) {
+      const delay = this.usagePolicy.minDelayMs - (Date.now() - last)
+      if (delay > 0) await new Promise((res) => setTimeout(res, delay))
+    }
+  }
+  private releaseGovernor(): void {
+    this.concurrent = Math.max(0, this.concurrent - 1)
+    this.callTimestamps.push(Date.now())
+    const next = this.queue.shift()
+    if (next !== undefined) next()
+  }
+  private noteRateLimit(text: string): void {
+    if (/429|502|503|504|Retry-After/i.test(text)) this.cooldownUntil = Date.now() + this.usagePolicy.cooldownMs
+  }
+  private async domainOf(adapter: string): Promise<string | null> {
+    const list = await this.adapterList()
+    const hit = list?.find((a) => a.name === adapter)
+    return hit?.domain ?? null
+  }
+  private checkAuthProfile(domain: string | null, authProfile?: string): string | null {
+    if (authProfile === undefined || authProfile.length === 0) return null
+    const prof = this.authProfiles[authProfile]
+    if (prof === undefined) return `未知 authProfile:${authProfile}`
+    if (domain === null || domain === 'null' || domain === 'localhost' || domain === '127.0.0.1') return null
+    if (!prof.allowedDomains.some((d) => domain === d || domain.endsWith(`.${d}`))) return `authProfile ${authProfile} 不允许访问域 ${domain}（允许：${prof.allowedDomains.join(', ')}）`
+    return null
+  }
+
   private async runOpencli(argv: string[], timeoutMs = 60000, stdoutMaxBytes = 1048576): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-    const spec = this.ctx.shell.resolve({ command: [this.bin, ...argv].join(' '), timeoutMs, stdoutMaxBytes } as ShellExecRequest)
-    const r = await this.ctx.shell.run(spec)
-    return { exitCode: r.exitCode, stdout: r.stdout?.text ?? '', stderr: r.stderr?.text ?? '' }
+    await this.acquireGovernor()
+    try {
+      const spec = this.ctx.shell.resolve({ command: [this.bin, ...argv].join(' '), timeoutMs, stdoutMaxBytes } as ShellExecRequest)
+      const r = await this.ctx.shell.run(spec)
+      const out = { exitCode: r.exitCode ?? 1, stdout: r.stdout?.text ?? '', stderr: r.stderr?.text ?? '' }
+      this.noteRateLimit(`${out.stdout}\n${out.stderr}`)
+      return out
+    } finally {
+      this.releaseGovernor()
+    }
   }
 
   private renderOut(out: { exitCode: number; stdout: string; stderr: string }): string {
