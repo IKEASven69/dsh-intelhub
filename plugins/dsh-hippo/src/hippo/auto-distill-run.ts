@@ -18,6 +18,7 @@ import { withEngine } from './engine-holder.js';
 import {
   loadAutoSettings, saveAutoSettings, appendShelved,
   type AutoDistillSettings, type ShelvedCandidate,
+  listShelved,
 } from './auto-distill.js';
 import { extractTasksFromTurns, mergeStoreTasks, loadStore, saveStore, collectGitContext, taskKey } from './task-context.js';
 import { taskRefluxCandidates } from './task-reflux.js';
@@ -170,7 +171,52 @@ async function runOnceInner(st: AutoDistillSettings, stats: AutoRunStats): Promi
     void autoRecompile().catch(() => {});
   }
 
+  // 治理自动化（H9②）：
+  // a) 待审队列积压 ≥20 条且注入了 LLM → 后台预审打建议（不阻塞本轮返回）
+  // b) 每日一轮 sleep 整合（去重/衰减/清过期），上次跑距 now ≥20h 才跑
+  if (stats.shelved > 0 || listShelved().length >= 20) {
+    const refiner = getDistillRefiner();
+    if (refiner !== null) {
+      void (async () => {
+        try {
+          const { reviewShelved } = await import('./shelved-review.js');
+          const st = await reviewShelved((sys, u) => refinerBridge(sys, u));
+          if (st.reviewed > 0) console.log(`[auto-review] 待审预审完成：${st.reviewed} 条（建议收 ${st.accept} / 弃 ${st.discard}）`);
+        } catch { /* 预审失败不影响主流程 */ }
+      })();
+    }
+  }
+  void maybeAutoSleep();
+
   return stats;
+}
+
+/** refiner 注入的是 Candidate 级 CompleteFn；预审复用同一通道。 */
+let refinerBridge: (system: string, user: string) => Promise<string> = async () => { throw new Error('LLM 未接入'); };
+export function setRefinerBridge(fn: (system: string, user: string) => Promise<string>): void {
+  refinerBridge = fn;
+}
+
+/** 每日 sleep：距上次 ≥20h 才跑（settings 里记 lastSleepAt）。 */
+async function maybeAutoSleep(): Promise<void> {
+  try {
+    const st = loadAutoSettings();
+    const now = Date.now() / 1000;
+    const last = (st as unknown as { lastSleepAt?: number }).lastSleepAt ?? 0;
+    if (now - last < 20 * 3600) return;
+    const { runSleep } = await import('./sleep.js');
+    const { withEngine } = await import('./engine-holder.js');
+    let merged = 0;
+    let dropped = 0;
+    await withEngine(async ({ engine }) => {
+      const report = await runSleep(engine as never, { apply: true });
+      merged = report.merged;
+      dropped = report.staleShelvedDropped;
+    });
+    (st as unknown as { lastSleepAt?: number }).lastSleepAt = now;
+    saveAutoSettings(st);
+    console.log(`[auto-sleep] 整合完成：合并 ${merged} · 清过期待审 ${dropped}`);
+  } catch { /* sleep 失败不影响蒸馏 */ }
 }
 
 /** 自动重编译已配置的项目（编译配置见 compile-config.ts）。 */

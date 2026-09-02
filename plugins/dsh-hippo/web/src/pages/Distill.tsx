@@ -260,6 +260,19 @@ export default function DistillPage() {
                   <span className="meta" style={{ fontSize: 11, flex: 'none' }}>
                     {item.reason} · conf {item.candidate.confidence.toFixed(2)} · {item.candidate.project}
                   </span>
+                  {item.suggest && (
+                    <span
+                      title={item.suggestReason || 'LLM 预审建议'}
+                      style={{
+                        flex: 'none', fontSize: 10.5, fontWeight: 700, padding: '1px 7px', borderRadius: 9,
+                        color: item.suggest === 'accept' ? 'var(--success)' : 'var(--warning)',
+                        border: `1px solid ${item.suggest === 'accept' ? 'var(--success)' : 'var(--warning)'}`,
+                        opacity: 0.85,
+                      }}
+                    >
+                      🦛 建议{item.suggest === 'accept' ? '收' : '弃'}{item.suggestReason ? `·${item.suggestReason.slice(0, 14)}` : ''}
+                    </span>
+                  )}
                   <button className="fs-clear" title="丢弃" onClick={() => { void api.shelvedDiscard([item.index]).then(reloadAuto); }}>✕</button>
                 </div>
               ))}

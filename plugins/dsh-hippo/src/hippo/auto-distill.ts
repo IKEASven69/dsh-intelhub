@@ -92,3 +92,9 @@ export function takeShelved(indices: number[]): number {
   fs.writeFileSync(SHELVED_PATH, rest.map(r => JSON.stringify(r)).join('\n') + (rest.length ? '\n' : ''), 'utf-8');
   return rest.length;
 }
+
+/** 整表回写（shelved-review 预审建议用）。 */
+export function saveShelvedItems(items: ShelvedCandidate[]): void {
+  const text = items.map(r => JSON.stringify(r)).join('\n') + (items.length ? '\n' : '');
+  fs.writeFileSync(SHELVED_PATH, text, 'utf-8');
+}

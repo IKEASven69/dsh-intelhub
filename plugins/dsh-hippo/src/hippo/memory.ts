@@ -64,9 +64,11 @@ export interface Store {
 export type EmbedFn = (text: string) => Promise<Float32Array>;
 
 export interface RememberResult {
-  status: 'created' | 'reinforced';
+  status: 'created' | 'reinforced' | 'rejected';
   id: string;
   strength?: number;
+  /** status='rejected' 时：命中的敏感信息类别（secret-guard）。 */
+  reason?: string;
 }
 
 export interface RecallHit {
@@ -128,6 +130,15 @@ export class MemoryEngine {
 
     text = text.trim();
     if (!text) throw new Error('memory text is empty');
+    // 敏感信息闸门（H9）：命中疑似密钥直接拒绝——记忆会镜像成明文 MD、
+    // 编译进 AGENTS.md、可能进 git，密钥绝不能进这条链路。
+    {
+      const { findSecrets } = await import('./secret-guard.js');
+      const hits = findSecrets(text);
+      if (hits.length > 0) {
+        return { status: 'rejected', id: '', reason: hits.map(h => h.kind).join(', ') };
+      }
+    }
     if (!VALID_TYPES.includes(type as MemoryType)) {
       throw new Error(`type must be one of ${VALID_TYPES.join(', ')}`);
     }

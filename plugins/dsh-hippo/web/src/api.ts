@@ -52,6 +52,8 @@ export interface ShelvedItem {
   sourceId: string;
   reason: string;
   createdAt: number;
+  suggest?: 'accept' | 'discard';
+  suggestReason?: string;
   candidate: { text: string; type: string; project: string; confidence: number; similarity: number; duplicate: string };
 }
 

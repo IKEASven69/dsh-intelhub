@@ -328,6 +328,61 @@ program
     }
   });
 
+// ── review（H9②）：待审队列 LLM 预审（打建议，人终审）──
+
+program
+  .command('review')
+  .description('LLM pre-review the shelved queue: annotate each candidate with accept/discard suggestion + reason (humans still decide)')
+  .action(async () => {
+    const { withEngine } = await import('./engine.js');
+    const { reviewShelved } = await import('./shelved-review.js');
+    // CLI 场景无 dsh llm 桥——按 settings 直连默认 provider（minimax/ollama 均可）
+    const { readDefaultModel, providerDirectComplete } = await import('../dsh-llm.js');
+    const route = readDefaultModel();
+    const complete = (system: string, user: string) =>
+      providerDirectComplete(system, user, { temperature: 0 });
+    if (route !== null) console.log(`预审模型：${route.provider}/${route.model}（LLM 仅建议，人终审）`);
+    const st = await withEngine(async () => reviewShelved(complete));
+    if (st.failed) { console.error('LLM 不可用，预审中断（队列未动）'); process.exitCode = 1; return; }
+    console.log(`预审完成：${st.reviewed} 条 → 建议收 ${st.accept} / 弃 ${st.discard}`);
+    console.log('GUI 蒸馏页可按建议勾选确认，或 hippo shelved-apply 人工执行');
+  });
+
+// ── secrets（H9）：存量库敏感信息扫描/清除 ─────────
+
+program
+  .command('secrets')
+  .description('scan the memory store for API keys / passwords / tokens (secret-guard); --purge deletes hits')
+  .option('--purge', 'delete memories containing secrets (destructive!)', false)
+  .action(async (options: { purge?: boolean }) => {
+    const { withEngine } = await import('./engine.js');
+    const { listRecords } = await import('./transfer.js');
+    const { findSecrets } = await import('./secret-guard.js');
+    let rows: Record<string, unknown>[] = [];
+    await withEngine(async ({ engine }) => {
+      rows = listRecords(engine.store as never, { includeSuperseded: true, limit: 0 }) as unknown as Record<string, unknown>[];
+    });
+    const hits: Array<{ id: string; kinds: string; text: string }> = [];
+    for (const r of rows) {
+      const found = findSecrets(String(r.text ?? ''));
+      if (found.length > 0) hits.push({ id: String(r.id), kinds: found.map(h => h.kind).join(', '), text: String(r.text ?? '') });
+    }
+    if (hits.length === 0) { console.log('✅ 全库扫描完成：未发现疑似密钥/凭证'); return; }
+    console.log(`⚠️ 发现 ${hits.length} 条记忆含疑似敏感信息：`);
+    for (const h of hits) {
+      console.log(`  [${h.id.slice(0, 8)}] (${h.kinds}) ${h.text.slice(0, 70).split(String.fromCharCode(10)).join(' ')}`);
+    }
+    if (options.purge) {
+      let del = 0;
+      await withEngine(async ({ engine }) => {
+        for (const h of hits) { if (await engine.forget(h.id)) del++; }
+      });
+      console.log(`已删除 ${del}/${hits.length} 条（--purge）`);
+    } else {
+      console.log('确认后执行：hippo secrets --purge');
+    }
+  });
+
 // ── memoryfield（H8）：透明可移植镜像层 ───────────
 
 program

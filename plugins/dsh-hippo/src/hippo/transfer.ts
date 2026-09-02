@@ -102,6 +102,8 @@ export interface ImportCounts {
   created: number;
   reinforced: number;
   skipped: number;
+  /** 被敏感信息闸门拒绝的条数（secret-guard）。 */
+  rejected?: number;
 }
 
 export async function importJsonl(
@@ -128,7 +130,8 @@ export async function importJsonl(
         sourceId: typeof r.source_id === 'string' ? r.source_id : undefined,
         sourceOffset: typeof r.source_offset === 'number' ? r.source_offset : undefined,
       });
-      counts[result.status] += 1;
+      if (result.status === 'rejected') counts.rejected = (counts.rejected ?? 0) + 1;
+      else counts[result.status] += 1;
     } catch (err) {
       counts.skipped += 1;
       console.error(`  line ${lineNo} skipped: ${(err as Error).message}`);

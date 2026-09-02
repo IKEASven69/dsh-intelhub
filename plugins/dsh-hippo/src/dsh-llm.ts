@@ -140,3 +140,51 @@ function auditBridge(line: string): void {
 `)
   } catch { /* 审计失败不影响主流程 */ }
 }
+
+/** CLI/独立场景：无 ctx.llm 时按 settings 直连默认 provider 的 OpenAI 兼容端点。
+ *  支持 minimax-cn（api.minimaxi.com）与任意 openai-completions provider；
+ *  key 从 dsh 凭证库（~/.dsh/.credentials.yaml refs）或环境变量解析。 */
+export async function providerDirectComplete(system: string, user: string, opts: { timeoutMs?: number; temperature?: number } = {}): Promise<string> {
+  const { readFileSync } = req('node:fs') as typeof import('node:fs')
+  const { join } = req('node:path') as typeof import('node:path')
+  const { homedir } = req('node:os') as typeof import('node:os')
+  const yamlText = readFileSync(join(homedir(), '.dsh', 'settings.yaml'), 'utf8')
+  const route = readDefaultModel()
+  if (route === null) throw new Error('无默认模型')
+  // 解析 provider 节：baseURL + apiKeyEnv
+  const provHeader = '  ' + route.provider + ':'
+  const provStart = yamlText.indexOf(provHeader)
+  if (provStart === -1) throw new Error('settings 无 provider 节：' + route.provider)
+  const rest = yamlText.slice(provStart + provHeader.length)
+  const nextProv = rest.search(/\n    \S[^:\n]*:/)
+  const sect = nextProv === -1 ? rest : rest.slice(0, nextProv)
+  const baseURL = sect.match(/baseURL:\s*(\S+)/)?.[1]
+  const apiKeyEnv = sect.match(/apiKeyEnv:\s*(\S+)/)?.[1]
+  if (baseURL === undefined) throw new Error(route.provider + ' 缺 baseURL')
+  // key：凭证库优先，环境变量兜底
+  let key = process.env[apiKeyEnv ?? ''] ?? ''
+  if (key === '') {
+    try {
+      const creds = readFileSync(join(homedir(), '.dsh', '.credentials.yaml'), 'utf8')
+      const m = new RegExp(apiKeyEnv + ":\\s*['\"]?([^'\"\\s]+)").exec(creds)
+      if (m) key = m[1]
+    } catch { /* 无凭证库 */ }
+  }
+  if (key === '') throw new Error('key 未配置（' + apiKeyEnv + '）')
+  const url = baseURL.replace(/\/$/, '') + '/chat/completions'
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: route.model,
+      messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
+      max_tokens: 8192,
+      ...(opts.temperature !== undefined ? { temperature: opts.temperature } : {}),
+    }),
+    signal: AbortSignal.timeout(opts.timeoutMs ?? 180_000),
+  })
+  if (!resp.ok) throw new Error(`provider ${resp.status}: ${await resp.text().catch(() => '')}`.slice(0, 200))
+  const d = (await resp.json()) as { choices?: Array<{ message?: { content?: string; reasoning_content?: string } }> }
+  const msg = d.choices?.[0]?.message
+  return msg?.content?.trim() !== '' && msg?.content !== undefined ? msg.content : (msg?.reasoning_content ?? '')
+}

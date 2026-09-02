@@ -27,7 +27,7 @@ import { registerPromptContext, registerRecallTool, registerRememberTool } from 
 import { registerLifeTools } from './life-tools.ts'
 import { startAutonomyLoop } from './life-autonomy.ts'
 import { llmCompleteWithFallback } from './dsh-llm.ts'
-import { setDistillRefiner } from './hippo/auto-distill-run.js'
+import { setDistillRefiner, setRefinerBridge } from './hippo/auto-distill-run.js'
 import { buildHttpApp } from './hippo/server-http.js'
 import { llmRefine } from './hippo/refine.js'
 import type { DoctorReport } from './types.ts'
@@ -201,6 +201,8 @@ export function apply(ctx: Context, config?: Config): void {
     setDistillRefiner((candidates) =>
       llmRefine(candidates, (system, user, opts) =>
         llmCompleteWithFallback(lc, system, user, opts).then(r => r.text)))
+    setRefinerBridge((system, user) =>
+      llmCompleteWithFallback(lc, system, user).then(r => r.text))
   })
 
   // H2：memory_recall 工具 + systemPrompt 注入（服务缺席时降级跳过，不阻断插件）。
