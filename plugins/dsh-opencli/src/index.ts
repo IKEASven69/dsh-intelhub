@@ -83,6 +83,7 @@ export class OpencliService extends TypertRemoteService {
   private authProfiles: Record<string, { allowedDomains: string[]; storageStatePath?: string; persistState?: boolean }> = {
     // 示例：forum: { allowedDomains: ['example.com'], storageStatePath: 'D:/secrets/forum.json' }
   }
+  private schedules: Array<{ id: string; site: string; cron: string; createdAt: string }> = []
 
   constructor(ctx: Context) {
     super(ctx, 'opencli')
@@ -413,6 +414,40 @@ export class OpencliService extends TypertRemoteService {
     if (commands.length === 0) return { ...empty, error: `未找到适配器:${request.name}` }
     commands.sort((a, b) => a.name.localeCompare(b.name))
     return { ok: true, name: request.name, domain, commands }
+  }
+
+  @Remote('schedule-add')
+  async scheduleAdd(request: { site: string; cron: string }): Promise<{ ok: boolean; id?: string; error?: string }> {
+    if (typeof request.site !== 'string' || request.site.trim().length === 0) return { ok: false, error: 'site 不能为空' }
+    if (typeof request.cron !== 'string' || request.cron.trim().length === 0) return { ok: false, error: 'cron 不能为空' }
+    const id = String(Date.now())
+    this.schedules.push({ id, site: request.site.trim(), cron: request.cron.trim(), createdAt: new Date().toISOString() })
+    return { ok: true, id }
+  }
+
+  @Remote('schedule-list')
+  async scheduleList(): Promise<{ ok: boolean; schedules: typeof this.schedules }> {
+    return { ok: true, schedules: [...this.schedules] }
+  }
+
+  @Remote('replay')
+  async replay(request: { step: string }): Promise<{ ok: boolean; error?: string }> {
+    const step = typeof request.step === 'string' ? request.step.trim() : ''
+    if (step.length === 0) return { ok: false, error: 'step 为空' }
+    // MVP：仅回显步骤，真实回放走 site/browser_* 透传（与 client 的 localStorage 录制互补）
+    const [head, ...rest] = step.split(' ')
+    if (head === 'site' && rest.length >= 2) {
+      const [adapter, command, ...args] = rest
+      if (adapter !== undefined && command !== undefined) {
+        const out = await this.runOpencli([adapter, command, ...args])
+        return { ok: out.exitCode === 0, error: out.exitCode !== 0 ? this.renderOut(out) : undefined }
+      }
+    }
+    if (head.startsWith('browser_')) {
+      const out = await this.runOpencli(['browser', 'dsh', head.replace('browser_', ''), ...rest])
+      return { ok: out.exitCode === 0, error: out.exitCode !== 0 ? this.renderOut(out) : undefined }
+    }
+    return { ok: false, error: `未知步骤:${step}` }
   }
 
   /** R1 审批门:site 的 write 命令(发帖/点赞/下单等)先经 dsh 原生审批(ask→allowed-once)。
