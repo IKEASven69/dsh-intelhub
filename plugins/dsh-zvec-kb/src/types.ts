@@ -1,0 +1,66 @@
+/** dsh-zvec-kb 公共类型。 */
+
+/** 文件在注册表里的条目。 */
+export interface FileEntry {
+  /** 内容 sha256,前 16 位,同时是 zvec 里的 file 字段值。 */
+  id: string
+  /** 导入时的绝对路径(规范化后)。 */
+  path: string
+  chunks: number
+  status: 'indexing' | 'done' | 'failed'
+  error?: string
+  importedAt: number
+}
+
+/** 面板/工具共用的检索结果条目。 */
+export interface SearchHit {
+  /** 来源定位:相对显示路径#块序号。 */
+  ref: string
+  score: number
+  text: string
+}
+
+/** kb_search 的返回(JSON 面)。 */
+export interface SearchResult {
+  ok: boolean
+  mode: 'hybrid' | 'fts' | 'none'
+  hits: SearchHit[]
+  note?: string
+  error?: string
+}
+
+export interface StatusResult {
+  ok: boolean
+  home: string
+  files: number
+  chunks: number
+  indexing: number
+  model: 'ready' | 'loading' | 'absent'
+  dim: number | null
+  error?: string
+}
+
+export interface ListResult {
+  ok: boolean
+  files: FileEntry[]
+  indexing: number
+  error?: string
+}
+
+export interface ImportResult {
+  ok: boolean
+  queued: number
+  skippedUnchanged: number
+  failedScan: string[]
+  error?: string
+}
+
+export interface RemoveResult {
+  ok: boolean
+  removed: boolean
+  error?: string
+}
+
+export interface SearchRpcResult extends SearchResult {}
+
+export type { FileEntry as KbFileEntry }
