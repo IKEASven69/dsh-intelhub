@@ -1,3 +1,4 @@
+import { BASE } from '../api'
 /**
  * 共享文件夹选择器：走服务端 /api/fs/list 浏览文件系统任意目录。
  * 交互模型（资源管理器式）：点目录行 = 进入看里面的内容（盘符同样可进），
@@ -48,7 +49,7 @@ export default function FolderPicker({ value, onChange, variant = 'input', count
     const seq = ++seqRef.current;
     setBusy(true);
     try {
-      const r = await fetch(`/api/fs/list${path ? `?path=${encodeURIComponent(path)}` : ''}`);
+      const r = await fetch(`${BASE}/api/fs/list${path ? `?path=${encodeURIComponent(path)}` : ''}`);
       const d = await r.json();
       if (seq !== seqRef.current) return;
       if (!r.ok) throw new Error(d.error);

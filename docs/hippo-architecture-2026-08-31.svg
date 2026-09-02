@@ -1,0 +1,62 @@
+<svg viewBox="0 0 680 520" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, sans-serif">
+  <!-- hippo 架构快照 · 2026-08-31 · 随代码演进需更新，更新时在 task-handoff-plan.md §7.1 记一行 -->
+  <rect width="680" height="520" fill="#16181d"/>
+  <text x="24" y="34" fill="#e8eaed" font-size="17" font-weight="700">dsh-hippo 数据流全景（2026-08-31 快照）</text>
+
+  <rect x="24" y="56" width="632" height="118" rx="10" fill="#1e2128" stroke="#3a3f4b"/>
+  <text x="40" y="78" fill="#9aa3b2" font-size="12" font-weight="600">① 源层</text>
+
+  <rect x="40" y="88" width="292" height="72" rx="8" fill="#232833" stroke="#4a5568"/>
+  <text x="52" y="108" fill="#7fb3ff" font-size="12" font-weight="700">会话型源 → SessionAdapter</text>
+  <text x="52" y="126" fill="#c8cdd6" font-size="11">claude · codex · opencode · pi · zcode</text>
+  <rect x="250" y="116" width="70" height="18" rx="9" fill="#2b3a2e" stroke="#5a8f5e"/>
+  <text x="256" y="129" fill="#8fd494" font-size="10">+ workbuddy</text>
+  <text x="52" y="148" fill="#7a828f" font-size="10">统一接口 types.ts :: SessionAdapter → Turn[]</text>
+
+  <rect x="348" y="88" width="292" height="72" rx="8" fill="#232833" stroke="#4a5568"/>
+  <text x="360" y="108" fill="#f0b45c" font-size="12" font-weight="700">事件型源（无统一 IR）</text>
+  <text x="360" y="126" fill="#c8cdd6" font-size="11">team events（已有 ledger/triage）· 任务状态</text>
+  <text x="360" y="148" fill="#7a828f" font-size="10">各自旁挂：tasks.json · team/ledger ← M1 git 挂这</text>
+
+  <path d="M340 94 L348 94" stroke="#5a6272" stroke-width="1.5" stroke-dasharray="3 3"/>
+
+  <rect x="24" y="192" width="632" height="150" rx="10" fill="#1e2128" stroke="#3a3f4b"/>
+  <text x="40" y="214" fill="#9aa3b2" font-size="12" font-weight="600">② 中间表示 + 存储层</text>
+
+  <rect x="40" y="226" width="180" height="46" rx="8" fill="#232833" stroke="#4a5568"/>
+  <text x="52" y="245" fill="#7fb3ff" font-size="11" font-weight="700">Turn[] 会话 IR</text>
+  <text x="52" y="262" fill="#7a828f" font-size="9">role/text/cwd/ts/tool/model</text>
+
+  <rect x="240" y="226" width="180" height="46" rx="8" fill="#232833" stroke="#4a5568"/>
+  <text x="252" y="245" fill="#f0b45c" font-size="11" font-weight="700">TaskRecord 操作状态</text>
+  <text x="252" y="262" fill="#7a828f" font-size="9">tasks.json（有意不进 zvec）</text>
+
+  <rect x="440" y="226" width="200" height="46" rx="8" fill="#232833" stroke="#4a5568"/>
+  <text x="452" y="245" fill="#d8a6ff" font-size="11" font-weight="700">L0 sources 原始 blob</text>
+  <text x="452" y="262" fill="#7a828f" font-size="9">审计回放用，JSON 文件</text>
+
+  <rect x="440" y="284" width="200" height="44" rx="8" fill="#2b2436" stroke="#8b6bb8"/>
+  <text x="452" y="303" fill="#d8a6ff" font-size="11" font-weight="700">L1 zvec 记忆库</text>
+  <text x="452" y="319" fill="#7a828f" font-size="9">HNSW + jieba FTS · BM25+vec RRF</text>
+  <path d="M540 272 L540 284" stroke="#8b6bb8" stroke-width="1.5"/>
+
+  <rect x="40" y="284" width="360" height="44" rx="8" fill="#242c24" stroke="#5a8f5e"/>
+  <text x="52" y="303" fill="#8fd494" font-size="11" font-weight="700">蒸馏管线 distill ← Candidate（统一入口）</text>
+  <text x="52" y="319" fill="#7a828f" font-size="9">会话蒸馏 ✓ · team 蒸馏 ✓ · 任务回流 = M3 第三条线</text>
+  <path d="M130 272 L130 284" stroke="#5a8f5e" stroke-width="1.5"/>
+  <path d="M330 272 L330 284" stroke="#5a8f5e" stroke-width="1.5" stroke-dasharray="3 3"/>
+
+  <rect x="24" y="360" width="632" height="72" rx="10" fill="#1e2128" stroke="#3a3f4b"/>
+  <text x="40" y="382" fill="#9aa3b2" font-size="12" font-weight="600">③ 出口层（并列，互不绑死）</text>
+  <g font-size="11" fill="#c8cdd6">
+    <rect x="40" y="392" width="118" height="26" rx="6" fill="#232833" stroke="#4a5568"/><text x="52" y="409">recall (MCP)</text>
+    <rect x="170" y="392" width="150" height="26" rx="6" fill="#232833" stroke="#4a5568"/><text x="182" y="409">compile → AGENTS.md</text>
+    <rect x="332" y="392" width="90" height="26" rx="6" fill="#232833" stroke="#4a5568"/><text x="344" y="409">dashboard</text>
+    <rect x="434" y="392" width="100" height="26" rx="6" fill="#232833" stroke="#4a5568"/><text x="446" y="409">SKILL.md</text>
+    <rect x="546" y="392" width="94" height="26" rx="6" fill="#2b3a2e" stroke="#5a8f5e"/><text x="558" y="409">+ M2 查询</text>
+  </g>
+
+  <rect x="24" y="448" width="632" height="56" rx="10" fill="#1e2128" stroke="#3a3f4b"/>
+  <text x="40" y="468" fill="#f0b45c" font-size="11" font-weight="700">架构边界（记录在案，H7 不解决）</text>
+  <text x="40" y="486" fill="#7a828f" font-size="10">zvec 单进程独占写锁（多 CLI 并发显式报错）· 事件型源无统一 IR（两条线各自成型）· 多机同步未涉及</text>
+</svg>

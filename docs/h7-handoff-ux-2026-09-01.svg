@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="860" viewBox="0 0 1440 860" font-family="'Microsoft YaHei','PingFang SC',sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0e0b1a"/><stop offset="1" stop-color="#141026"/>
+    </linearGradient>
+    <linearGradient id="idx" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#7c3aed"/><stop offset="1" stop-color="#a78bfa"/>
+    </linearGradient>
+    <filter id="glow"><feGaussianBlur stdDeviation="6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+
+  <rect width="1440" height="860" fill="url(#bg)"/>
+  <text x="48" y="64" fill="#f4f2ff" font-size="30" font-weight="700">H7 无感交接 · 效果图</text>
+  <text x="48" y="96" fill="#8b84a3" font-size="15">薄索引常驻 ≤100 token ＋ 按需取件 · 2026-09-01 · docs/h7-handoff-ux-2026-09-01.svg</text>
+
+  <!-- ══ Panel 1: agent 开局看到的全貌 ══ -->
+  <rect x="48" y="128" width="660" height="420" rx="14" fill="#181427" stroke="#2a2150"/>
+  <text x="72" y="164" fill="#c3bdd6" font-size="16" font-weight="700">① 会话开局 · agent 收到的全部（自动注入，无需说「接手」）</text>
+  <rect x="72" y="184" width="612" height="300" rx="10" fill="#0e0b1a" stroke="#3d3370"/>
+    <text x="92" y="216" fill="#a78bfa" font-size="13" font-family="Consolas,monospace">[hippo] 活跃任务（3）· 项目 dsh-plugin · 分支 main</text>
+    <text x="92" y="248" fill="#e8e4f5" font-size="13" font-family="Consolas,monospace">1. H7 任务轨迹 M2   in_progress</text>
+    <text x="112" y="270" fill="#fbbf24" font-size="13" font-family="Consolas,monospace">└ 卡点：mergeTasks 归档策略待冷神拍板</text>
+    <text x="92" y="298" fill="#e8e4f5" font-size="13" font-family="Consolas,monospace">2. minimax Token Plan 接入   completed（已回流 2 条教训）</text>
+    <text x="92" y="326" fill="#e8e4f5" font-size="13" font-family="Consolas,monospace">3. WorkBuddy 适配器   pending</text>
+    <text x="92" y="366" fill="#8b84a3" font-size="13" font-family="Consolas,monospace">记忆库：memory_recall("关键词") 可查历史决策/教训</text>
+    <text x="92" y="390" fill="#8b84a3" font-size="13" font-family="Consolas,monospace">收件箱：1 份待取 [hippo:sess_94519] ← 上个会话推送</text>
+    <text x="92" y="440" fill="#4ade80" font-size="12" font-family="Consolas,monospace">// 以上即全部常驻成本 ≈ 85 token · 消费即弃，不累积</text>
+  <rect x="72" y="498" width="180" height="34" rx="17" fill="url(#idx)" filter="url(#glow)"/>
+  <text x="162" y="520" fill="#fff" font-size="13" font-weight="700" text-anchor="middle">常驻 ≈ 85 token</text>
+  <text x="270" y="520" fill="#8b84a3" font-size="13">vs GSD 文档交接 1500+ token 全文常驻</text>
+
+  <!-- ══ Panel 2: 三层预算栈 ══ -->
+  <rect x="740" y="128" width="652" height="420" rx="14" fill="#181427" stroke="#2a2150"/>
+  <text x="764" y="164" fill="#c3bdd6" font-size="16" font-weight="700">② 上下文预算三层（progressive disclosure）</text>
+
+  <rect x="764" y="190" width="604" height="86" rx="10" fill="#241a4d" stroke="#7c3aed"/>
+  <text x="788" y="222" fill="#e8e4f5" font-size="15" font-weight="700">L-索引 · 常驻</text>
+  <text x="788" y="248" fill="#a78bfa" font-size="13">≤ 100 token · 开局自动注入 · 活跃任务+卡点+取件指针</text>
+  <text x="1340" y="228" fill="#a78bfa" font-size="22" font-weight="700" text-anchor="end">85t</text>
+
+  <rect x="824" y="286" width="544" height="86" rx="10" fill="#1c1733" stroke="#3d3370"/>
+  <text x="848" y="318" fill="#e8e4f5" font-size="15" font-weight="700">L-取件 · 回合内按需</text>
+  <text x="848" y="344" fill="#8b84a3" font-size="13">0–500 token/次 · handoff_load / memory_recall 一次调用拉蒸馏详情</text>
+
+  <rect x="884" y="382" width="484" height="86" rx="10" fill="#161228" stroke="#261f3d"/>
+  <text x="908" y="414" fill="#c3bdd6" font-size="15" font-weight="700">L-溯源 · 不常驻</text>
+  <text x="908" y="440" fill="#8b84a3" font-size="13">0 token · L0 原文片段，带 ref 极少数情况反查</text>
+
+  <text x="764" y="508" fill="#4ade80" font-size="13">▲ 越往下越少进入上下文 —— agent 为自己的好奇心付 token，不为系统的库存付</text>
+
+  <!-- ══ Panel 3: 无感四环节 ══ -->
+  <rect x="48" y="576" width="920" height="250" rx="14" fill="#181427" stroke="#2a2150"/>
+  <text x="72" y="612" fill="#c3bdd6" font-size="16" font-weight="700">③ 无感四环节 · 全程零用户动作</text>
+
+  <g>
+    <rect x="72" y="636" width="196" height="120" rx="10" fill="#241a4d" stroke="#7c3aed"/>
+    <text x="170" y="668" fill="#a78bfa" font-size="14" font-weight="700" text-anchor="middle">采集</text>
+    <text x="170" y="694" fill="#8b84a3" font-size="12" text-anchor="middle">auto-distill 事后扫描</text>
+    <text x="170" y="714" fill="#8b84a3" font-size="12" text-anchor="middle">transcript+Todo+git</text>
+    <text x="170" y="740" fill="#4ade80" font-size="12" text-anchor="middle">会话崩了也能采</text>
+
+    <rect x="300" y="636" width="196" height="120" rx="10" fill="#241a4d" stroke="#7c3aed"/>
+    <text x="398" y="668" fill="#a78bfa" font-size="14" font-weight="700" text-anchor="middle">注入</text>
+    <text x="398" y="694" fill="#8b84a3" font-size="12" text-anchor="middle">开局薄索引自动就位</text>
+    <text x="398" y="714" fill="#8b84a3" font-size="12" text-anchor="middle">无需触发词/确认</text>
+    <text x="398" y="740" fill="#4ade80" font-size="12" text-anchor="middle">≤100 token</text>
+
+    <rect x="528" y="636" width="196" height="120" rx="10" fill="#241a4d" stroke="#7c3aed"/>
+    <text x="626" y="668" fill="#a78bfa" font-size="14" font-weight="700" text-anchor="middle">消费</text>
+    <text x="626" y="694" fill="#8b84a3" font-size="12" text-anchor="middle">agent 按需取件</text>
+    <text x="626" y="714" fill="#8b84a3" font-size="12" text-anchor="middle">用完当轮即弃归档</text>
+    <text x="626" y="740" fill="#4ade80" font-size="12" text-anchor="middle">不残留不累积</text>
+
+    <rect x="756" y="636" width="196" height="120" rx="10" fill="#241a4d" stroke="#7c3aed"/>
+    <text x="854" y="668" fill="#a78bfa" font-size="14" font-weight="700" text-anchor="middle">沉淀</text>
+    <text x="854" y="694" fill="#8b84a3" font-size="12" text-anchor="middle">completed 瞬间自动回流</text>
+    <text x="854" y="714" fill="#8b84a3" font-size="12" text-anchor="middle">卡点+解法+changed</text>
+    <text x="854" y="740" fill="#4ade80" font-size="12" text-anchor="middle">走 minimax LLM 精炼</text>
+
+    <path d="M268 696 L300 696" stroke="#7c3aed" stroke-width="2" marker-end="url(#arr)"/>
+    <path d="M496 696 L528 696" stroke="#7c3aed" stroke-width="2"/>
+    <path d="M724 696 L756 696" stroke="#7c3aed" stroke-width="2"/>
+    <path d="M854 756 Q854 796 460 796 L170 796 Q170 780 170 756" stroke="#2a2150" stroke-width="2" stroke-dasharray="5 5" fill="none"/>
+    <text x="512" y="790" fill="#5b5570" font-size="12">循环：下个会话的开局索引更准</text>
+  </g>
+  <defs><marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" fill="none" stroke="#7c3aed"/></marker></defs>
+
+  <!-- ══ Panel 4: 对比 ══ -->
+  <rect x="996" y="576" width="396" height="250" rx="14" fill="#181427" stroke="#2a2150"/>
+  <text x="1020" y="612" fill="#c3bdd6" font-size="16" font-weight="700">④ 常驻成本对比</text>
+
+  <text x="1020" y="652" fill="#8b84a3" font-size="13">口述交接（人工转述）</text>
+  <rect x="1020" y="662" width="300" height="18" rx="4" fill="#dc2626" opacity="0.75"/>
+  <text x="1352" y="676" fill="#f87171" font-size="12" text-anchor="end">人工 5-10 分钟/次</text>
+
+  <text x="1020" y="712" fill="#8b84a3" font-size="13">GSD 文档交接（全文常驻）</text>
+  <rect x="1020" y="722" width="196" height="18" rx="4" fill="#ea6a33" opacity="0.8"/>
+  <text x="1340" y="736" fill="#fb923c" font-size="12" text-anchor="end">≈1500 token + 手动维护</text>
+
+  <text x="1020" y="772" fill="#8b84a3" font-size="13">H7 薄索引（本设计）</text>
+  <rect x="1020" y="782" width="18" height="18" rx="9" fill="url(#idx)" filter="url(#glow)"/>
+  <text x="1352" y="796" fill="#a78bfa" font-size="12" font-weight="700" text-anchor="end">≈85 token · 零动作</text>
+</svg>

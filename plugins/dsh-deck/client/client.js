@@ -92,6 +92,61 @@ window.__ModuleLoader__.load({
     }
 
     // ── 通用小组件 ──
+
+    // ── SVG 图标系统（Lucide 风格线性图标 + CSS 动画）──
+    const ICON_PATHS = {
+      hub: 'M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z',
+      content: 'M4 4h16v2H4zM4 9h16v2H4zM4 14h10v2H4zM4 19h7v2H4z',
+      kb: 'M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2z M12 20c-4.4 0-8-3.6-8-8 0-1.8.6-3.5 1.7-4.8C7 5.7 9.4 4.7 12 4.7s5 1 6.3 2.5C19.4 8.5 20 10.2 20 12c0 4.4-3.6 8-8 8z',
+      research: 'M11 4a7 7 0 0 1 7 7 7 7 0 0 1-7 7 7 7 0 0 1-7-7 7 7 0 0 1 7-7zM21 21l-4.35-4.35',
+      msg: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z',
+      room: 'M3 3h18v14H3zM8 21h8M12 17v4',
+      search: 'M11 4a7 7 0 0 1 7 7 7 7 0 0 1-7 7 7 7 0 0 1-7-7 7 7 0 0 1 7-7zM21 21l-4.35-4.35',
+      library: 'M4 19.5A2.5 2.5 0 0 1 6.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z',
+      ideas: 'M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z',
+      tasks: 'M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11',
+      review: 'M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z',
+      lessons: 'M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15',
+      graph: 'M12 2a10 10 0 1 0 10 10h-10V2z',
+      send: 'M22 2L11 13M22 2l-7 20-4-9-9-4z',
+      terminal: 'M4 17l6-6-6-6M12 19h8',
+      chat: 'M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z',
+      publish: 'M3 11l18-5v12L3 14v-3zM11.6 16.8a3 3 0 1 1-5.8-1.6',
+      play: 'M5 3l14 9-14 9V3z',
+      read: 'M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2zM22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z',
+      plus: 'M12 5v14M5 12h14',
+      trash: 'M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6',
+      edit: 'M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4z',
+      check: 'M20 6L9 17l-5-5',
+      warn: 'M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9v4M12 17h.01',
+      close: 'M18 6L6 18M6 6l12 12',
+      chevronR: 'M9 18l6-6-6-6',
+      chevronL: 'M15 18l-6-6 6-6',
+      split: 'M3 3h18v18H3zM12 3v18',
+      copy: 'M20 9h-9a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2zM5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1',
+      settings: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z',
+      refresh: 'M1 4v6h6M23 20v-6h-6M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15',
+      dot: 'M12 12m-2 0a2 2 0 1 0 4 0 2 2 0 1 0-4 0',
+      clock: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 6v6l4 2',
+      eye: 'M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z',
+      file: 'M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z M13 2v7h7',
+      folder: 'M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z',
+      arrowUp: 'M12 19V5M5 12l7-7 7 7',
+      arrowDown: 'M12 5v14M19 12l-7 7-7-7',
+      bookmark: 'M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z',
+      link: 'M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71',
+      user: 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z',
+      calendar: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 6v6l4 2',
+      grid: 'M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z',
+    }
+    function Icon({ name, size = 18, className = '', style = {} }) {
+      const d = ICON_PATHS[name] || ICON_PATHS.dot
+      return h('svg', { width: size, height: size, viewBox: '0 0 24 24', fill: 'none',
+        stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round',
+        className: 'dk-icon-svg ' + className, style,
+        dangerouslySetInnerHTML: { __html: '<path d="' + d + '"/>' } })
+    }
+
     function Note({ children }) { return h('div', { className: 'dk-note' }, children) }
     function Err({ children }) { return h('div', { className: 'dk-note dk-err' }, children) }
 
@@ -158,6 +213,7 @@ window.__ModuleLoader__.load({
       const [entries, setEntries] = useState(null)
       const [file, setFile] = useState(null)
       const [err, setErr] = useState(null)
+      const [split, setSplit] = useState(false)
       useEffect(() => { setDir(base) }, [root, base])
       useEffect(() => {
         let alive = true
@@ -168,9 +224,31 @@ window.__ModuleLoader__.load({
         }).catch((e) => { if (alive) setErr(String(e)) })
         return () => { alive = false }
       }, [root, dir])
+      if (split) {
+        return h('div', { style: { display: 'flex', gap: 12, flex: 1, minHeight: 0 } },
+          h('div', { style: { width: 340, flexShrink: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 } },
+            h('div', { className: 'dk-toolbar', style: { marginBottom: 4 } },
+              h('button', { className: 'dk-chip', onClick: () => setSplit(false) }, '⇔ 单栏'),
+              h('span', { className: 'dk-fine', style: { alignSelf: 'center', marginLeft: 6 } }, dir || '根')),
+            (entries ?? []).map((e) =>
+              h('div', {
+                key: e.name,
+                style: { padding: '6px 10px', borderRadius: 8, cursor: 'pointer', fontSize: 13,
+                  background: file === (dir === '' ? e.name : dir + '/' + e.name) ? 'color-mix(in srgb, var(--dk-accent,#5b6cff) 12%, transparent)' : 'var(--color-bg-1,#14161c)',
+                  border: '1px solid var(--color-border-1,#2a2e37)', fontWeight: e.type === 'dir' ? 600 : 400 },
+                onClick: () => { const next = dir === '' ? e.name : dir + '/' + e.name; if (e.type === 'dir') { setDir(next); setFile(null) } else { setFile(next) } },
+              }, (e.type === 'dir' ? '📁 ' : '📄 ') + e.name)),
+          ),
+          h('div', { style: { flex: 1, minWidth: 0, overflowY: 'auto' } },
+            file !== null
+              ? h(Preview, { root, path: file, title: file.split('/').pop(), onBack: () => setFile(null) })
+              : h(Note, null, '← 点文件预览')),
+        )
+      }
       if (file !== null) return h(Preview, { root, path: file, title: file.split('/').pop(), onBack: () => setFile(null) })
       return h('div', { className: 'dk-col' },
         h('div', { className: 'dk-toolbar' },
+          h('button', { className: 'dk-chip', onClick: () => setSplit(true), title: '左列表+右预览' }, '⇔ 分屏'),
           dir === base && layers !== null
             ? layers.map(([slug, label]) => h('button', { key: slug, className: 'dk-chip', onClick: () => setDir(slug) }, label))
             : h('span', { className: 'dk-crumbrow' },
@@ -231,6 +309,23 @@ window.__ModuleLoader__.load({
     }
 
     // ── 知识台·复盘 ──
+    function KbGraph() {
+      const [html, setHtml] = useState(null)
+      const [err, setErr] = useState(null)
+      useEffect(() => {
+        let alive = true
+        API.read('kb', 'docs/graph.html').then((j) => {
+          if (!alive) return
+          if (j.ok) setHtml(j.content); else setErr(j.error)
+        }).catch((e) => { if (alive) setErr(String(e)) })
+        return () => { alive = false }
+      }, [])
+      if (err !== null) return h(Err, null, '读取失败：' + err + '（跑 scripts/graph.ps1 生成）')
+      if (html === null) return h(Note, null, '加载图谱中…')
+      return h('div', { style: { flex: 1, minHeight: 0, borderRadius: 12, overflow: 'hidden', border: '1px solid var(--color-border-1,#2a2e37)' } },
+        h('iframe', { sandbox: 'allow-scripts', srcDoc: html, style: { width: '100%', height: '100%', border: 'none', background: '#0d1117' } }))
+    }
+
     function KbReview() {
       const [html, setHtml] = useState(null)
       const [stat, setStat] = useState(null)
@@ -479,7 +574,7 @@ window.__ModuleLoader__.load({
         : h('iframe', { sandbox: '', srcDoc: html, className: 'dk-frame' }))
     }
 
-    const KB_TABS = [['quick', '📊 速览'], ['search', '🔍 搜索'], ['browse', '📚 文库'], ['ideas', '💡 点子'], ['tasks', '📋 任务'], ['review', '🧾 审阅'], ['lessons', '🔁 复盘']]
+    const KB_TABS = [['quick', 'hub', '速览'], ['search', 'search', '搜索'], ['browse', 'library', '文库'], ['ideas', 'ideas', '点子'], ['tasks', 'tasks', '任务'], ['review', 'review', '审阅'], ['lessons', 'lessons', '复盘'], ['graph', 'graph', '图谱']]
 
     function KbQuick({ onOpenFile }) {
       const [qv, setQv] = useState(null)
@@ -496,8 +591,8 @@ window.__ModuleLoader__.load({
         h('div', { className: 'dk-fine' }, k), h('div', { style: { fontSize: 26, fontWeight: 750 } }, v), sub !== undefined ? h('div', { className: 'dk-fine' }, sub) : null)
       return h('div', { className: 'dk-col' },
         h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))', gap: 10 } },
-          stat('已提炼 Skills', S.skills), stat('精选素材', S.collections), stat('今日新增', S.todayNew, '篇'),
-          stat('待处理 all/', S.raw), stat('判断回看', S.lessonsWarn, '⚠️待验证'), stat('关注渠道', S.watchChannels)),
+          stat('✈ Skills', S.skills), stat('📁 精选', S.collections), stat('↑ 今日新增', S.todayNew, '篇'),
+          stat('○ 待处理', S.raw), stat('目 回看', S.lessonsWarn, '待验证'), stat('→ 关注', S.watchChannels)),
         h('div', { className: 'dk-field-label' }, '🔥 收藏 Top（互动量降序，点卡预览）'),
         h('div', { className: 'dk-grid' }, qv.hot.slice(0, 8).map((x, i) =>
           h('div', { key: x.file, className: 'dk-card', onClick: () => onOpenFile(x.file) },
@@ -530,7 +625,7 @@ window.__ModuleLoader__.load({
       }
       return h('div', { className: 'dk-desk' },
         h('div', { className: 'dk-deskbar' }, KB_TABS.map(([id, label]) =>
-          h('button', { key: id, className: tab === id ? 'on' : '', onClick: () => setTab(id) }, label))),
+          h('button', { key: id, className: tab === id ? 'on' : '', onClick: () => setTab(id) }, h(Icon, { name: label, size: 14, style: { marginRight: 5, verticalAlign: -2 } }), label === 'search' ? '搜索' : label === 'library' ? '文库' : label === 'ideas' ? '点子' : label === 'tasks' ? '任务' : label === 'review' ? '审阅' : label === 'lessons' ? '复盘' : label === 'graph' ? '图谱' : label))),
         h('div', { className: 'dk-deskmain' },
           tab === 'quick' ? h(KbQuick, { onOpenFile: (f) => setQuickFile(f) })
           : tab === 'search' ? h(KbSearch)
@@ -538,6 +633,7 @@ window.__ModuleLoader__.load({
           : tab === 'ideas' ? h(KbIdeas)
           : tab === 'tasks' ? h(TaskBoard, { projectId: 'builtin-kb', onGoReview: () => setTab('review') })
           : tab === 'review' ? h(ReviewFlow, { projectId: 'builtin-kb', root: 'kb' })
+          : tab === 'graph' ? h(KbGraph)
           : h(KbReview)),
       )
     }
@@ -557,7 +653,7 @@ window.__ModuleLoader__.load({
       return h('div', { className: 'dk-desk' },
         h('div', { className: 'dk-deskbar' },
           [['board', '📋 看板'], ['new', '➕ 选题'], ['files', '📚 文件'], ['tasks', '🧾 任务']].map(([id, label]) =>
-            h('button', { key: id, className: tab === id ? 'on' : '', onClick: () => setTab(id) }, label))),
+            h('button', { key: id, className: tab === id ? 'on' : '', onClick: () => setTab(id) }, h(Icon, { name: label, size: 14, style: { marginRight: 5, verticalAlign: -2 } }), label === 'search' ? '搜索' : label === 'library' ? '文库' : label === 'ideas' ? '点子' : label === 'tasks' ? '任务' : label === 'review' ? '审阅' : label === 'lessons' ? '复盘' : label === 'graph' ? '图谱' : label))),
         h('div', { className: 'dk-deskmain' },
           tab === 'board' ? h(MediaBoard)
           : tab === 'new' ? h(NewTopic, { onDone: () => setTab('board') })
@@ -666,8 +762,8 @@ window.__ModuleLoader__.load({
         }).catch(() => {})
         return () => { alive = false }
       }, [item.slug])
-      if (pptHtml !== null) return h(PPTViewer, { html: pptHtml, title: item.title, onClose: () => setPptHtml(null) })
-      if (artMd !== null) return h(ArticleReader, { md: artMd, title: item.title, onClose: () => setArtMd(null) })
+      if (pptHtml !== null) return h(PPTViewer, { html: pptHtml, title: item.title, onClose: () => { setPptHtml(null); onClose() } })
+      if (artMd !== null) return h(ArticleReader, { md: artMd, title: item.title, onClose: () => { setArtMd(null); onClose() } })
       const advance = () => {
         const next = NEXT_STATUS[item.status]
         if (next === null) return
@@ -1168,7 +1264,7 @@ function openSession(id) { try { deckCtx && deckCtx.sessions && deckCtx.sessions
           : h('div', { className: 'dk-col', style: { gap: 8 } },
               reviewCards.map(({ b, c }) =>
                 h('div', { key: 'r' + b.id + c.id, className: 'dk-card dk-todo urgent', onClick: goReview },
-                  h('span', { className: 'ico' }, '🧾'), h('span', { className: 'nm' }, '审阅落库'),
+                  h(Icon, { name: 'review', size: 26, style: { color: 'var(--dk-accent)' } }), h('span', { className: 'nm' }, '审阅落库'),
                   h('span', { className: 'pv' }, c.title + '（' + b.name + '）→ LESSONS'),
                   h('button', { className: 'dk-mini', onClick: (e) => { e.stopPropagation(); goReview() } }, '去审阅'))),
               readyItems.map((i) =>
@@ -1187,14 +1283,14 @@ function openSession(id) { try { deckCtx && deckCtx.sessions && deckCtx.sessions
                 real < 4 ? h('span', { className: 'dk-stepline ' + (real < step ? 'done' : '') }) : null)
             })),
             c.status === 'queued' ? h('span', null,
-              h('button', { className: 'dk-mini', onClick: () => { window.__dkDispatchProject = b.id; window.__dkNeedLaunch = (window.__dkLaunchSeen !== '1'); notify() } }, '🚀 派发'),
+              h('button', { className: 'dk-mini', onClick: () => { window.__dkDispatchProject = b.id; window.__dkNeedLaunch = (window.__dkLaunchSeen !== '1'); notify() } }, null, h(Icon, { name: 'send', size: 12, style: { marginRight: 3 } }), ' 派发'),
               h('button', { className: 'dk-mini', style: { marginLeft: 5 }, onClick: async () => {
                 const proj = stateStore.projects.find((p) => p.id === b.id)
                 const sid = (proj && proj.bindSession) || sessionsStore.current
                 if (!sid) { window.alert('先在控制室绑定会话'); return }
                 const text = '【dsh-deck 任务派发】\n任务：' + c.title + '\n读 TASK.md 找 queued 卡→干活→写 RESULT.md→改 review'
                 try { await promptIntoSession(sid, text); openSession(sid) } catch (e) { window.alert(String(e.message || e)) }
-              } }, '💬 会话')) : null)),
+              } }, null, h(Icon, { name: 'chat', size: 12, style: { marginRight: 3 } }), ' 会话')) : null)),
         drafting.map((i) =>
           h('div', { key: i.slug, className: 'dk-flowrow' },
             h('span', { className: 'ftt' }, i.title),
@@ -1337,7 +1433,7 @@ function openSession(id) { try { deckCtx && deckCtx.sessions && deckCtx.sessions
     }
 
     // ── 工作台外壳（v4 五台）──
-    const APPS = [['hub', '🏠', '总台'], ['content', '🎬', '内容台'], ['kb', '🧠', '知识库'], ['research', '📡', '调研台'], ['msg', '💬', '消息台']]
+    const APPS = [['hub', 'hub', '总台'], ['content', 'content', '内容台'], ['kb', 'kb', '知识库'], ['research', 'research', '调研台'], ['msg', 'msg', '消息台']]
     const THEMES = [['glass', '#2dd4ff'], ['term', '#39ff6e'], ['cyber', '#fcee0a'], ['paper', '#d8c9a3']]
     const FLOW_STEPS = ['灵感', '任务', '创作', '待发', '发布']
     const stepOfTask = (st) => st === 'queued' ? 1 : (st === 'running' || st === 'review') ? 2 : 4
@@ -1374,7 +1470,7 @@ function openSession(id) { try { deckCtx && deckCtx.sessions && deckCtx.sessions
         h('div', { className: 'dk-rail-brand' }, 'DECK'),
         APPS.map(([id, icon, label]) =>
           h('button', { key: id, className: 'dk-rail-btn' + (app === id ? ' on' : ''), title: label, onClick: () => setApp(id) },
-            h('span', { className: 'dk-rail-icon' }, icon),
+            h(Icon, { name: icon, size: 22, className: 'dk-rail-icon' }),
             h('span', { className: 'dk-rail-label' }, label))),
         userProjects.length > 0 ? h('div', { className: 'dk-rail-sep' }) : null,
         userProjects.map((p) =>
@@ -1382,7 +1478,12 @@ function openSession(id) { try { deckCtx && deckCtx.sessions && deckCtx.sessions
             h('span', { className: 'dk-rail-icon' }, p.icon || '📁'),
             h('span', { className: 'dk-rail-label' }, p.name.slice(0, 6)))),
         h('div', { className: 'dk-rail-fill' }),
-        h('div', { className: 'dk-thdots' }, THEMES.map(([id, color]) =>
+        h('div', { className: 'dk-thdots' },
+          h('button', { className: 'dk-thdot', title: '\u7f29\u653e ' + (zoomStore.z * 100) + '% (\u70b9\u51fb\u5207\u6362 85/100/115/130%)',
+            onClick: () => zoomStore.cycle(),
+            style: { background: zoomStore.z === 1 ? 'var(--color-text-1,#e6e6e6)' : 'var(--dk-accent,#5b6cff)', color: zoomStore.z === 1 ? 'var(--color-bg-1,#14161c)' : '#fff', fontSize: '8px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', width: 15, height: 15, borderRadius: '50%', border: '2px solid rgba(255,255,255,.25)', cursor: 'pointer', padding: 0 } },
+            Math.round(zoomStore.z * 100)),
+          THEMES.map(([id, color]) =>
           h('button', { key: id, className: 'dk-thdot' + (themeStore.th === id ? ' on' : ''), style: { background: color, color }, title: '主题 ' + id, onClick: () => themeStore.set(id) }))),
         h('button', { className: 'dk-rail-btn' + (app === 'room' ? ' on' : ''), title: '控制室', onClick: () => setApp('room') },
           h('span', { className: 'dk-rail-icon' }, '🖥️'),
@@ -1411,7 +1512,7 @@ function openSession(id) { try { deckCtx && deckCtx.sessions && deckCtx.sessions
           : null
       }
       const proj = app.startsWith('p:') ? (stateStore.projects.find((p) => p.id === app.slice(2)) ?? null) : null
-      return h('div', { className: 'dk-shell', 'data-th': themeStore.th, style: { '--dk-chatw': chatStore.w + 'px' } },
+      return h('div', { className: 'dk-shell', 'data-th': themeStore.th, style: { '--dk-chatw': chatStore.w + 'px', '--dk-zoom': zoomStore.z } },
         h(Rail, { app, setApp }),
         h('div', { className: 'dk-main' },
           app === 'hub' ? h(HubDesk)
@@ -1438,6 +1539,8 @@ function openSession(id) { try { deckCtx && deckCtx.sessions && deckCtx.sessions
       )
     }
 
+    const ZOOMS = [0.85, 1, 1.15, 1.3]
+    const zoomStore = { z: Number(localStorage.getItem('dk-zoom')) || 1, set(v) { this.z = v; try { localStorage.setItem('dk-zoom', String(v)) } catch {} notify() }, cycle() { const i = ZOOMS.indexOf(this.z); this.set(ZOOMS[(i + 1) % ZOOMS.length]) } }
     const themeStore = { th: (() => { try { return localStorage.getItem('dk-theme') || 'glass' } catch { return 'glass' } })(), set(t) { this.th = t; try { localStorage.setItem('dk-theme', t) } catch {} notify() } }
     const chatStore = { w: Number(localStorage.getItem('dk-chatw')) || 420, setW(v) { this.w = Math.round(v); try { localStorage.setItem('dk-chatw', String(this.w)) } catch {} notify() } }
 
@@ -1639,7 +1742,77 @@ function openSession(id) { try { deckCtx && deckCtx.sessions && deckCtx.sessions
 `
       const el = document.createElement('style')
       el.id = 'dsh-deck-style'
-      el.textContent = css + `/* ═══ v4：Hub/会话右条/主题/启动器 ═══ */
+      el.textContent = css + `
+/* ═══ 展开动画+组件层级优化 ═══ */
+.dk-main > .dk-desk{animation:deskSlideIn .22s cubic-bezier(.25,.46,.45,.94);}
+@keyframes deskSlideIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
+.dk-todo{animation:cardIn .3s cubic-bezier(.25,.46,.45,.94) both;}
+.dk-todo:nth-child(2){animation-delay:.06s;}
+.dk-todo:nth-child(3){animation-delay:.12s;}
+@keyframes cardIn{from{opacity:0;transform:translateX(-12px);}to{opacity:1;transform:none;}}
+.dk-flowrow{animation:rowIn .25s ease both;}
+.dk-flowrow:nth-child(2){animation-delay:.04s;}
+.dk-flowrow:nth-child(3){animation-delay:.08s;}
+@keyframes rowIn{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:none;}}
+.dk-modal-back{animation:fadeIn .15s ease;}
+.dk-modal{animation:modalIn .22s cubic-bezier(.34,1.2,.64,1);}
+@keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
+@keyframes modalIn{from{opacity:0;transform:scale(.94) translateY(10px);}to{opacity:1;transform:none;}}
+.dk-card{transition:transform .16s cubic-bezier(.25,.46,.45,.94),border-color .16s,box-shadow .16s;}
+.dk-card:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,.25);}
+.dk-idea{transition:transform .18s cubic-bezier(.34,1.3,.64,1),border-color .18s;}
+.dk-idea:hover{transform:translateY(-3px) scale(1.02);}
+.dk-sessbar .sess{transition:transform .14s ease,border-color .14s,box-shadow .14s;}
+.dk-sessbar .sess:hover{transform:translateX(-2px);}
+.dk-field-label{letter-spacing:.3px;text-transform:none;}
+/* 层级尺寸规范 */
+.dk-todo .nm{font-weight:700;}
+.dk-todo .pv{font-weight:400;}
+.dk-flowrow .ftt{font-weight:600;}
+.dk-step.now{text-shadow:0 0 8px color-mix(in srgb,var(--dk-accent,#5b6cff) 40%,transparent);}
+/* 统计卡数字强调 */
+.dk-shell .stat .v,.dk-shell [style*="fontWeight: 750"],.dk-shell [style*="fontWeight:750"]{font-variant-numeric:tabular-nums;letter-spacing:-.5px;}
+/* 按钮触感 */
+button{transition:transform .1s ease,filter .1s ease,box-shadow .15s ease;}
+button:active{transform:scale(.97);}
+` + `/* ═══ 缩放系统 ═══ */
+.dk-shell{font-size:calc(13px * var(--dk-zoom,1)) !important;}
+.dk-shell .dk-icon-svg{width:calc(18px * var(--dk-zoom,1));height:calc(18px * var(--dk-zoom,1));}
+.dk-shell .dk-rail-btn .dk-icon-svg{width:calc(22px * var(--dk-zoom,1));height:calc(22px * var(--dk-zoom,1));}
+.dk-shell .dk-card{padding:calc(12px * var(--dk-zoom,1)) calc(14px * var(--dk-zoom,1));}
+.dk-shell .dk-deskbar button{font-size:calc(12.5px * var(--dk-zoom,1));}
+.dk-shell .dk-searchbar input{font-size:calc(13px * var(--dk-zoom,1));}
+.dk-shell .dk-note{font-size:calc(12.5px * var(--dk-zoom,1));}
+.dk-shell .dk-card-title{font-size:calc(13.5px * var(--dk-zoom,1));}
+.dk-shell .dk-card-sub{font-size:calc(11.5px * var(--dk-zoom,1));}
+.dk-shell .dk-mini{font-size:calc(12px * var(--dk-zoom,1));}
+.dk-shell .dk-grid{gap:calc(10px * var(--dk-zoom,1));grid-template-columns:repeat(auto-fill,minmax(calc(300px * var(--dk-zoom,1)),1fr));}
+.dk-shell .dk-rail{width:calc(84px * var(--dk-zoom,1));}
+.dk-shell .dk-todo .nm{font-size:calc(15.5px * var(--dk-zoom,1));}
+.dk-shell .dk-todo .pv{font-size:calc(13.5px * var(--dk-zoom,1));}
+.dk-shell .dk-h1{font-size:calc(21px * var(--dk-zoom,1));}
+@media (max-width:1400px){.dk-shell .dk-grid{grid-template-columns:repeat(auto-fill,minmax(calc(260px * var(--dk-zoom,1)),1fr));}}
+@media (max-width:1100px){.dk-shell .dk-grid{grid-template-columns:1fr;}.dk-shell .dk-board{grid-template-columns:repeat(2,1fr);}}
+@media (max-width:800px){.dk-shell .dk-board{grid-template-columns:1fr;}.dk-shell .dk-rail{width:calc(64px * var(--dk-zoom,1));}}` + `
+/* ═══ SVG 图标 + 动画系统 ═══ */
+.dk-icon-svg{display:inline-block;vertical-align:middle;transition:transform .18s ease,filter .18s ease,opacity .18s ease;}
+.dk-icon-svg:hover{transform:scale(1.12);filter:drop-shadow(0 0 4px color-mix(in srgb,var(--dk-accent,#5b6cff) 60%,transparent));}
+.dk-rail-btn .dk-icon-svg{transition:transform .2s cubic-bezier(.34,1.56,.64,1),filter .2s ease;}
+.dk-rail-btn:hover .dk-icon-svg{transform:scale(1.18) translateY(-1px);filter:drop-shadow(0 0 6px color-mix(in srgb,var(--dk-accent,#5b6cff) 70%,transparent));}
+.dk-rail-btn.on .dk-icon-svg{transform:scale(1.1);filter:drop-shadow(0 0 8px color-mix(in srgb,var(--dk-accent,#5b6cff) 80%,transparent));animation:iconPulse 2.4s ease-in-out infinite;}
+@keyframes iconPulse{0%,100%{filter:drop-shadow(0 0 4px color-mix(in srgb,var(--dk-accent,#5b6cff) 50%,transparent));}50%{filter:drop-shadow(0 0 10px color-mix(in srgb,var(--dk-accent,#5b6cff) 90%,transparent));}}
+.dk-deskbar button .dk-icon-svg{transition:transform .15s ease;}
+.dk-deskbar button:hover .dk-icon-svg{transform:scale(1.15) rotate(-5deg);}
+.dk-deskbar button.on .dk-icon-svg{transform:scale(1.1);animation:iconBounce .3s ease;}
+@keyframes iconBounce{0%{transform:scale(.8);}60%{transform:scale(1.2);}100%{transform:scale(1.1);}}
+.dk-card-actions .dk-icon-svg,.dk-mini .dk-icon-svg{transition:transform .12s ease;}
+.dk-card-actions button:hover .dk-icon-svg,.dk-mini:hover .dk-icon-svg{transform:scale(1.2) rotate(8deg);}
+.dk-brand{animation:brandFloat 3s ease-in-out infinite;}
+@keyframes brandFloat{0%,100%{transform:translateY(0);}50%{transform:translateY(-2px);}}
+.dk-loading{animation:spin 1s linear infinite;}
+@keyframes spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
+.dk-rail-icon{width:22px;height:22px;display:flex;align-items:center;justify-content:center;}
+` + `/* ═══ v4：Hub/会话右条/主题/启动器 ═══ */
 .dk-todo{display:flex;align-items:center;gap:14px;padding:14px 20px;}
 .dk-todo.urgent{border-color:rgba(251,191,36,.5);background:linear-gradient(145deg,rgba(251,191,36,.10),transparent 60%),var(--color-bg-1,#14161c);}
 .dk-todo .ico{font-size:24px;}.dk-todo .nm{font-size:15.5px;font-weight:700;}

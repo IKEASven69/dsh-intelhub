@@ -49,3 +49,13 @@ test('llmRefine: 空候选直接返回', async () => {
   assert.equal(out.length, 0)
   assert.equal(called, false)
 })
+
+test('parseVerdicts: 思考模型输出先剥 <think> 块（思考内有 [ 字符也不受污染）', () => {
+  const raw = '<think>The user wants me to evaluate 0. [decision] and 1. [lesson] candidates...</think>\n[{"i":0,"k":false},{"i":1,"k":true}]'
+  const v = parseVerdicts(raw)
+  assert.equal(v.size, 2)
+  assert.equal(v.get(0)!.keep, false)
+  assert.equal(v.get(1)!.keep, true)
+  // think 未闭合（max_tokens 截断）→ 不可解析
+  assert.equal(parseVerdicts('<think>半截思考 [0] 未完').size, 0)
+})

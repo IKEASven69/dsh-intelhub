@@ -10,7 +10,7 @@ import { existsSync } from 'node:fs'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { createRequire } from 'node:module'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { join, dirname } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 // Type-only: pulls the Context.webServer merge（宿主由 web bundle 提供，不打进产物）。
 import type {} from '@deepseek-ai/dsh-host-webserver'
@@ -28,6 +28,7 @@ import { registerLifeTools } from './life-tools.ts'
 import { startAutonomyLoop } from './life-autonomy.ts'
 import { llmCompleteWithFallback } from './dsh-llm.ts'
 import { setDistillRefiner } from './hippo/auto-distill-run.js'
+import { buildHttpApp } from './hippo/server-http.js'
 import { llmRefine } from './hippo/refine.js'
 import type { DoctorReport } from './types.ts'
 
@@ -221,6 +222,35 @@ export function apply(ctx: Context, config?: Config): void {
   ctx.inject(['webServer'], (host) => {
     host.effect(() => {
       const disposers = [
+        // ── 完整工作台桥接：/dsh-hippo/app/* → 引擎 buildHttpApp（同进程）──
+        // 静态资源（web/dist）+ 全部 /api/* 路由一网打尽；req.url 剥前缀后
+        // 直接交给 express app。web/dist 定位：插件包根（安装态 lib→../web/dist）。
+        (() => {
+          // web/dist 定位与 app 构建全部惰性（首个请求时）——注册期抛错会炸掉
+          // 整个 effect 块，殃及后面全部路由注册。
+          let app: ReturnType<typeof buildHttpApp> | null = null
+          const APP_PREFIX = '/dsh-hippo/app'
+          return host.webServer.register({
+            kind: 'prefix',
+            path: APP_PREFIX,
+            handler: (request, response) => {
+              try {
+                if (app === null) {
+                  const webDist = [join(dirname(selfRequire.resolve('../package.json')), 'web', 'dist'), join(process.cwd(), 'web', 'dist')]
+                    .find((d) => { try { return existsSync(join(d, 'index.html')) } catch { return false } })
+                  app = buildHttpApp({ staticDir: webDist, autoTimer: false })
+                }
+                const origUrl = request.url ?? '/'
+                // 前缀剥离：/dsh-hippo/app/api/health → /api/health；裸前缀给 '/'
+                request.url = origUrl.slice(APP_PREFIX.length) || '/'
+                app(request as never, response as never)
+              } catch (e) {
+                response.writeHead(500, { 'Content-Type': 'application/json' })
+                response.end(JSON.stringify({ error: `工作台桥接失败: ${e instanceof Error ? e.message : String(e)}` }))
+              }
+            },
+          })
+        })(),
         // T0：dump 本机全部团队事件（rc.8 起有真实数据；rc.7 返回 0 条属预期）
         host.webServer.register({
           kind: 'exact',

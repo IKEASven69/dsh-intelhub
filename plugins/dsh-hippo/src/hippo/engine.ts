@@ -76,6 +76,7 @@ export { startTelegramBot, type TelegramConfig } from './telegram.js';
 export { extractSkillCandidates, type CorrectionPattern, type SkillExtractReport } from './skill-extract.js';
 
 // 任务上下文（操作性上下文）
-export { loadTasks, saveTasks, tasksForProject, updateTaskStatus, type TaskRecord } from './task-context.js';
+export { loadTasks, saveTasks, tasksForProject, updateTaskStatus, collectGitContext, type TaskRecord } from './task-context.js';
+export { pushHandoff, listInbox, loadHandoff, archivedInbox, detailText, type InboxItem } from './handoff-inbox.js';
 export { projectCard, type ProjectCard } from './project-card.js';
 export { projectBrief, projectBriefAuto, type BriefOptions } from './brief.js';

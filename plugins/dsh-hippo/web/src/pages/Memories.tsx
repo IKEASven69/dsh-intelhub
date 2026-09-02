@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { FolderOpen, MessagesSquare, Plus, RefreshCw, X , Brain, BarChart3, TrendingUp , Upload } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import EmptyState from '../components/EmptyState';
-import { api, MEMORY_TYPES, type MemoryRecord, type MemoryType, type SessionListItem, type Stats, toDateStr } from '../api';
+import { api, MEMORY_TYPES, type MemoryRecord, type MemoryType, type SessionListItem, type Stats, toDateStr, BASE } from '../api';
 import { useDetail } from '../components/DetailDrawer';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import FolderPicker, { underPath } from '../components/FolderPicker';
@@ -229,7 +229,7 @@ export default function MemoriesPage() {
               onClick={async () => {
                 setImportBusy(true);
                 try {
-                  const r = await fetch('/api/memories/import', {
+                  const r = await fetch(`${BASE}/api/memories/import`, {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ raw: importRaw }),
                   });
@@ -242,7 +242,7 @@ export default function MemoriesPage() {
                 onClick={async () => {
                   setImportBusy(true);
                   try {
-                    const r = await fetch('/api/memories/import', {
+                    const r = await fetch(`${BASE}/api/memories/import`, {
                       method: 'POST', headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ raw: importRaw, apply: true }),
                     });

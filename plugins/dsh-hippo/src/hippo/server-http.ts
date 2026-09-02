@@ -105,7 +105,11 @@ function triggerRecompile(): void {
   void autoRecompile().catch(() => {});
 }
 
-export function startHttpServer(port: number = DEFAULT_PORT, opts: HttpServerOptions = {}): HttpServer {
+/** 构建完整 HTTP 应用（API + 可选静态 SPA），不监听端口——
+ *  dsh 插件用它把整个工作台桥接进 /dsh-hippo/app 前缀路由（同进程共用
+ *  engine-holder 引用计数）；`hippo gui` 走 startHttpServer 监听。
+ *  opts.autoTimer=false 时不启动自动蒸馏定时器（宿主生命周期自己管）。 */
+export function buildHttpApp(opts: HttpServerOptions & { autoTimer?: boolean } = {}): express.Express {
   const app = express();
   app.use(cors({ origin: CORS_ORIGINS }));
   app.use(express.json({ limit: '50mb' }));
@@ -550,7 +554,7 @@ export function startHttpServer(port: number = DEFAULT_PORT, opts: HttpServerOpt
       let memoryCount = 0;
       for (const t of targets) {
         const r = compileTarget(t, records, {
-          indexMode: indexMode === true,
+          indexMode: indexMode !== false,
           outPath: outPath !== undefined ? outPath : defaultOutPath(t),
         });
         // 编译自动化：记住配置，自动蒸馏后重编
@@ -568,6 +572,42 @@ export function startHttpServer(port: number = DEFAULT_PORT, opts: HttpServerOpt
       res.status(500).json({ error: (err as Error).message });
     }
   }));
+
+  // ── H7 M5：handoff 收件箱（工作台 ⇪ 按钮 / skill 取件共用）──
+  app.get('/api/handoff/inbox', async (_req, res) => {
+    const { listInbox } = await import('./handoff-inbox.js');
+    res.json({ pending: listInbox() });
+  });
+
+  app.post('/api/handoff/push', async (req, res) => {
+    const { sessionId, to } = req.body ?? {};
+    if (typeof sessionId !== 'string' || sessionId === '') {
+      res.status(400).json({ error: 'sessionId required' });
+      return;
+    }
+    try {
+      const { pushHandoff } = await import('./handoff-inbox.js');
+      const item = pushHandoff(sessionId, typeof to === 'string' ? { to } : {});
+      res.json({ id: item.id, title: item.from.title, candidates: item.candidates.length, tasks: item.activeTasks.length, changed: item.git.changed.length });
+    } catch (err) {
+      res.status(400).json({ error: (err as Error).message });
+    }
+  });
+
+  app.post('/api/handoff/load', async (req, res) => {
+    const { id } = req.body ?? {};
+    if (typeof id !== 'string' || id === '') {
+      res.status(400).json({ error: 'id required' });
+      return;
+    }
+    try {
+      const { loadHandoff } = await import('./handoff-inbox.js');
+      const { text } = loadHandoff(id);
+      res.json({ text });
+    } catch (err) {
+      res.status(404).json({ error: (err as Error).message });
+    }
+  });
 
   // 编译配置管理：查看 / 删除自动重编译的目标
   app.get('/api/compile-config', async (_req, res) => {
@@ -635,6 +675,8 @@ export function startHttpServer(port: number = DEFAULT_PORT, opts: HttpServerOpt
     try { runSync(); } catch { /* 单轮失败下轮再试 */ }
   }, 10 * 60 * 1000);
   syncTimer.unref();
+  // 停止钩子挂在 app 上：startHttpServer 的 close() 用（桥接模式随宿主进程走）
+  ;(app as unknown as { __hippoStopSessionSync?: () => void }).__hippoStopSessionSync = () => clearInterval(syncTimer);
 
   /** 详情/导出/蒸馏共用的取 Turn 流：优先索引，未命中回退实时解析。 */
   const loadSessionFull = (id: string): { session: IndexedSession; turns: Turn[]; live: boolean } | null => {
@@ -1172,9 +1214,19 @@ export function startHttpServer(port: number = DEFAULT_PORT, opts: HttpServerOpt
     });
   }
 
-  // 自动蒸馏定时器（mode=off 时不启动）；随 server 关闭
+  // 自动蒸馏定时器：独立进程（hippo gui）自己管；桥接模式（dsh 插件）
+  // 由插件侧 startAutoDistillTimer 统一管，避免双定时器。
+  if (opts.autoTimer !== false) {
+    const stopAuto = startAutoDistillTimer();
+    void stopAuto;
+  }
+
+  return app;
+}
+
+export function startHttpServer(port: number = DEFAULT_PORT, opts: HttpServerOptions = {}): HttpServer {
+  const app = buildHttpApp({ ...opts, autoTimer: false });
   const stopAuto = startAutoDistillTimer();
-  void stopAuto;
 
   const server = app.listen(port) as unknown as Server;
   const actualPort = (() => {
@@ -1188,7 +1240,7 @@ export function startHttpServer(port: number = DEFAULT_PORT, opts: HttpServerOpt
     close: () => {
       stopAuto();
       server.close();
-      clearInterval(syncTimer);
+      ;(app as unknown as { __hippoStopSessionSync?: () => void }).__hippoStopSessionSync?.();
     },
   };
   return httpServer;

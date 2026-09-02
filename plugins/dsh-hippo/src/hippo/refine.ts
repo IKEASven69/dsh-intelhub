@@ -43,8 +43,12 @@ const SYSTEM_PROMPT = `你是记忆库审核员。判断每条从 AI 编程会�
 只输出 JSON 数组：[{"i":编号,"k":true|false,"t":"改写文本","y":"fact|decision|lesson|preference","p":"修正项目名"}]，t/y/p 仅保留时可选。未列出的编号视为保留。`
 
 /** 防御性解析 LLM 输出 → 按 i 索引的判决表。 */
-export function parseVerdicts(raw: string): Map<number, { keep: boolean; text?: string; type?: string; project?: string }> {
+export function parseVerdicts(rawInput: string): Map<number, { keep: boolean; text?: string; type?: string; project?: string }> {
   const verdicts = new Map<number, { keep: boolean; text?: string; type?: string; project?: string }>()
+  // 思考模型（MiniMax-M3 / qwen3.5 等）先吐 <think>…</think>，思考里出现
+  // 的 "[" 会污染首尾截取——只取最后一个 </think> 之后的内容再解析。
+  const lastThink = rawInput.lastIndexOf('</think>')
+  const raw = lastThink >= 0 ? rawInput.slice(lastThink + '</think>'.length) : rawInput
   // 容错：模型可能把 JSON 包在 ```json 围栏或前后废话里
   const start = raw.indexOf('[')
   const end = raw.lastIndexOf(']')

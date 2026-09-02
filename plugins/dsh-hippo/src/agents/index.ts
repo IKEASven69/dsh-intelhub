@@ -9,6 +9,7 @@ import { codexAdapter } from './codex.js'
 import { opencodeAdapter } from './opencode.js'
 import { zcodeAdapter } from './zcode.js'
 import { piAdapter } from './pi.js'
+import { workbuddyAdapter } from './workbuddy.js'
 
 export const AGENTS: SessionAdapter[] = [
   claudeAdapter,
@@ -16,6 +17,7 @@ export const AGENTS: SessionAdapter[] = [
   opencodeAdapter,
   zcodeAdapter,
   piAdapter,
+  workbuddyAdapter,
 ]
 
 const byName = new Map(AGENTS.map((a) => [a.name, a]))

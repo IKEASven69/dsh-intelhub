@@ -392,125 +392,6 @@ function MemRow({ m, onDelete, onUpdate }: {
   )
 }
 
-function MemoriesCard({ page, loading, q, setQ, type, setType, onSearch, onMore, onRefresh }: {
-  page: MemoryPage | null
-  loading: boolean
-  q: string
-  setQ: (v: string) => void
-  type: string
-  setType: (v: string) => void
-  onSearch: () => void
-  onMore: () => void
-  onRefresh: () => void
-}): ReturnType<typeof createElement> {
-  const isSearch = q.trim() !== ''
-  const shown = page?.items ?? []
-  const hasMore = page !== null && !isSearch && page.offset + page.items.length < page.total
-
-  // H3 编译区
-  const [compileOpen, setCompileOpen] = useState(false)
-  const [compiling, setCompiling] = useState(false)
-  const [compileResult, setCompileResult] = useState<{ memoryCount: number; markdown: string; written?: string[] } | null>(null)
-  const [compProject, setCompProject] = useState('')
-  const [compPath, setCompPath] = useState('')
-  const [compMsg, setCompMsg] = useState<string | null>(null)
-
-  const doCompile = async (write: boolean) => {
-    if (compiling) return
-    setCompiling(true)
-    setCompMsg(null)
-    try {
-      const r = await postJson<{ memoryCount: number; markdown: string; written?: string[] }>('/dsh-hippo/memories/compile',
-        { project: compProject.trim() === '' ? undefined : compProject.trim(), write, outPath: compPath.trim() === '' ? undefined : compPath.trim() })
-      setCompileResult(r)
-      if (write && r.written) setCompMsg(`已写入：${r.written.join('、')}`)
-    } catch (e) {
-      setCompMsg(`编译失败：${e instanceof Error ? e.message : String(e)}`)
-    }
-    setCompiling(false)
-  }
-
-  return createElement('div', { className: 'hb-card' },
-    createElement('div', { className: 'hb-hero' },
-      createElement('span', { style: { fontWeight: 700, fontSize: 13 } }, '记忆库'),
-      createElement('span', { className: 'hb-sub' },
-        page === null ? (loading ? '读取中…' : '') : isSearch ? `搜索到 ${page.total} 条` : `共 ${page.total} 条记忆`),
-      createElement('span', { className: 'hb-spacer' }),
-      createElement('button', { className: 'hb-btn hb-btn-ghost', style: { padding: '4px 12px', fontSize: 12 },
-        onClick: () => { setCompileOpen(!compileOpen) } }, compileOpen ? '收起编译' : '编译 AGENTS.md'),
-    ),
-    compileOpen
-      ? createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 8 } },
-          createElement('div', { className: 'hb-mem-tools' },
-            createElement('input', { className: 'hb-input', placeholder: '项目名（留空=全部项目）', value: compProject,
-              onChange: (e: { target: { value: string } }) => { setCompProject(e.target.value) } }),
-            createElement('input', { className: 'hb-input', placeholder: '写入路径（留空=预览不落盘；如 D:\\coding\\proj\\AGENTS.md）', value: compPath,
-              onChange: (e: { target: { value: string } }) => { setCompPath(e.target.value) } }),
-          ),
-          createElement('div', { className: 'hb-mem-actions' },
-            createElement('button', { className: 'hb-mini', disabled: compiling, onClick: () => { void doCompile(false) } }, compiling ? '编译中…' : '预览'),
-            createElement('button', { className: 'hb-mini hb-mini-pri', disabled: compiling || compPath.trim() === '', onClick: () => { void doCompile(true) } }, '写入文件'),
-          ),
-          compMsg !== null ? createElement('div', { className: 'hb-banner hb-banner-info' }, compMsg) : null,
-          compileResult !== null
-            ? createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 6 } },
-                createElement('div', { className: 'hb-muted' }, `入选记忆 ${compileResult.memoryCount} 条`),
-                createElement('pre', { className: 'hb-pre' }, compileResult.markdown.slice(0, 4000) || '（空）'),
-              )
-            : null,
-        )
-      : null,
-    createElement('div', { className: 'hb-mem-tools' },
-      createElement('input', {
-        className: 'hb-input',
-        placeholder: '语义搜索记忆…',
-        value: q,
-        onChange: (e: { target: { value: string } }) => { setQ(e.target.value) },
-        onKeyDown: (e: { key: string }) => { if (e.key === 'Enter') onSearch() },
-      }),
-      createElement('button', { className: 'hb-btn hb-btn-ghost', onClick: onSearch, disabled: loading },
-        loading && page !== null && isSearch ? '搜索中…' : '搜索'),
-    ),
-    createElement('div', { className: 'hb-fchips' },
-      ...[['', '全部'], ['preference', '偏好'], ['decision', '决策'], ['lesson', '教训'], ['fact', '事实']].map(([val, label]) =>
-        createElement('button', {
-          key: val,
-          className: `hb-fchip${type === val ? ' hb-fchip-on' : ''}`,
-          onClick: () => { setType(val) },
-        }, label),
-      ),
-    ),
-    shown.length > 0
-      ? createElement('div', { className: 'hb-mem-list' },
-          ...shown.map((m) => createElement(MemRow, {
-            key: m.id, m,
-            onDelete: async (id: string) => {
-              try {
-                await postJson<{ ok: boolean }>('/dsh-hippo/memories/forget', { id })
-                onRefresh()
-              } catch (e) {
-                window.alert?.(`删除失败：${e instanceof Error ? e.message : String(e)}`)
-              }
-            },
-            onUpdate: async (id: string, text: string) => {
-              await postJson<{ status: string }>('/dsh-hippo/memories/update', { id, text })
-              onRefresh()
-            },
-          })))
-      : !loading
-        ? createElement('div', { className: 'hb-banner hb-banner-info' },
-            isSearch ? '没有匹配的记忆，换个关键词试试。' : '记忆库还是空的——用上面的「开始迁移」把会话蒸馏进来。')
-        : null,
-    hasMore
-      ? createElement('button', { className: 'hb-btn hb-btn-ghost hb-mem-more', onClick: onMore, disabled: loading }, '加载更多')
-      : null,
-  )
-}
-
-// ---------------------------------------------------------------------------
-// 面板
-// ---------------------------------------------------------------------------
-
 function Panel(): ReturnType<typeof createElement> {
   const [report, setReport] = useState<DoctorReport | null>(null)
   const [inv, setInv] = useState<AgentInventory[] | null>(null)
@@ -519,27 +400,6 @@ function Panel(): ReturnType<typeof createElement> {
   const [busy, setBusy] = useState<'none' | 'doctor' | 'preview' | 'import'>('none')
   const timer = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  // 记忆库浏览状态
-  const [mem, setMem] = useState<MemoryPage | null>(null)
-  const [memLoading, setMemLoading] = useState(false)
-  const [memQ, setMemQ] = useState('')
-  const [memQApplied, setMemQApplied] = useState('')
-  const [memType, setMemType] = useState('')
-  const memOffset = useRef(0)
-
-  const fetchMem = async (opts: { q: string; type: string; offset: number; append: boolean }) => {
-    setMemLoading(true)
-    try {
-      const params = new URLSearchParams({ limit: '30', offset: String(opts.offset) })
-      if (opts.q.trim() !== '') params.set('q', opts.q.trim())
-      if (opts.type !== '') params.set('type', opts.type)
-      const page = await getJson<MemoryPage>(`/dsh-hippo/memories?${params.toString()}`)
-      setMem((prev) => (opts.append && prev !== null ? { ...page, items: [...prev.items, ...page.items] } : page))
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    }
-    setMemLoading(false)
-  }
 
   const poll = (running: boolean) => {
     if (timer.current !== null) { clearInterval(timer.current); timer.current = null }
@@ -553,10 +413,7 @@ function Panel(): ReturnType<typeof createElement> {
             poll(false)
             setBusy('none')
             void getJson<AgentInventory[]>('/dsh-hippo/inventory').then(setInv).catch(() => {})
-            if (!j.stats.dryRun) {
-              memOffset.current = 0
-              void fetchMem({ q: '', type: memType, offset: 0, append: false })
-            }
+            if (!j.stats.dryRun) { /* 记忆浏览在工作台 */ }
           }
         },
         () => {},
@@ -601,16 +458,8 @@ function Panel(): ReturnType<typeof createElement> {
     void getJob().then((j) => {
       if (j !== null && j.state === 'running') { setJob(j); poll(true) }
     }).catch(() => {})
-    void fetchMem({ q: '', type: '', offset: 0, append: false })
     return () => { if (timer.current !== null) clearInterval(timer.current) }
   }, [])
-
-  // 类型筛选变化时重查（搜索词保持已应用值）
-  useEffect(() => {
-    if (report === null) return
-    memOffset.current = 0
-    void fetchMem({ q: memQApplied, type: memType, offset: 0, append: false })
-  }, [memType])
 
   const ready = report !== null && report.migrationReady
   const hasSessions = (inv ?? []).some((a) => a.sessions > 0)
@@ -620,10 +469,15 @@ function Panel(): ReturnType<typeof createElement> {
 
     createElement('div', { className: 'hb-card' },
       createElement('button', {
+        className: 'hb-btn hb-btn-primary', style: { alignSelf: 'flex-end', fontSize: 12 },
+        onClick: () => { window.open('/dsh-hippo/app/', '_blank') },
+        title: '完整工作台：记忆 / 会话 / 蒸馏 / 编译 / 图谱 / 时间线 / 生活流',
+      }, '🦛 打开完整工作台'),
+      createElement('button', {
         className: 'hb-btn hb-btn-ghost', style: { alignSelf: 'flex-end', fontSize: 12 },
         onClick: overlayStore.toggle,
-        title: '打开独立记忆面板（不占设置页空间）',
-      }, '🦛 在独立面板中打开'),
+        title: '在浮层中打开本面板（不占设置页空间）',
+      }, '⧉ 浮层'),
       createElement('div', { className: 'hb-hero' },
         createElement('span', { className: 'hb-logo' }, '桥'),
         createElement('span', { className: 'hb-hero-txt' },
@@ -663,28 +517,7 @@ function Panel(): ReturnType<typeof createElement> {
     job !== null && job.state === 'error'
       ? createElement('div', { className: 'hb-card' }, createElement('div', { className: 'hb-banner hb-banner-err' }, `迁移失败：${job.error ?? '未知错误'}`))
       : null,
-
-    createElement(MemoriesCard, {
-      page: mem,
-      loading: memLoading,
-      q: memQ,
-      setQ: setMemQ,
-      type: memType,
-      setType: setMemType,
-      onSearch: () => {
-        memOffset.current = 0
-        setMemQApplied(memQ)
-        void fetchMem({ q: memQ, type: memType, offset: 0, append: false })
-      },
-      onMore: () => {
-        memOffset.current += 30
-        void fetchMem({ q: memQApplied, type: memType, offset: memOffset.current, append: true })
-      },
-      onRefresh: () => {
-        memOffset.current = 0
-        void fetchMem({ q: memQApplied, type: memType, offset: 0, append: false })
-      },
-    }),
+    // 记忆浏览/搜索/编译/自动蒸馏管理不在设置页重复——工作台（🦛 按钮）里全有。
   )
 }
 

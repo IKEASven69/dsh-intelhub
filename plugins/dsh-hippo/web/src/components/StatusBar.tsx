@@ -1,3 +1,4 @@
+import { BASE } from '../api'
 /**
  * 系统状态栏：GUI 顶部常驻显示——自动蒸馏状态 + 待审队列 + 编译配置。
  * 解决"静默失败"问题：用户一眼看到 hippo 是否在工作。
@@ -35,7 +36,7 @@ export default function StatusBar() {
 
   useEffect(() => {
     const load = () => {
-      void fetch('/api/health')
+      void fetch(`${BASE}/api/health`)
         .then(r => r.json())
         .then(setHealth)
         .catch(() => {});
@@ -78,7 +79,7 @@ export default function StatusBar() {
           onClick={() => { navigate('/distill'); }}
           title="点击去蒸馏页处理">
           <Clock size={13} color="var(--warning)" />
-          <b style={{ color: 'var(--warning)' }}>{health.shelvedQueue} 条待审</b>
+          <b className="attention-pulse" style={{ color: 'var(--warning)' }}>{health.shelvedQueue} 条待审</b>
         </span>
       )}
 

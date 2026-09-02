@@ -56,7 +56,7 @@ export async function dshLlmComplete(ctx: Context, system: string, user: string,
   const callConfig = {
     provider: route.provider,
     model: route.model,
-    maxTokens: 4096,
+    maxTokens: 8192, // 思考模型（M3）think 块吃预算，判决 JSON 需要余量
     ...(opts.temperature !== undefined ? { temperature: opts.temperature } : {}),
   }
   const prepared = await ctx.llm.prepareCall(callConfig)

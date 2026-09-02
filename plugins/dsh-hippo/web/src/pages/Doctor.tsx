@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation, Trans } from 'react-i18next';
-import { api, type Diagnostics } from '../api';
+import { api, type Diagnostics, BASE } from '../api';
 import GradientText from '../components/anim/GradientText';
 
 export default function DoctorPage() {
@@ -19,7 +19,7 @@ export default function DoctorPage() {
   const runSleepDry = async () => {
     setSleepBusy(true); setSleepApplied(false);
     try {
-      const r = await fetch('/api/sleep', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+      const r = await fetch(`${BASE}/api/sleep`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
       setSleepReport(await r.json());
     } catch (e) { setError((e as Error).message); }
     setSleepBusy(false);
@@ -28,7 +28,7 @@ export default function DoctorPage() {
   const runSleepApply = async () => {
     setSleepBusy(true);
     try {
-      const r = await fetch('/api/sleep', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"apply":true}' });
+      const r = await fetch(`${BASE}/api/sleep`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"apply":true}' });
       setSleepReport(await r.json());
       setSleepApplied(true);
       reload();

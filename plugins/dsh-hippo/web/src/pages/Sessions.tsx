@@ -7,7 +7,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FolderOpen, RefreshCw, Search, TerminalSquare, Download, FileJson, FileText, FlaskConical, Trash2 } from 'lucide-react';
-import { api, workspaceOf, type SessionListItem, type SessionDetail, type SessionDistillPreview, type SyncStatus } from '../api';
+import { api, workspaceOf, type SessionListItem, type SessionDetail, type SessionDistillPreview, type SyncStatus, BASE } from '../api';
 import { AgentIcon, agentLabel } from '../components/AgentIcon';
 import FolderPicker, { underPath } from '../components/FolderPicker';
 import Pagination from '../components/Pagination';
@@ -293,10 +293,16 @@ export default function SessionsPage() {
 }
 
 function SessionRow({ s, active, onOpen }: { s: SessionListItem; active: boolean; onOpen: () => void }) {
+  const [pushed, setPushed] = useState<string | null>(null);
+  const doPush = (ev: React.MouseEvent) => {
+    ev.stopPropagation();
+    setPushed('…');
+    api.handoffPush(s.id).then(r => setPushed(`已推送 ${r.id}（候选${r.candidates}·任务${r.tasks}）`)).catch(e => setPushed(String(e)));
+  };
   return (
     <div className={`card clickable${active ? ' active' : ''}`} onClick={onOpen}
       style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 12 }}>
-      <AgentIcon agent={s.agent} size={24} />
+      <AgentIcon agent={ s.agent } size={24} />
       <div style={{ minWidth: 0, flex: 1 }}>
         <div style={{ fontWeight: 600, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {s.title || s.id.slice(0, 24)}
@@ -308,6 +314,11 @@ function SessionRow({ s, active, onOpen }: { s: SessionListItem; active: boolean
       </div>
       {s.distilled > 0 && (
         <span className="chip" data-color="fact" title="已蒸馏记忆数" style={{ flex: 'none' }}>✦ {s.distilled}</span>
+      )}
+      <button className={`icon-btn push-btn${pushed !== null ? ' pushed' : ''}`} title="推送交接：蒸馏本会话（任务/git/候选）进收件箱，接手方开局取件"
+        onClick={doPush} style={{ flex: 'none' }}>{pushed !== null ? '✓' : '⇪'}</button>
+      {pushed !== null && (
+        <span className="meta push-receipt" style={{ flex: 'none', fontSize: 11.5, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={pushed}>{pushed}</span>
       )}
     </div>
   );
@@ -386,7 +397,7 @@ function SessionDetailDrawer({ id, onClose, onDistilled }: { id: string; onClose
           <button className="btn ghost" title="强制重跑蒸馏（旧记忆保留，新候选走去重）"
               onClick={async () => {
                 try {
-                  const r = await fetch(`/api/sessions/${encodeURIComponent(id)}/redistill`, { method: 'POST' });
+                  const r = await fetch(`${BASE}/api/sessions/${encodeURIComponent(id)}/redistill`, { method: 'POST' });
                   const d = await r.json();
                   setToast(`重蒸馏：新建 ${d.created ?? 0} · 强化 ${d.reinforced ?? 0}`);
                   onDistilled();
