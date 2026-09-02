@@ -149,12 +149,12 @@
 
 | 通道 | 机制 | 适用 | 状态 |
 |---|---|---|---|
-| **A. MCP 工具**（首选） | 在 `~/.workbuddy/mcp.json` 注册 dsh-hippo MCP server（stdio），WorkBuddy 会话内 agent 直接调 `hippo_handoff_load` / `hippo recall` | WorkBuddy（已是标准 MCP 宿主，chatcut 同法接入） | 待实现 |
-| **B. Skill 触发**（跨 agent 统一入口） | 项目级 skill（WorkBuddy: `D:\coding\.workbuddy\skills\handoff\SKILL.md`；Claude Code: `.claude/skills/` 同内容），指令：会话开始或用户说"接手/继续"时 → 调通道 A 或跑 `hippo handoff --load` → 复述 Task/Changed/Blocked/Next → 确认后继续 | 一份 SKILL.md 通吃所有支持 skill 的 agent，交互时刻收敛为一句"接手" | 待实现 |
-| **C. 文件兜底**（零插件） | `hippo compile` 除 AGENTS.md 外落一份快照文件（如 `.workbuddy/memory/HANDOFF.md`），skill/agent 直接读文件 | 目标 agent 无 MCP 无 skill 机制时的最坏情况 | 待实现 |
+| **A. MCP 工具**（首选） | 在 `~/.workbuddy/mcp.json` 注册 dsh-hippo MCP server（stdio），WorkBuddy 会话内 agent 直接调 `handoff_inbox` / `handoff_load` | WorkBuddy（已是标准 MCP 宿主，chatcut 同法接入） | **代码 ✅ / 注册 ⏳**：两工具已上线（server.ts），但 `~/.workbuddy/mcp.json` 当前只有 `chatcut`，dsh-hippo 未挂 |
+| **B. Skill 触发**（跨 agent 统一入口） | 项目级 skill（WorkBuddy: `D:\coding\.workbuddy\skills\handoff\SKILL.md`；Claude Code: `D:\coding\.claude\skills\handoff\` 同内容），指令：会话开始或用户说"接手/继续"时 → 调通道 A 或跑 `hippo handoff inbox/load` → 复述 Task/Changed/Blocked/Next → 确认后继续 | 一份 SKILL.md 通吃所有支持 skill 的 agent，交互时刻收敛为一句"接手" | **✅ 已落三份**（M5c），无 MCP 时自动降级 CLI |
+| **C. 文件兜底**（零插件） | 按 §5.2.2 硬约束取舍：不落常驻投影文件（与"handoff 产物禁写 AGENTS.md、消费即弃"冲突），兜底形态收敛为 **CLI**（`hippo handoff inbox/load`，零依赖可用） | 目标 agent 无 MCP 无 skill 机制时的最坏情况 | **✅ 以 CLI 形态兑现**（M5d） |
 
 要点：
-- 通道 A 需用户在连接器管理页对新 MCP server 点"信任"（WorkBuddy 机制，一次性动作，写进 README）。
+- 通道 A 需用户在连接器管理页对新 MCP server 点"信任"（WorkBuddy 机制，一次性动作，写进 README）。**截至 2026-09-02 收官核对：mcp.json 尚未挂 dsh-hippo，通道 A 未生效**——skill 目前走 CLI 降级路径。
 - 通道 B 的 skill 不是自动执行的——它把"接手"这个动作变成一句触发词 + 标准流程，替代现在的"口述他干了什么"。
 - "直接发送到会话框"明确**不做**：无可靠 UI 注入路径，且拉模式已覆盖同一需求（效果等价：新会话开场就有完整上下文）。
 - 原始对话片段（"zcode 里某段讨论"）不进快照正文，快照只留 L0 引用，WorkBuddy 侧按需 `hippo recall` 反查——推蒸馏、拉原文。
@@ -324,6 +324,20 @@ GSD 交接机制实测：`/gsd:pause-work` 手动触发 → agent 收集状态�
 - **M2 是设计决策变更**（推翻文档化的"快照"策略），需冷神明确点头。→ ✅ 2026-09-01 冷神授权（"你看着来"），两层归档语义已追认。
 - tasks.json 老格式迁移策略：直接切 + 容错读（装机量小）。
 
+### 6.1 收官状态与最后一公里（2026-09-02 核对）
+
+**已完成（代码 + 测试）**：M0–M5 全部里程碑，139/139 测试通过，工作区干净（已提交）。
+
+**尚未闭环的三件事**（都是"用起来"层面，不是代码层面）：
+
+| # | 事项 | 为什么没闭环 | 需要谁 |
+|---|---|---|---|
+| 1 | **MCP 注册**（通道 A） | `~/.workbuddy/mcp.json` 只挂了 `chatcut`，dsh-hippo 未注册 → skill 目前走 CLI 降级路径 | 写配置 + 冷神在连接器管理页点一次"信任" |
+| 2 | **真实端到端接手** | M5 验收是脚本自测（push→load→二次拒绝）；"新开 WorkBuddy 会话零口述接上"必须由真实使用验证 | 冷神用一次 |
+| 3 | **fidelity bench 数据** | §5.2 定的三个量化指标（复述保真 / 接手成功率 / 噪声率）目前只有定性结论，无累积数据 | 每次真实接手后补记 |
+
+判断：这三件事做不做，决定 H7 是"已交付的工具"还是"已验证有效的工作流"。**代码不缺，缺的是第一次真用。**
+
 ## 7. 面向对象、使用方法与使用效果（2026-08-31 调研结论）
 
 调研基础：ai-memory（install-hooks/run 的被动采集 UX）、memento（inject/restore/verify 的接手 UX）、社区手工交接模式（HANDOFF.md / AGENTS.md / threadId 接力）+ hippo 自身既有形态（MCP recall、compile、dashboard、auto-distill）。
@@ -394,6 +408,10 @@ GSD 交接机制实测：`/gsd:pause-work` 手动触发 → agent 收集状态�
 
 ### 8.1 变更日志
 
+- **2026-09-02 收官核对（H7 全里程碑代码完成 = M0–M5 全绿，工作区干净）**：已提交 `43d64bf feat(H7-M5): 交付通道五件套` 与 `02a0e8e feat(H7): 活体验收收尾`。实测复核——手验 M5 五件套全部在位：`handoff-inbox.ts`（pending→load→archived 消费即弃）、CLI `hippo handoff push/inbox/load`、MCP `handoff_inbox`+`handoff_load`（共 16 工具）、三份 SKILL.md（WorkBuddy/Claude/插件模板，含"快照=历史事实须当下确认"安全规则）、HTTP 三路由 + 工作台 `推送交接` 按钮（`web/src/pages/Sessions.tsx:318`）；全量测试 **139/139**（node 24，ABI 备忘见 M1）。**同步修正**：§4 M5 通道表状态列原写"待实现"，与下方 M5a–e 已勾 ✅ 自相矛盾，已按实际改写（A=代码就绪待注册 / B=已落 / C=以 CLI 兑现）。**剩余最后一公里见 §8.2。**
+- **2026-09-01（M5 交付通道五件套）**：M5a 收件箱 + push CLI、M5b MCP 两工具、M5c 三份 handoff skill、M5d 文件兜底按 §5.2.2 硬约束取舍为 CLI（不落常驻投影）、M5e 工作台推送按钮。端到端验收：CLI push 真实 WorkBuddy 会话（8 候选/10 文件改动）→ load 出完整详情（行为痕迹前/叙事后/原文指针/安全尾注）→ 二次 load 正确拒绝（消费即弃）。
+- **2026-09-01（M4 WorkBuddy 适配器）**：`src/agents/workbuddy.ts`（discover 只读头部 64KB 提取 ai-title/cwd，reasoning 与 function_call 交织故跳过、status!==completed 即 toolFailed）+ 注册 index + 4 测试（夹具取自真实会话，15 条覆盖全 6 类型）。验收：12 会话被发现，「探讨豆包工作的办公 Agent 启示」860 turns → 20 候选。
+- **2026-09-01（M3 完成回流）**：新增 `task-reflux.ts`，新归档任务 → Candidate(type=fact) → 每条独立 L0 事件源 → 走既有 distill；双钩子点（MCP `task_update` + auto-distill 归档回流）。**顺带修 distill 溯源覆盖 bug**：`engine.remember` 原用外层 `sourceId` 覆盖候选自带值，改为候选自带优先。验收：回放 14 真实会话 → 26 条回流候选（带分支/改动），L0 溯源通过，132 测试全过。
 - **2026-09-01（M2 完成）**：任务轨迹两层化——`tasks.json` v2（活跃快照 + 历史归档 dedupe+cap2000）、`taskHistory()` store 层查询、`compileTarget` 默认 index 模式 + 薄索引带 Current State（≤3 任务 + 卡点行）、老格式自动迁移、历史层不泄漏进常驻投影的硬约束测试。真实回放验收：14 会话 → 活跃 4 + 历史 34。全量测试 127/127。
 - 2026-09-01 **M1 git 维度采集完成**：TaskRecord 新增 branch/changed（可选字段，老数据兼容）；collectGitContext（status --short 含 untracked + rev-parse 探活，cap 50，非 git 静默降级）；接线 auto-distill-run（有任务才采集）。验收：真实会话 sess_94519137 → 3 任务带 branch+changed，全量测试 118/118（node 24）。**顺手修掉存量 bug**：zcode tool text="input\noutput" 拼接致 TodoWrite 整段 parse 失败、任务提取对 zcode 一直 0 条——修复为整段失败退化首行解析。真实发现：大仓 cwd 下 changed 噪声大，留给 M3 对账过滤；环境备忘：better-sqlite3 为 node 24 ABI，node 22 下测试假失败。下一步 M2（需冷神拍板 mergeTasks 轨迹策略）。
 - 2026-09-01 功能效果图落盘：docs/h7-feature-mockup-2026-09-01.svg（一次完整交接四画面：推送⇪/开局无感注入/按需取件/完成沉淀闭环），§7.1.1 挂引用。
