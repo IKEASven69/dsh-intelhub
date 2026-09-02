@@ -69,8 +69,12 @@ dsh plugin add IKEASven69/dsh-opencli
 
 ## 0.2.1 缺口补齐（对齐 anweat，2026-09-01）
 - **自包含 fallback**：`resolveBin()` 优先 `DSH_OPENCLI_BIN` → 插件本地 `@jackwener/opencli`（`node dist/src/main.js`）→ `node_modules/.bin/opencli` → 全局 `opencli`，与 anweat“本地优先/全局复用”同策略
-- **限流**：`usagePolicy`（`minDelayMs 750 / maxConcurrency 2 / burst 3 / cooldown 30000`）+ 429/502/503/504 自动冷却，与 anweat 359-browser-half 的节流对齐
+- **限流**：`usagePolicy`（`minDelayMs 750 / maxConcurrency 2 / burst 3 / cooldown 30000 / maxPagesPerRun 20`）+ 429/502/503/504 自动冷却，与 anweat 359-browser-half 的节流对齐
 - **限域登录**：`site --authProfile` + `authProfiles`（`allowedDomains` / `storageStatePath`），`domainOf()` 校验，跨域拒绝；同时 `ctx.provide('browser', this)` 兼容 `inject: ['browser']` 生态
+
+## 0.3.0 超集（2026-09-01 里程碑 38e4e08/7d89404/4c797db）
+- **Host 桩**：`@Remote schedule-add/list` + `replay`（`site` / `browser_*` 透传，`localStorage` 录制互补）+ `script-catalog/run_builtin` + `crawl`（`maxPagesPerRun` 限流）
+- **高级抽屉**：面板 `高级自动化` 折叠，内含 4档 `automationMode`（`read-only/standard/autonomous/unrestricted`）+ 限流/限域可视化 + 脚本/泛爬入口，`automationMode` 接入 `tools/pre-execute` 审批门
 
 ## 已验证的测试矩阵
 
