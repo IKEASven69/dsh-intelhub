@@ -8,7 +8,7 @@
  * @module dsh-zvec-kb
  */
 
-import { Context } from '@deepseek-ai/cordis'
+import { Context, Service } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { TypertRemoteService, Remote } from '@deepseek-ai/dsh-typert-protocol'
 // 仅类型面:拉入 dsh 宿主对 cordis Context 的增强(systemPrompt 服务声明);SWC 会擦除,不进运行时依赖
@@ -87,7 +87,7 @@ export class ZvecKbService extends TypertRemoteService {
 
   // ── 生命周期:工具 + systemPrompt ─────────────────────────
 
-  async init(): Promise<void> {
+  protected async [Service.init](): Promise<void> {
     await this.loadRegistry()
     this.registerTools()
     this.ctx.systemPrompt.section({

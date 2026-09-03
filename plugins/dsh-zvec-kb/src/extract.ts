@@ -50,7 +50,7 @@ export async function extractText(path: string): Promise<{ text: string | null; 
     }
     if (PDF_EXTS.has(ext)) {
       const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
-      const doc = await pdfjs.getDocument({ data: await readFile(path), useSystemFonts: true }).promise
+      const doc = await pdfjs.getDocument({ data: new Uint8Array(await readFile(path)), useSystemFonts: true }).promise
       const parts: string[] = []
       const pages = Math.min(doc.numPages, 500)
       for (let i = 1; i <= pages; i++) {
