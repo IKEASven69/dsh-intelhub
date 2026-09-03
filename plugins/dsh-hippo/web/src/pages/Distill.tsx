@@ -244,6 +244,26 @@ export default function DistillPage() {
                   onClick={() => applyShelved([...shelvedSel])}>入库所选（{shelvedSel.size}）</button>
                 <button className="btn small" disabled={autoBusy}
                   onClick={() => { void api.shelvedDiscard(shelved.map(x => x.index)).then(reloadAuto); }}>清空队列</button>
+                {(() => {
+                  const acc = shelved.filter(x => x.suggest === 'accept').map(x => x.index);
+                  const dis = shelved.filter(x => x.suggest === 'discard').map(x => x.index);
+                  if (acc.length + dis.length === 0) return null;
+                  return (
+                    <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+                      <span className="meta" style={{ fontSize: 11.5 }}>🦛 预审建议：</span>
+                      <button className="btn primary small" disabled={autoBusy || acc.length === 0}
+                        title={acc.length ? `批量入库 ${acc.length} 条 LLM 建议收的候选` : '无建议收的候选'}
+                        onClick={() => applyShelved(acc)}>
+                        按建议收（{acc.length}）
+                      </button>
+                      <button className="btn small" disabled={autoBusy || dis.length === 0}
+                        title={dis.length ? `批量丢弃 ${dis.length} 条 LLM 建议弃的候选` : '无建议弃的候选'}
+                        onClick={() => { void api.shelvedDiscard(dis).then(reloadAuto); }}>
+                        按建议弃（{dis.length}）
+                      </button>
+                    </span>
+                  );
+                })()}
               </div>
               {shelved.map(item => (
                 <div key={item.index} className="pick-item" style={{ marginBottom: 4 }}>

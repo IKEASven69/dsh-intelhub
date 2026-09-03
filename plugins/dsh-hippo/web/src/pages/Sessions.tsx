@@ -41,6 +41,11 @@ function syncAgo(s: SyncStatus | null): string {
 export default function SessionsPage() {
   const { t } = useTranslation();
   const [sessions, setSessions] = useState<SessionListItem[]>([]);
+  // handoff 收件箱（H7 M5 UI）：pending 列表 + 取件详情
+  const [inbox, setInbox] = useState<Array<{ id: string; from: { agent: string; title: string }; pushedAt: number; project: string; git: { branch: string; changed: string[] }; activeTasks: Array<{ text: string; status: string }>; candidates: string[] }>>([]);
+  const [inboxOpen, setInboxOpen] = useState(false);
+  const [inboxDetail, setInboxDetail] = useState<{ id: string; text: string } | null>(null);
+  const loadInbox = () => { void api.handoffInbox().then(r => setInbox(r.pending)).catch(() => setInbox([])); };
   const [total, setTotal] = useState(0);
   const [agent, setAgent] = useState('');
   const [ws, setWs] = useState('');
@@ -78,6 +83,7 @@ export default function SessionsPage() {
   useEffect(() => {
     const focus = new URLSearchParams(location.search).get('focus');
     if (focus) setOpenId(focus);
+    loadInbox();
   }, []);
 
   const agents = useMemo(() => {
@@ -146,7 +152,65 @@ export default function SessionsPage() {
   return (
     <FadeIn>
       <div style={{ display: 'flex', gap: 14, alignItems: 'baseline', flexWrap: 'wrap' }}>
-        <h1><Search size={22} style={{ verticalAlign: -4, marginRight: 8 }} />{t('nav.sessions')}</h1>
+        
+        {inbox.length > 0 && (
+
+          <div className="card" style={{ marginBottom: 12, borderColor: 'var(--primary-ring)' }}>
+
+            <div onClick={() => setInboxOpen(!inboxOpen)} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', userSelect: 'none' }}>
+
+              <span style={{ fontWeight: 700, fontSize: 13.5 }}>🦛 交接收件箱</span>
+
+              <span className="chip" data-color="decision" style={{ flex: 'none' }}>{inbox.length} 份待取</span>
+
+              <span style={{ flex: 1 }} />
+
+              <span className="meta" style={{ fontSize: 11.5 }}>{inboxOpen ? '收起 ▾' : '展开 ▸'}</span>
+
+            </div>
+
+            {inboxOpen && (
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
+
+                {inbox.map(it => (
+
+                  <div key={it.id} style={{ border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px' }}>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+
+                      <span style={{ fontWeight: 600, fontSize: 13 }}>{it.from.title || it.id}</span>
+
+                      <span className="meta" style={{ fontSize: 11.5 }}>来自 {it.from.agent} · {it.project} · {new Date(it.pushedAt * 1000).toLocaleString()}</span>
+
+                      <span style={{ flex: 1 }} />
+
+                      <button className="btn primary small" onClick={() => { void api.handoffLoad(it.id).then(r => { setInboxDetail({ id: it.id, text: r.text }); loadInbox(); }).catch(e => setInboxDetail({ id: it.id, text: String(e) })); }}>
+
+                        取件
+
+                      </button>
+
+                    </div>
+
+                    <div className="meta" style={{ fontSize: 11.5, marginTop: 4 }}>
+
+                      {it.git.branch && `分支 ${it.git.branch} · `}{it.git.changed.length} 文件改动 · {it.candidates.length} 条候选{it.activeTasks.length ? ` · ${it.activeTasks.length} 任务` : ''}
+
+                    </div>
+
+                  </div>
+
+                ))}
+
+              </div>
+
+            )}
+
+          </div>
+
+        )}
+<h1><Search size={22} style={{ verticalAlign: -4, marginRight: 8 }} />{t('nav.sessions')}</h1>
         <span className="meta">
           {searchHits ? `搜索 ${shown.length} / ${total}` : `${filtered.length} / ${total} 个会话`}
           {status?.synced && ` · 同步于 ${syncAgo(status)}`}
@@ -288,6 +352,18 @@ export default function SessionsPage() {
           />
         </>
       )}
+    {inboxDetail !== null && (
+      <div className="modal-backdrop" onClick={() => setInboxDetail(null)}>
+        <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 640, width: '100%', textAlign: 'left' }}>
+          <h3 style={{ marginTop: 0 }}>取件详情 · {inboxDetail.id}</h3>
+          <pre style={{ whiteSpace: 'pre-wrap', fontSize: 12.5, background: 'var(--page)', padding: 12, borderRadius: 8, maxHeight: 400, overflow: 'auto' }}>{inboxDetail.text}</pre>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            <button className="btn small" onClick={() => { void navigator.clipboard.writeText(inboxDetail.text); }}>复制</button>
+            <button className="btn primary small" onClick={() => setInboxDetail(null)}>关闭</button>
+          </div>
+        </div>
+      </div>
+    )}
     </FadeIn>
   );
 }

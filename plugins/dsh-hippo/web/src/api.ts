@@ -369,7 +369,7 @@ export const api = {
 
   handoffPush: (sessionId: string, to?: string) =>
     postJSON<{ id: string; title: string; candidates: number; tasks: number; changed: number }>('/api/handoff/push', { sessionId, ...(to ? { to } : {}) }),
-  handoffInbox: () => getJSON<{ pending: Array<{ id: string; from: { agent: string; title: string }; pushedAt: number; to: string }> }>('/api/handoff/inbox'),
+  handoffInbox: () => getJSON<{ pending: Array<{ id: string; from: { agent: string; sessionId: string; title: string }; to: string; project: string; pushedAt: number; git: { branch: string; changed: string[] }; activeTasks: Array<{ text: string; status: string }>; candidates: string[] }> }>('/api/handoff/inbox'),
   handoffLoad: (id: string) => postJSON<{ text: string }>('/api/handoff/load', { id }),
 
   memoryValue: () => getJSON<MemoryValueReport>('/api/memories/value'),
