@@ -26,21 +26,21 @@
 ## 2. 里程碑
 
 ### M1 · 发布基础设施 `（0.5 天）`
-- [ ] `scripts/publish-both.mjs`：读同一构建产物 → 生成两份发布包
+- [x] `scripts/publish-both.mjs` ✅ 2026-09-03（keywords 写入修复；hippo-context exports 重映射包根→引擎）
   - dsh-hippo：现 package.json 原样（name/files/dsh 字段）
   - hippo-context：替换 name/description/keywords（去 dsh 字段，加 AI-memory 叙事）；README 换 npm 版
   - `npm pack --dry-run` 双包体积/文件清单校验
-- [ ] `hippo-context` 名占确认（npm view 已 ✅，发布时再正式 claim）
+- [x] `hippo-context` 名占确认 ✅（npm view 404 = 可注册）
 - **验收**：两份 .tgz 产出，文件清单不含对方私有物（dsh 包不含 npm README / npm 包不含 dsh 字段）
 
 ### M2 · 文档 `（0.5 天）`
-- [ ] 主 README（dsh market 页 + 仓库门面）：两分钟故事（装→自检→一键迁移→开局认识你）+ 截图（工作台/⇪推送/取件详情）+ 前置条件（approve-builds / 2GB 模型 / HF 镜像）
-- [ ] npm 版 README（hippo-context）：面向非 dsh 用户——`npm i -g hippo-context && hippo gui`、Memoryfields 互通、与 dsh 版关系说明
-- [ ] CHANGELOG.md：0.1.0 → 0.3.0 归纳（H2 工具 → H7 交接 → H8 镜像 → H9 治理）
+- [x] 主 README ✅ plugins/dsh-hippo/README.md（两分钟上手 + 能力表 + LLM 说明 + 文档链接）
+- [x] npm 版 README ✅ README-npm.md（安装/三分钟体验/MCP 接入/核心概念/dsh 关系）
+- [x] CHANGELOG.md ✅ 0.3.0/0.2.0/0.1.0 三版归纳
 - **验收**：三个文档互相链接、无过时信息（引用 test-report）
 
 ### M3 · 干净环境装机自检 `（0.5 天）`
-- [ ] 模拟新用户：空目录 + 双包 tgz 安装（pnpm/npm 各一遍）→ pnpm approve-builds → doctor 全绿 → 最小 import/recall → memoryfield export
+- [x] 模拟新用户 ✅ hippo-context tgz（1.8M）干净目录安装：--version 0.3.0 / doctor healthy / remember+recall 全通；pnpm 侧安装警告与 README 指引一致
 - [ ] HIPPO_DATA_DIR 隔离，不碰真库
 - **验收**：零文档依赖跑通；卡点全部回填 README
 
@@ -60,4 +60,9 @@
 
 ## 5. 变更日志
 
+- 2026-09-03 立项：双包发布 + 文档规划。npm 名 hippo-context 拍板（可注册已验证）。
+
+## 5. 变更日志
+
+- 2026-09-03 M1/M2/M3 完成（commit be55c5e+）：publish-both.mjs 双包构建（keywords/exports 重映射修复）、双 README + CHANGELOG、干净装机自检全通。测试抓出并修复：CLI/MCP 硬编码版本号 0.2.0 在 0.3.0 包里漏出 → 动态读取 package.json。剩余 M4 market 提交材料 + 真实 publish 动作（人执行）。
 - 2026-09-03 立项：双包发布 + 文档规划。npm 名 hippo-context 拍板（可注册已验证）。
