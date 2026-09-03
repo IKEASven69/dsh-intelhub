@@ -22,6 +22,8 @@ import crypto from 'node:crypto';
 // docs/threshold-calibration.md.
 export const DEDUP_THRESHOLD = 0.93;
 export const RECENCY_HALF_LIFE_DAYS = 90.0;
+/** 环境事实新鲜度阈值：超过即提示引用前验证（H11 M-B）。 */
+export const STALE_FACT_DAYS = 90;
 export const GLOBAL_PROJECT = 'global';
 export const VALID_TYPES = ['fact', 'decision', 'lesson', 'preference'] as const;
 export type MemoryType = (typeof VALID_TYPES)[number];
@@ -79,6 +81,10 @@ export interface RecallHit {
   agent: string;
   score: number;
   similarity: number;
+  /** H11 M-B：环境事实新鲜度——fact 且距今 >STALE_FACT_DAYS 天时为 true，引用前先验证。 */
+  stale?: boolean;
+  /** 记忆年龄（天，整数）。stale 提示的展示依据。 */
+  ageDays?: number;
 }
 
 export class MemoryEngine {
@@ -208,6 +214,7 @@ export class MemoryEngine {
       const results: RecallHit[] = [];
       for (const { score, similarity, record } of scored.slice(0, limit)) {
         await this._store.touch(record.id, { accessedAt: now });
+        const ageDays = Math.max(0.0, (now - (record.created_at ?? now)) / 86400.0);
         results.push({
           id: record.id,
           text: record.text,
@@ -216,6 +223,11 @@ export class MemoryEngine {
           agent: record.agent,
           score: Math.round(score * 10000) / 10000,
           similarity: Math.round(similarity * 10000) / 10000,
+          // 环境事实新鲜度（H11 M-B）：fact 超过 90 天 → 提醒引用前验证。
+          // 只标 fact（决策/教训有自身演化链，不靠天数判断）
+          ...(record.type === 'fact' && ageDays > STALE_FACT_DAYS
+            ? { stale: true, ageDays: Math.round(ageDays) }
+            : {}),
         });
       }
       return results;

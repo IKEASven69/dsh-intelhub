@@ -66,6 +66,8 @@ export interface RecallHit {
   score: number;
   similarity: number;
   created_at?: number | null;
+  stale?: boolean;
+  ageDays?: number;
 }
 
 export interface Stats {

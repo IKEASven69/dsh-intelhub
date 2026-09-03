@@ -76,7 +76,8 @@ program
         return;
       }
       for (const h of hits) {
-        console.log(`[${h.score.toFixed(2)} ${h.similarity.toFixed(2)} ${h.type}] ${h.text}`);
+        const staleTag = h.stale ? ` ⚠ 距今 ${h.ageDays} 天，引用前先验证` : '';
+        console.log(`[${h.score.toFixed(2)} ${h.similarity.toFixed(2)} ${h.type}] ${h.text}${staleTag}`);
         console.log(`  id=${h.id} project=${h.project}`);
       }
     } finally {

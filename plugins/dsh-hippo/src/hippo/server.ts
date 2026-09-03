@@ -89,8 +89,15 @@ export function createHippoMcpServer(engine: McpEngine, opts: { distillUnavailab
       project: z.string().default('global'),
       limit: z.number().int().positive().default(5),
     },
-  }, safe(async ({ query, project, limit }: { query: string; project: string; limit: number }) =>
-    engine.recall(query, { project, limit })));
+  }, safe(async ({ query, project, limit }: { query: string; project: string; limit: number }) => {
+    const hits = await engine.recall(query, { project, limit });
+    // H11 M-B：旧环境事实引用前先验证（stale 由引擎标注）
+    const lines = hits.map((h) => {
+      if (!h.stale) return `- [${h.type}] ${h.text} (id: ${h.id})`;
+      return `- [${h.type}] ⚠ 距今 ${h.ageDays} 天，引用前先验证：${h.text} (id: ${h.id})`;
+    });
+    return lines.length > 0 ? lines.join('\n') : '未找到相关记忆。';
+  }));
 
   server.registerTool('update', {
     description:

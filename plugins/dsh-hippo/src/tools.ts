@@ -82,7 +82,11 @@ export function registerRecallTool(ctx: Context): void {
         const lines = hits.map(([r, sim]) => {
           const rec = r as { text: string; type: string; agent: string; created_at: number; source_id: string; project: string }
           const src = rec.agent.replace(/^import:/, '') || '未知来源'
-          return `- [${rec.type}]（相关度 ${(sim * 100).toFixed(0)}%，来源 ${src}，${fmtDate(rec.created_at ?? 0)}）${rec.text}`
+          const stale = rec.type === 'fact' && rec.created_at > 0
+          && (Date.now() / 1000 - rec.created_at) > 90 * 86400
+          ? ` ⚠ 距今 ${Math.round((Date.now() / 1000 - rec.created_at) / 86400)} 天，引用前先验证`
+          : '';
+        return `- [${rec.type}]（相关度 ${(sim * 100).toFixed(0)}%，来源 ${src}，${fmtDate(rec.created_at ?? 0)}）${stale}${rec.text}`
         })
         return `项目「${project}」的记忆命中 ${hits.length} 条：\n${lines.join('\n')}`
       })

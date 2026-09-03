@@ -142,6 +142,12 @@ export default function RecallPage() {
                   <span>{h.project}</span>
                   {h.agent && <span>{h.agent}</span>}
                   <span className="muted">{h.created_at ? toDateStr(h.created_at) : ''}</span>
+                  {h.stale && (
+                    <span title={`该事实距今 ${h.ageDays} 天，引用前先验证`}
+                      style={{ color: 'var(--warn, #b45309)', fontWeight: 600 }}>
+                      ⚠ {h.ageDays} 天前的事实
+                    </span>
+                  )}
                   <span className="score-bar"><span style={{ width: `${Math.min(100, h.score * 100)}%` }} /></span>
                   <span>{t('recall.score')} {h.score.toFixed(3)}</span>
                   <span className="muted">{t('recall.sim')} {h.similarity.toFixed(3)}</span>
