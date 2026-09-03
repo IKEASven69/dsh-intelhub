@@ -7,7 +7,7 @@
 
 import { createElement, useEffect, useState } from 'react'
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
-import type { FileEntry, ImportResult, ListResult, RemoveResult, SearchResult, StatusResult } from './types.ts'
+import type { DemoResult, FileEntry, ImportResult, ListResult, RemoveResult, SearchResult, StatusResult } from './types.ts'
 // 仅类型面:拉入 settings.section 槽位声明
 import type {} from '@deepseek-ai/dsh-client-ui-settings'
 
@@ -71,6 +71,12 @@ const CSS = `
 .zkb-hitsnip { font-size: 12.5px; color: #C9C9CE; margin-top: 5px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
 .zkb-badge { flex: none; border-radius: 5px; padding: 1px 7px; font-size: 11px; background: rgba(74,158,255,.16); color: #4A9EFF; }
 .zkb-err { color: #FF6961; font-size: 12px; }
+.zkb-drop { flex: 1; min-width: 160px; border: 1.5px dashed rgba(255,255,255,.18); border-radius: 10px; padding: 16px 14px;
+  text-align: center; font-size: 12.5px; color: #9A9AA0; cursor: pointer; transition: border-color .15s, background .15s; }
+.zkb-drop:hover, .zkb-drop.zkb-drop-on { border-color: #4A9EFF; background: rgba(74,158,255,.06); color: #C9C9CE; }
+.zkb-demo-tag { display: inline-block; border-radius: 5px; padding: 1px 8px; font-size: 11px; margin-left: 8px; }
+.zkb-demo-no { background: rgba(255,69,58,.15); color: #FF6961; }
+.zkb-demo-yes { background: rgba(52,199,89,.15); color: #34C759; }
 `
 
 function Panel(): ReturnType<typeof createElement> {
@@ -82,6 +88,43 @@ function Panel(): ReturnType<typeof createElement> {
   const [busyImport, setBusyImport] = useState(false)
   const [busySearch, setBusySearch] = useState(false)
   const [err, setErr] = useState<string | null>(null)
+  const [demo, setDemo] = useState<DemoResult | null>(null)
+  const [busyDemo, setBusyDemo] = useState(false)
+  const [dragOn, setDragOn] = useState(false)
+
+  const TEXTLIKE = /\.(md|markdown|txt|log|csv|json|ya?ml|xml|html?|ts|tsx|js|mjs|cjs|py|go|rs|java|c|h|cpp|sh)$/i
+
+  /** 浏览器端读取文本族文件(pdf/docx 走路径导入)。 */
+  const readFiles = async (fl: FileList | File[]): Promise<{ name: string; text: string }[]> => {
+    const out: { name: string; text: string }[] = []
+    for (const f of Array.from(fl)) {
+      if (!TEXTLIKE.test(f.name)) continue
+      out.push({ name: f.name, text: await f.text() })
+    }
+    return out
+  }
+
+  const doUpload = async (fl: FileList | File[]): Promise<void> => {
+    const files = await readFiles(fl)
+    if (files.length === 0) {
+      setErr('只识别文本类文件(md/txt/json/代码等);PDF、Word 请用下方路径导入。')
+      return
+    }
+    setErr(null)
+    const r = await rpc<ImportResult>('upload', { files })
+    if (r.ok && r.value !== undefined && r.value.ok) await refresh()
+    else setErr(r.value?.error ?? r.error?.message ?? '上传失败')
+  }
+
+  const doDemo = async (): Promise<void> => {
+    setBusyDemo(true)
+    setErr(null)
+    const r = await rpc<DemoResult>('demo')
+    if (r.ok && r.value !== undefined && r.value.ok) setDemo(r.value)
+    else setErr(r.value?.error ?? r.error?.message ?? '演示失败')
+    setBusyDemo(false)
+    await refresh()
+  }
 
   const refresh = async (): Promise<void> => {
     const s = await rpc<StatusResult>('status')
@@ -171,14 +214,53 @@ function Panel(): ReturnType<typeof createElement> {
         createElement('span', { className: 'zkb-hint', style: { marginLeft: 'auto' } }, '首次导入时自动下载(约 30MB),全程本机'),
       ),
     ),
+    // ── 空态演示卡(知识库为空时)──
+    (status === null || (status.files === 0 && status.chunks === 0 && status.indexing === 0))
+      ? createElement('div', { className: 'zkb-card' },
+          createElement('div', { className: 'zkb-srow' },
+            createElement('span', { className: 'zkb-sk' }, '第一次用?'),
+            createElement('span', { className: 'zkb-hint', style: { flex: 1 } }, '30 秒看懂语义检索和关键词检索的差别——导入一份样例手册,问一个文档里"没写过"的问题。'),
+            createElement('button', { className: 'zkb-btn zkb-btn-pri', disabled: busyDemo, onClick: () => { void doDemo() } }, busyDemo ? '准备中…' : '看演示'),
+          ),
+          demo !== null && demo.ok
+            ? createElement('div', { className: 'zkb-srow', style: { display: 'block' } },
+                createElement('div', { className: 'zkb-hint' }, `查询「${demo.query}」——样例手册里写的是"30 秒内无响应则会话中断",没有"超时"二字:`),
+                createElement('div', { style: { marginTop: 8 } },
+                  createElement('span', { className: 'zkb-demo-tag zkb-demo-no' }, `关键词检索 ${demo.fts.length} 条`),
+                  demo.fts.length > 0 ? createElement('span', { className: 'zkb-hint' }, demo.fts.map((h) => h.ref).join(' ')) : null,
+                ),
+                createElement('div', { style: { marginTop: 6 } },
+                  createElement('span', { className: 'zkb-demo-tag zkb-demo-yes' }, `语义混合检索 ${demo.hybrid.length} 条`),
+                  demo.hybrid.slice(0, 2).map((h, i) => createElement('div', { key: i, style: { marginTop: 6 } },
+                    createElement('span', { className: 'zkb-hitref' }, h.ref),
+                    createElement('div', { className: 'zkb-hitsnip' }, h.text.length > 120 ? h.text.slice(0, 120) + '…' : h.text),
+                  )),
+                ),
+              )
+            : null,
+        )
+      : null,
     // ── 导入卡 ──
     createElement('div', { className: 'zkb-card' },
       createElement('div', { className: 'zkb-srow' },
-        createElement('input', { className: 'zkb-input', placeholder: '文件或文件夹的绝对路径(支持 ~)', value: path, onChange: (e: { target: { value: string } }) => setPath(e.target.value), onKeyDown: (e: { key: string }) => { if (e.key === 'Enter') void doImport() } }),
+        createElement('div', {
+          className: `zkb-drop${dragOn ? ' zkb-drop-on' : ''}`,
+          onClick: () => {
+            const inp = document.createElement('input')
+            inp.type = 'file'
+            inp.multiple = true
+            inp.onchange = () => { if (inp.files !== null) void doUpload(inp.files) }
+            inp.click()
+          },
+          onDragOver: (e: DragEvent) => { e.preventDefault(); setDragOn(true) },
+          onDragLeave: () => setDragOn(false),
+          onDrop: (e: DragEvent) => { e.preventDefault(); setDragOn(false); if (e.dataTransfer?.files !== undefined && e.dataTransfer.files.length > 0) void doUpload(e.dataTransfer.files) },
+        }, '拖入文件(可多选,md/txt/json/代码)或点击选择'),
+        createElement('input', { className: 'zkb-input', placeholder: '或输入路径(文件夹/单个文件,支持 ~;PDF、Word 走这里)', value: path, onChange: (e: { target: { value: string } }) => setPath(e.target.value), onKeyDown: (e: { key: string }) => { if (e.key === 'Enter') void doImport() } }),
         createElement('button', { className: 'zkb-btn zkb-btn-pri', disabled: busyImport || path.trim() === '', onClick: () => { void doImport() } }, busyImport ? '导入中…' : '导入'),
       ),
       createElement('div', { className: 'zkb-srow' },
-        createElement('span', { className: 'zkb-hint' }, '支持 md / txt / pdf / docx / json / yaml / 代码等。整个文件夹可一次导入:后台建索引,重复导入只处理新增与变更。导入后 agent 经 kb_search 检索,结果带 文件路径#块号 来源。'),
+        createElement('span', { className: 'zkb-hint' }, 'Obsidian 库直接填库目录(自动跳过 .obsidian 内部文件);网页让 agent 用 kb_import_url 存档;对话里的长文/微博等社交内容由 agent 经 kb_note 写入。重复导入只处理新增与变更。'),
       ),
     ),
     // ── 检索预览卡 ──

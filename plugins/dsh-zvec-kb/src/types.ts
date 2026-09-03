@@ -63,4 +63,15 @@ export interface RemoveResult {
 
 export interface SearchRpcResult extends SearchResult {}
 
+/** 空态演示:导入样例文档并对一条陷阱查询并排返回 FTS 与混合结果。 */
+export interface DemoResult {
+  ok: boolean
+  imported: boolean
+  query: string
+  fts: SearchHit[]
+  hybrid: SearchHit[]
+  note?: string
+  error?: string
+}
+
 export type { FileEntry as KbFileEntry }

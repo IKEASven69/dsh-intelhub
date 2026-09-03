@@ -27,6 +27,13 @@ class TestKbService extends ZvecKbService {
   protected createEmbedder(): Embedder {
     return new FakeEmbedder(8)
   }
+
+  protected async fetchText(url: string): Promise<string> {
+    if (url === 'https://example.com/holiday') {
+      return `<html><head><title>放假</title><script>bad()</script></head><body><nav>导航</nav><article><p>年假制度:入职满一年可休五天,需提前三个工作日在系统申请。</p><p>法定节假日安排以每年公告为准。QX-99 锚点。</p></article><footer>页脚</footer></body></html>`
+    }
+    throw new Error('404')
+  }
 }
 
 let ctx: InstanceType<typeof Context>
@@ -102,7 +109,7 @@ describe('dsh-zvec-kb 集成', () => {
     expect(r.ok).toBe(true)
     expect(r.removed).toBe(true)
     const after = await svc.search('ZKW-42', 5)
-    expect(after.hits.some((h) => h.ref.includes('beta.txt'))).toBe(false)
+    expect(after.hits.some((h) => h.text.includes('ZKW-42'))).toBe(false)
   })
 
   it('增量:同内容重导入跳过,变更文件重索引', async () => {
@@ -118,7 +125,8 @@ describe('dsh-zvec-kb 集成', () => {
     expect(third.queued).toBe(1)
     await svc.drain()
     const old = await svc.search('释放资源', 5)
-    expect(old.hits.some((h) => h.ref.includes('alpha.md#') && h.text.includes('释放资源'))).toBe(false)
+    // 变更重索引后旧块必须被清掉(不能留孤儿)
+    expect(old.hits.some((h) => h.text.includes('释放资源'))).toBe(false)
   })
 
   it('注册表持久化:新实例重载(zvec 写锁单进程独占,先释放旧实例)', async () => {
@@ -140,5 +148,63 @@ describe('dsh-zvec-kb 集成', () => {
     const r = await svc.importPath(join(home, 'nope'))
     expect(r.ok).toBe(false)
     expect(r.error).toContain('路径不存在')
+  })
+
+  it('URL 导入:抓取→正文抽取→入库,来源为 URL', async () => {
+    const r = await svc.importUrls(['https://example.com/holiday'])
+    expect(r.ok).toBe(true)
+    expect(r.queued).toBe(1)
+    await svc.drain()
+    const s = await svc.search('年假', 5)
+    expect(s.hits.some((h) => h.ref.includes('example.com/holiday#') && h.text.includes('五天'))).toBe(true)
+    // script/nav/footer 内容不应进库
+    expect(s.hits.every((h) => !h.text.includes('bad()') && !h.text.includes('导航'))).toBe(true)
+    // 非法 URL 拒绝
+    const bad = await svc.importUrls(['notaurl'])
+    expect(bad.failedScan.length).toBe(1)
+  })
+
+  it('kb_note 直接写入:按标题去重覆盖', async () => {
+    const r1 = await svc.importNote('微博-演示', '今天学了一个新概念叫语义检索,和关键词检索完全不同。NOTE-77 锚点。')
+    expect(r1.ok).toBe(true)
+    await svc.drain()
+    const s = await svc.search('NOTE-77', 5)
+    expect(s.hits.some((h) => h.ref.includes('note:微博-演示#'))).toBe(true)
+    // 同标题覆盖,旧内容必须清掉
+    const r2 = await svc.importNote('微博-演示', '覆盖后的内容,只有这一段。NOTE-88 锚点。')
+    await svc.drain()
+    const s2 = await svc.search('NOTE-77', 5)
+    expect(s2.hits.some((h) => h.text.includes('NOTE-77'))).toBe(false)
+    const s3 = await svc.search('NOTE-88', 5)
+    expect(s3.hits.some((h) => h.text.includes('NOTE-88'))).toBe(true)
+  })
+
+  it('Obsidian 库:.obsidian 内部文件不导入', async () => {
+    await mkdir(join(docsDir, '.obsidian'), { recursive: true })
+    await writeFile(join(docsDir, '.obsidian', 'workspace.json'), '{"should":"not import"}', 'utf8')
+    const r = await svc.importPath(docsDir)
+    await svc.drain()
+    const s = await svc.search('not import', 5)
+    expect(s.hits.some((h) => h.text.includes('not import'))).toBe(false)
+  })
+
+  it('空态演示:FTS 空 vs 混合命中', async () => {
+    // 新开干净实例跑 demo
+    svc.shutdown()
+    const home2 = await mkdtemp(join(tmpdir(), 'zveckb-demo-'))
+    process.env.DSH_ZVECKB_HOME = home2
+    const ctx3 = new Context()
+    await ctx3.plugin(StubTools)
+    await ctx3.plugin(StubSystemPrompt)
+    await ctx3.plugin(TestKbService)
+    const svc3 = ctx3.zvecKb as TestKbService
+    const d = await svc3.rpcDemo()
+    expect(d.ok).toBe(true)
+    expect(d.query).toBe('怎么配置超时时间')
+    expect(d.fts.length).toBe(0)
+    expect(d.hybrid.length).toBeGreaterThan(0)
+    expect(d.hybrid.some((h) => h.ref.includes('示例·员工手册'))).toBe(true)
+    svc3.shutdown()
+    process.env.DSH_ZVECKB_HOME = home
   })
 })

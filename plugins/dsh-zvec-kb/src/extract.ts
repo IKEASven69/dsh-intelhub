@@ -16,6 +16,30 @@ export const SUPPORTED_EXTS = new Set([...TEXT_EXTS, ...PDF_EXTS, ...DOCX_EXTS])
 /** 单文件原始大小上限(字节),防御性截流。 */
 export const MAX_FILE_BYTES = 8 * 1024 * 1024
 
+/** 极简 HTML 正文抽取:剥脚本/样式/导航结构,块级标签转空行,解码常见实体。 */
+export function htmlToText(html: string): string {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<(nav|footer|header|aside|noscript)[\s\S]*?<\/\1>/gi, '')
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/<\/(p|div|li|h[1-6]|tr|section|article|blockquote|pre)>/gi, '\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#0?39;/g, "'")
+    .replace(/&#(\d+);/g, (_m, d: string) => {
+      try { return String.fromCodePoint(Number(d)) } catch { return '' }
+    })
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
 /** 抽取结果:null 表示不支持/失败,reason 供注册表 error 字段。 */
 export async function extractText(path: string): Promise<{ text: string | null; reason?: string }> {
   const ext = extname(path).toLowerCase()

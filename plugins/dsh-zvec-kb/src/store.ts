@@ -79,7 +79,8 @@ export class KbStore {
 
   deleteFile(fileId: string): void {
     if (this.col === null) throw new Error(this.openError ?? 'store 未打开')
-    this.col.deleteByFilterSync(`file == "${fileId}"`)
+    // zvec filter 语法是单等号(类 SQL);双等号解析失败且只记日志不抛错
+    this.col.deleteByFilterSync(`file = "${fileId}"`)
   }
 
   /**
