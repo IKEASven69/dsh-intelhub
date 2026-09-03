@@ -169,8 +169,13 @@ function Panel(): ReturnType<typeof createElement> {
     setBusySearch(false)
   }
 
+  const [removing, setRemoving] = useState('')
+
   const doRemove = async (p: string): Promise<void> => {
+    if (!window.confirm('从知识库移除「' + p.split(/[\\/]/).pop() + '」?(原文件不受影响)')) return
+    setRemoving(p)
     const r = await rpc<RemoveResult>('remove', { path: p })
+    setRemoving('')
     if (!(r.ok && r.value !== undefined && r.value.ok)) setErr(r.value?.error ?? r.error?.message ?? '删除失败')
     await refresh()
   }
@@ -289,7 +294,7 @@ function Panel(): ReturnType<typeof createElement> {
               createElement('span', { className: `zkb-dot ${f.status === 'done' ? 'zkb-ok' : f.status === 'failed' ? 'zkb-bad' : 'zkb-mid'}` }),
               createElement('span', { className: 'zkb-fpath', title: f.error !== undefined ? f.error : f.path }, f.path),
               createElement('span', { className: 'zkb-fmeta' }, f.status === 'done' ? `${f.chunks} 块` : f.status === 'indexing' ? '索引中' : '失败'),
-              createElement('button', { className: 'zkb-btn', style: { padding: '4px 10px', fontSize: '11px' }, onClick: () => { void doRemove(f.path) } }, '删除'),
+              createElement('button', { className: 'zkb-btn', style: { padding: '4px 10px', fontSize: '11px' }, disabled: removing === f.path, onClick: () => { void doRemove(f.path) } }, removing === f.path ? '移除中' : '删除'),
             )),
           ),
     ),

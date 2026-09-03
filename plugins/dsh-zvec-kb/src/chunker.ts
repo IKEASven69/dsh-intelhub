@@ -73,5 +73,10 @@ export function chunkText(input: string, maxLen = DEFAULT_MAX_CHUNK): string[] {
     }
     push(buf)
   }
+  // 短文档兜底:全文不足 MIN_CHUNK 时保留为单块(用户随手的一句话笔记也应可检索)
+  if (chunks.length === 0) {
+    const whole = text.trim()
+    if (whole) chunks.push(whole.length > maxLen ? whole.slice(0, maxLen) : whole)
+  }
   return chunks
 }

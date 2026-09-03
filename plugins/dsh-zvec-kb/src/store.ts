@@ -67,14 +67,14 @@ export class KbStore {
 
   insert(fileId: string, texts: string[], vectors: number[][]): void {
     if (this.col === null) throw new Error(this.openError ?? 'store 未打开')
-    this.col.insertSync(
-      texts.map((text, i) => ({
-        // zvec 文档 id 不允许 ':',用 '#' 分隔
-        id: `${fileId}#${i}`,
-        vectors: { emb: vectors[i] },
-        fields: { text, file: fileId, chunk: i },
-      })) as never,
-    )
+    const docs = texts.map((text, i) => ({
+      // zvec 文档 id 不允许 ':',用 '#' 分隔
+      id: `${fileId}#${i}`,
+      vectors: { emb: vectors[i] },
+      fields: { text, file: fileId, chunk: i },
+    })) as never[]
+    // zvec 单批写入上限 1024 条,超限整体报错(Too many docs)
+    for (let i = 0; i < docs.length; i += 1024) this.col.insertSync(docs.slice(i, i + 1024) as never)
   }
 
   deleteFile(fileId: string): void {

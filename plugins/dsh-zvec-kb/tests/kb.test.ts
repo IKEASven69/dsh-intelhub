@@ -68,7 +68,7 @@ afterAll(async () => {
   delete process.env.DSH_ZVECKB_HOME
 })
 
-describe('dsh-zvec-kb 集成', () => {
+describe('dsh-zvec-kb 集成', { timeout: 30000 }, () => {
   it('文件夹导入:支持格式入队,跳过目录与不支持扩展名', async () => {
     const r = await svc.importPath(docsDir)
     expect(r.ok).toBe(true)
@@ -142,6 +142,26 @@ describe('dsh-zvec-kb 集成', () => {
     const r = await svc2.search('权限制度', 5)
     expect(r.hits.some((h) => h.ref.includes('gamma.md'))).toBe(true)
     svc2.shutdown()
+  })
+
+  it('等长编辑:内容变了但大小没变,必须重索引', async () => {
+    const f = join(docsDir, 'eqlen.md')
+    await writeFile(f, 'AAAA 内容一:独有锚点 EQ-OLD-1,用于等长回归。', 'utf8')
+    let r = await svc.importPath(f)
+    expect(r.queued).toBe(1)
+    await svc.drain()
+    const before = await svc.search('EQ-OLD-1', 3)
+    expect(before.hits.some((h) => h.text.includes('EQ-OLD-1'))).toBe(true)
+    // 等长改写:新内容字节数与旧内容一致
+    await writeFile(f, 'AAAA 内容二:独有锚点 EQ-NEW-2,用于等长回归。', 'utf8')
+    const r2 = await svc.importPath(f)
+    expect(r2.queued).toBe(1)
+    expect(r2.skippedUnchanged).toBe(0)
+    await svc.drain()
+    const oldHits = await svc.search('EQ-OLD-1', 3)
+    expect(oldHits.hits.some((h) => h.text.includes('EQ-OLD-1'))).toBe(false)
+    const newHits = await svc.search('EQ-NEW-2', 3)
+    expect(newHits.hits.some((h) => h.text.includes('EQ-NEW-2'))).toBe(true)
   })
 
   it('不存在的路径报错', async () => {

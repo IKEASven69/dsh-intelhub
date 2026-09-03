@@ -256,7 +256,7 @@ export class ZvecKbService extends TypertRemoteService {
           const fp = join(dir, e.name)
           if (e.isDirectory()) {
             if (!SKIP_DIRS.has(e.name) && !e.name.startsWith('.')) await walk(fp)
-          } else if (SUPPORTED_EXTS.has(extLower(e.name))) {
+          } else if (!e.name.startsWith('.') && SUPPORTED_EXTS.has(extLower(e.name))) {
             files.push(fp)
           }
         }
@@ -283,12 +283,21 @@ export class ZvecKbService extends TypertRemoteService {
         failedScan.push(`${fp}(不可读)`)
       }
     }
-    // 大小相同且此前 done 的先乐观跳过;内容级去重在队列里按 hash 处理
+    // 大小相同且此前 done 的做内容哈希校验再跳过——等长编辑(改字不加字)必须被重索引
     for (const c of candidates) {
       const prev = this.registry.get(regKey('fs', c.path))
       if (prev !== undefined && prev.status === 'done' && prev.bytes === c.bytes) {
-        skippedUnchanged++
-        continue
+        let unchanged = false
+        try {
+          const buf = await readFile(c.path)
+          unchanged = createHash('sha256').update(buf).digest('hex').slice(0, 16) === prev.id
+        } catch {
+          unchanged = false
+        }
+        if (unchanged) {
+          skippedUnchanged++
+          continue
+        }
       }
       const prevEntry = prev ?? entryOf(c.path)
       this.registry.set(regKey('fs', c.path), { ...prevEntry, path: resolve(c.path), bytes: c.bytes, status: 'indexing' as const, chunks: prev?.chunks ?? 0 })
