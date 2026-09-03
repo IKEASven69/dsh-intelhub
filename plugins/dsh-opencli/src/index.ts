@@ -230,6 +230,84 @@ export class OpencliService extends TypertRemoteService {
         return run(a.session, [cmd, ...(a.args ?? [])])
       },
     }))
+    t.register(defineTool({
+      name: 'browser_close',
+      description: '释放当前浏览器会话的 tab 租约（对应 opencli browser <session> close）',
+      parameters: { session: { type: 'string', description: s } },
+      output: { schema: { type: 'json' }, render: (_a: unknown, v: { text: string }) => [{ type: 'text', text: v.text }] },
+      execute: async (a: ToolArgs) => run(a.session, ['close']),
+    }))
+    t.register(defineTool({
+      name: 'browser_read',
+      description: '读当前页 URL/标题/正文（browser_extract 别名，适合公开网页快速读取）',
+      parameters: { session: { type: 'string', description: s } },
+      output: { schema: { type: 'json' }, render: (_a: unknown, v: { text: string }) => [{ type: 'text', text: v.text }] },
+      execute: async (a: ToolArgs) => run(a.session, ['extract']),
+    }))
+    t.register(defineTool({
+      name: 'browser_status',
+      description: '运行时状态：daemon/扩展/适配器数/限流与审批策略（先调它再选工具）',
+      parameters: { session: { type: 'string', description: s } },
+      output: { schema: { type: 'json' }, render: (_a: unknown, v: { text: string }) => [{ type: 'text', text: v.text }] },
+      execute: async () => {
+        const st = await this.status()
+        return { text: JSON.stringify(st, null, 2).slice(0, 4000) }
+      },
+    }))
+    t.register(defineTool({
+      name: 'browser_install',
+      description: '环境自检：daemon/扩展/opencli 三件套缺谁补谁（daemon 未跑给 restart 命令，扩展未连给安装指引）',
+      parameters: {},
+      output: { schema: { type: 'json' }, render: (_a: unknown, v: { text: string }) => [{ type: 'text', text: v.text }] },
+      execute: async () => {
+        const st = await this.status()
+        if (st.ok && st.daemon?.running === true) return { text: '环境就绪：daemon 运行中，扩展已连接，无需安装。' }
+        return { text: `环境缺失：${st.error ?? 'daemon 未运行'}。请先 npm i -g @jackwener/opencli，再 opencli daemon restart，并到 https://github.com/jackwener/opencli/releases 装 BrowserBridge 扩展。` }
+      },
+    }))
+    t.register(defineTool({
+      name: 'opencli_status',
+      description: 'OpenCLI 连接检查：实际跑 doctor，报告 daemon/extension/profile 连通性（不要只看开关，看这个）',
+      parameters: {},
+      output: { schema: { type: 'json' }, render: (_a: unknown, v: { text: string }) => [{ type: 'text', text: v.text }] },
+      execute: async () => {
+        const st = await this.status()
+        return { text: JSON.stringify(st, null, 2).slice(0, 4000) }
+      },
+    }))
+    t.register(defineTool({
+      name: 'opencli_catalog',
+      description: '按 query/site/access 过滤 170+ 适配器目录，单次最多 100 条（不确定命令先查它，别猜）',
+      parameters: {
+        query: { type: 'string', description: '关键词（如 search）' },
+        site: { type: 'string', description: '站点名（如 reddit）' },
+        access: { type: 'string', enum: ['read', 'write'], description: '权限过滤' },
+        limit: { type: 'string', description: '返回条数，默认 10，最大 100' },
+      },
+      output: { schema: { type: 'json' }, render: (_a: unknown, v: { text: string }) => [{ type: 'text', text: v.text }] },
+      execute: async (a: ToolArgs) => {
+        const list = await this.adapterList()
+        if (list === null) return { text: `opencli list 不可用 | ${this.lastShellError ?? '未知'}` }
+        const q = a.command !== undefined ? String(a.command).toLowerCase() : ''
+        const site = a.adapter !== undefined ? String(a.adapter).toLowerCase() : ''
+        const filtered = list.filter((x) => (q.length === 0 || x.name.toLowerCase().includes(q)) && (site.length === 0 || x.name.toLowerCase().includes(site))).slice(0, 100)
+        return { text: JSON.stringify(filtered.slice(0, 10), null, 2).slice(0, 4000) + `\n…共 ${filtered.length} 条` }
+      },
+    }))
+    t.register(defineTool({
+      name: 'opencli_run',
+      description: '通用 OpenCLI argv 网关（除 unrestricted 外走审批；常规搜索优先 site 直调）',
+      parameters: {
+        args: { type: 'array', items: { type: 'string' }, description: 'argv 数组（如 ["reddit","search","DeepSeek Harness"]），不拼 shell' },
+      },
+      output: { schema: { type: 'json' }, render: (_a: unknown, v: { text: string }) => [{ type: 'text', text: v.text }] },
+      execute: async (a: ToolArgs) => {
+        const argv = Array.isArray(a.args) ? a.args.map(String) : []
+        if (argv.length === 0) return { text: 'args 为空' }
+        const out = await this.runOpencli(argv)
+        return { text: this.renderOut(out) }
+      },
+    }))
   }
 
   private registerSiteTool(): void {
