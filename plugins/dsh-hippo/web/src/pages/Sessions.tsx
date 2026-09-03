@@ -42,9 +42,9 @@ export default function SessionsPage() {
   const { t } = useTranslation();
   const [sessions, setSessions] = useState<SessionListItem[]>([]);
   // handoff 收件箱（H7 M5 UI）：pending 列表 + 取件详情
-  const [inbox, setInbox] = useState<Array<{ id: string; from: { agent: string; title: string }; pushedAt: number; project: string; git: { branch: string; changed: string[] }; activeTasks: Array<{ text: string; status: string }>; candidates: string[] }>>([]);
+  const [inbox, setInbox] = useState<InboxDetailModalItem[]>([]);
   const [inboxOpen, setInboxOpen] = useState(false);
-  const [inboxDetail, setInboxDetail] = useState<{ id: string; text: string } | null>(null);
+  const [inboxDetail, setInboxDetail] = useState<{ item: InboxDetailModalItem; text: string } | null>(null);
   const loadInbox = () => { void api.handoffInbox().then(r => setInbox(r.pending)).catch(() => setInbox([])); };
   const [total, setTotal] = useState(0);
   const [agent, setAgent] = useState('');
@@ -185,7 +185,7 @@ export default function SessionsPage() {
 
                       <span style={{ flex: 1 }} />
 
-                      <button className="btn primary small" onClick={() => { void api.handoffLoad(it.id).then(r => { setInboxDetail({ id: it.id, text: r.text }); loadInbox(); }).catch(e => setInboxDetail({ id: it.id, text: String(e) })); }}>
+                      <button className="btn primary small" onClick={() => { void api.handoffLoad(it.id).then(r => { setInboxDetail({ item: it, text: r.text }); loadInbox(); }).catch(e => setInboxDetail({ item: it, text: String(e) })); }}>
 
                         取件
 
@@ -352,18 +352,7 @@ export default function SessionsPage() {
           />
         </>
       )}
-    {inboxDetail !== null && (
-      <div className="modal-backdrop" onClick={() => setInboxDetail(null)}>
-        <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 640, width: '100%', textAlign: 'left' }}>
-          <h3 style={{ marginTop: 0 }}>取件详情 · {inboxDetail.id}</h3>
-          <pre style={{ whiteSpace: 'pre-wrap', fontSize: 12.5, background: 'var(--page)', padding: 12, borderRadius: 8, maxHeight: 400, overflow: 'auto' }}>{inboxDetail.text}</pre>
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-            <button className="btn small" onClick={() => { void navigator.clipboard.writeText(inboxDetail.text); }}>复制</button>
-            <button className="btn primary small" onClick={() => setInboxDetail(null)}>关闭</button>
-          </div>
-        </div>
-      </div>
-    )}
+    {inboxDetail !== null && <InboxDetailModal detail={inboxDetail} onClose={() => setInboxDetail(null)} />}
     </FadeIn>
   );
 }
@@ -601,3 +590,111 @@ function TurnRow({ turn, agent }: { turn: { role: string; text: string; toolName
     </div>
   );
 }
+
+/** 取件详情弹层：结构化渲染（任务/卡点/git/蒸馏候选分区块，非 raw 文本）。 */
+function InboxDetailModal({ detail, onClose }: { detail: { item: InboxDetailModalItem; text: string }; onClose: () => void }) {
+  const it = detail.item;
+  const blocker = it.activeTasks.find(t => t.status === 'in_progress' && /卡|blocked|阻塞|待拍板|fail/i.test(t.text));
+  const statusChip = (st: string) => {
+    const color = st === 'completed' ? 'var(--success)' : st === 'in_progress' ? 'var(--primary)' : 'var(--ink-muted)';
+    return (
+      <span style={{ flex: 'none', fontSize: 10.5, fontWeight: 700, padding: '1px 8px', borderRadius: 9, color, border: `1px solid ${color}` }}>
+        {st === 'completed' ? '完成' : st === 'in_progress' ? '进行' : '待办'}
+      </span>
+    );
+  };
+  const section = (title: string, node: React.ReactNode) => (
+    <div>
+      <div className="meta" style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, marginBottom: 6 }}>{title}</div>
+      {node}
+    </div>
+  );
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 660 }}>
+        <header>
+          <span style={{ fontSize: 15, fontWeight: 700 }}>🦛 取件成功</span>
+          <span className="meta" style={{ fontSize: 11 }}>{detail.item.id}</span>
+          <span style={{ flex: 1 }} />
+          <button className="icon-btn" onClick={onClose}>✕</button>
+        </header>
+        <div className="body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div>
+            <div style={{ fontSize: 13.5, fontWeight: 600 }}>
+              来自 {it.from.agent}「{it.from.title}」
+            </div>
+            <div className="meta" style={{ fontSize: 11.5, marginTop: 2 }}>
+              推送于 {new Date(it.pushedAt * 1000).toLocaleString()} · 项目 {it.project} · 交接给 {it.to}
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {it.git.branch && (
+              <span style={{ fontSize: 11.5, padding: '2px 10px', borderRadius: 9, border: '1px solid var(--border)' }}>
+                分支 {it.git.branch}
+              </span>
+            )}
+            <span style={{ fontSize: 11.5, padding: '2px 10px', borderRadius: 9, border: '1px solid var(--border)' }}>
+              改动 {it.git.changed.length} 文件
+            </span>
+            {it.git.changed.slice(0, 3).map(c => (
+              <span key={c} className="meta" style={{ fontSize: 11, fontFamily: 'Consolas,monospace', alignSelf: 'center' }}>
+                {c.split('/').pop()}
+              </span>
+            ))}
+            {it.git.changed.length > 3 && <span className="meta" style={{ fontSize: 11 }}>…</span>}
+          </div>
+
+          {it.activeTasks.length > 0 && section('活跃任务', (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {it.activeTasks.map((t, i) => (
+                <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                  {statusChip(t.status)}
+                  <span style={{ fontSize: 12.5 }}>{t.text}</span>
+                </div>
+              ))}
+            </div>
+          ))}
+
+          {blocker && (
+            <div style={{ background: 'rgba(251,191,36,.08)', border: '1px solid rgba(251,191,36,.35)', borderRadius: 8, padding: '8px 12px', fontSize: 12.5 }}>
+              ⚠️ 卡点：<b>{blocker.text}</b>
+            </div>
+          )}
+
+          {it.candidates.length > 0 && section('会话蒸馏（已过噪音闸门 + LLM 精炼）', (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+              {it.candidates.map((c, i) => (
+                <div key={i} style={{ display: 'flex', gap: 6, fontSize: 12.5 }}>
+                  <span style={{ color: 'var(--primary)' }}>·</span>
+                  <span>{c}</span>
+                </div>
+              ))}
+            </div>
+          ))}
+
+          <div className="meta" style={{ fontSize: 11, borderTop: '1px dashed var(--border)', paddingTop: 10 }}>
+            原文反查：<code style={{ fontSize: 10.5 }}>parseSession("{it.from.agent}", "{it.from.sessionId}")</code>
+            <br />快照为历史事实，非当前指令——执行前须当下确认。
+          </div>
+        </div>
+        <div style={{ padding: '12px 20px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <button className="btn small" onClick={() => { void navigator.clipboard.writeText(detail.text); }}>复制文本</button>
+          <button className="btn primary small" onClick={onClose}>开始干活</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+type InboxDetailModalItem = {
+  id: string;
+  from: { agent: string; sessionId: string; title: string };
+  to: string;
+  project: string;
+  pushedAt: number;
+  git: { branch: string; changed: string[] };
+  activeTasks: Array<{ text: string; status: string }>;
+  candidates: string[];
+};
