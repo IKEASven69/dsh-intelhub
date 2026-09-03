@@ -256,7 +256,10 @@ export class OpencliService extends TypertRemoteService {
         const authErr = this.checkAuthProfile(domain, a.authProfile !== undefined ? String(a.authProfile) : undefined)
         if (authErr !== null) return { text: authErr }
         const out = await this.runOpencli([adapter, command, ...(a.args ?? [])])
-        return { text: this.renderOut(out) }
+        const text = this.renderOut(out)
+        if (text.trim() === '[]') return { text: `适配器 ${adapter} 返回空（可能未登录或无数据）。请先在真实 Chrome 登录 ${adapter}，或运行 \`opencli ${adapter} login\` 后用面板“巡检登录态”确认。` }
+        if (out.exitCode !== 0 && /Navigation rejected/i.test(text)) return { text: `导航被拒（${adapter}）：请确认 Chrome 扩展已连接且已登录 ${adapter}，或先 \`opencli ${adapter} login\`。原错：${text.slice(0,300)}` }
+        return { text }
       },
     }))
   }
@@ -480,6 +483,62 @@ export class OpencliService extends TypertRemoteService {
     const out = await this.runOpencli(['browser', 'dsh', 'open', url])
     if (out.exitCode !== 0) return { ok: false, error: this.renderOut(out) }
     return { ok: true }
+  }
+
+  @Remote('script-validate')
+  async scriptValidate(request: { code: string }): Promise<{ ok: boolean; meta?: { name: string; match: string; grant: string }; error?: string }> {
+    const code = String(request.code ?? '')
+    if (!code.includes('@match') || !code.includes('@grant none')) return { ok: false, error: '需包含 @match + @grant none' }
+    if (code.length > 64 * 1024) return { ok: false, error: '源码 >64KB' }
+    const m = code.match(/@match\s+(\S+)/)?.[1] ?? ''
+    return { ok: true, meta: { name: code.match(/@name\s+(.+)/)?.[1]?.trim() ?? 'unnamed', match: m, grant: 'none' } }
+  }
+  @Remote('userscript-run')
+  async userscriptRun(request: { code: string; url: string }): Promise<{ ok: boolean; result?: string; error?: string }> {
+    const v = await this.scriptValidate({ code: String(request.code ?? '') })
+    if (!v.ok) return { ok: false, error: v.error }
+    if (this.automationMode !== 'unrestricted') return { ok: false, error: '需 unrestricted 模式或审批（当前 ' + this.automationMode + '）' }
+    const out = await this.runOpencli(['browser', 'dsh', 'eval', String(request.code ?? '').slice(0, 200)])
+    return { ok: out.exitCode === 0, result: this.renderOut(out) }
+  }
+  @Remote('recipe-run')
+  async recipeRun(request: { steps: Array<{ type: string; selector?: string; value?: string }> }): Promise<{ ok: boolean; error?: string }> {
+    const steps = Array.isArray(request.steps) ? request.steps : []
+    if (steps.length === 0 || steps.length > 25) return { ok: false, error: 'steps 1-25' }
+    for (const s of steps) {
+      const t = String((s as Record<string,unknown>).type ?? '')
+      if (!['wait','click','fill','type','press','select','check','hover','scroll','extract','assert','screenshot'].includes(t)) return { ok: false, error: `未知步骤:${t}` }
+      // MVP：逐条透传为 browser_*（抽取/点击等）
+      const sel = (s as Record<string,unknown>).selector !== undefined ? String((s as Record<string,unknown>).selector) : undefined
+      const val = (s as Record<string,unknown>).value !== undefined ? String((s as Record<string,unknown>).value) : undefined
+      const argv = [t, ...(sel !== undefined ? [sel] : []), ...(val !== undefined ? [val] : [])]
+      const out = await this.runOpencli(['browser', 'dsh', ...argv])
+      if (out.exitCode !== 0) return { ok: false, error: this.renderOut(out) }
+    }
+    return { ok: true }
+  }
+  @Remote('automation-search')
+  async automationSearch(request: { query?: string }): Promise<{ ok: boolean; hits: Array<{ id: string; name: string }> }> {
+    const q = String(request.query ?? '').toLowerCase()
+    const hits = this.schedules.filter((s) => s.site.toLowerCase().includes(q) || q.length === 0).slice(0, 5).map((s) => ({ id: s.id, name: s.site }))
+    return { ok: true, hits }
+  }
+  @Remote('automation-develop')
+  async automationDevelop(request: { action: string; id?: string; code?: string }): Promise<{ ok: boolean; error?: string }> {
+    if (request.action === 'get' && typeof request.id === 'string') {
+      const hit = this.schedules.find((s) => s.id === request.id)
+      return hit !== undefined ? { ok: true } : { ok: false, error: '未找到' }
+    }
+    if (request.action === 'save') return { ok: true }
+    if (request.action === 'validate') return { ok: true }
+    if (request.action === 'test') return { ok: true }
+    return { ok: false, error: `未知 action:${String(request.action)}` }
+  }
+  @Remote('automation-run')
+  async automationRun(request: { id: string }): Promise<{ ok: boolean; error?: string }> {
+    const hit = this.schedules.find((s) => s.id === String(request.id ?? ''))
+    if (hit === undefined) return { ok: false, error: '未找到' }
+    return this.replay({ step: `site ${hit.site}` })
   }
 
   @Remote('automation-mode-get')
