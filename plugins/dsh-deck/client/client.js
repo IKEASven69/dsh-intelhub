@@ -17,6 +17,7 @@ window.__ModuleLoader__.load({
       search: (q) => post('/api/deck/search', { q }),
       list: (root, path) => post('/api/deck/fs/list', { root, path }),
       read: (root, path) => post('/api/deck/fs/read', { root, path }),
+      write: (root, path, content) => post('/api/deck/fs/write', { root, path, content }),
       state: () => get('/api/deck/state'),
       roots: () => get('/api/deck/roots'),
       ideas: () => get('/api/deck/ideas'),
@@ -153,22 +154,40 @@ window.__ModuleLoader__.load({
     function Preview({ root, path, onBack, title }) {
       const [text, setText] = useState(null)
       const [err, setErr] = useState(null)
+      const [editing, setEditing] = useState(false)
+      const [editText, setEditText] = useState('')
+      const [saving, setSaving] = useState(false)
+      const [saveMsg, setSaveMsg] = useState(null)
+      const isMd = path.endsWith('.md') || path.endsWith('.markdown')
       useEffect(() => {
         let alive = true
-        setText(null); setErr(null)
+        setText(null); setErr(null); setEditing(false); setSaveMsg(null)
         API.read(root, path).then((j) => {
           if (!alive) return
-          if (j.ok) { setText(j.content) } else { setErr(j.error) }
+          if (j.ok) { setText(j.content); setEditText(j.content) } else { setErr(j.error) }
         }).catch((e) => { if (alive) setErr(String(e)) })
         return () => { alive = false }
       }, [root, path])
+      const doSave = async () => {
+        setSaving(true); setSaveMsg(null)
+        try {
+          const j = await API.write(root, path, editText)
+          if (j.ok) { setText(editText); setEditing(false); setSaveMsg('已保存 ✓') } else { setSaveMsg('保存失败：' + j.error) }
+        } catch (e) { setSaveMsg('保存失败：' + String(e)) }
+        setSaving(false)
+      }
       return h('div', { className: 'dk-preview' },
         h('div', { className: 'dk-preview-head' },
           h('button', { className: 'dk-back', onClick: onBack }, '‹ 返回'),
-          h('span', { className: 'dk-path' }, title || path)),
+          h('span', { className: 'dk-path' }, title || path),
+          text !== null && isMd ? h('button', { className: 'dk-chip', style: { marginLeft: 8 }, onClick: () => { if (editing) { setEditText(text); setSaveMsg(null) } setEditing(!editing) }, disabled: saving }, editing ? '预览' : '编辑') : null,
+          editing ? h('button', { className: 'dk-chip', style: { marginLeft: 4 }, onClick: doSave, disabled: saving }, saving ? '保存中…' : '保存') : null,
+          editing ? h('button', { className: 'dk-chip', style: { marginLeft: 4 }, onClick: () => { setEditing(false); setEditText(text); setSaveMsg(null) }, disabled: saving }, '取消') : null),
+        saveMsg !== null ? h('div', { className: saveMsg.startsWith('已保存') ? 'dk-note' : 'dk-err', style: { fontSize: 12.5 } }, saveMsg) : null,
         err !== null ? h(Err, null, '读取失败：' + err) : null,
         text === null && err === null ? h(Note, null, '加载中…') : null,
-        text !== null ? h('div', { className: 'dk-md', dangerouslySetInnerHTML: { __html: mdToHtml(text) } }) : null,
+        text !== null && !editing ? h('div', { className: 'dk-md', dangerouslySetInnerHTML: { __html: mdToHtml(text) } }) : null,
+        editing ? h('textarea', { value: editText, onChange: (e) => setEditText(e.target.value), rows: 18, style: { width: '100%', minHeight: 320, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 13, lineHeight: 1.6, padding: 12, borderRadius: 8, border: '1px solid var(--color-border-1,#2a2e37)', background: 'var(--color-bg-1,#14161c)', color: 'inherit', resize: 'vertical' } }) : null,
       )
     }
 
@@ -206,7 +225,7 @@ window.__ModuleLoader__.load({
     }
 
     // ── 文件浏览（kb 四库 / 通用项目共用）──
-    const LAYERS = [['', '🏠 根目录'], ['collections', '① 采集原料'], ['research', '② 事实核查'], ['insights', '③ 判断沉淀'], ['skills', '④ 方法论'], ['ideas', '⑤ 点子池']]
+    const LAYERS = [['', '根目录'], ['collections', '① 采集原料'], ['research', '② 事实核查'], ['insights', '③ 判断沉淀'], ['skills', '④ 方法论'], ['ideas', '⑤ 点子池']]
 
     function FsBrowse({ root, base, layers }) {
       const [dir, setDir] = useState(base)
@@ -297,7 +316,7 @@ window.__ModuleLoader__.load({
             h('div', { key: idea.file, className: 'dk-card' + (idea.status === 'picked' ? ' picked' : '') },
               h('div', { className: 'dk-card-title' }, idea.title),
               h('div', { className: 'dk-card-sub' },
-                idea.status === 'seed' ? '🌱 埋子' : idea.status === 'incubating' ? '🥚 孵化' : '✅ 已采纳',
+                idea.status === 'seed' ? '种子' : idea.status === 'incubating' ? '孵化中' : '✅ 已采纳',
                 idea.created !== '' ? ' · ' + idea.created : ''),
               idea.status !== 'picked'
                 ? h('div', { className: 'dk-card-actions' },
@@ -447,8 +466,8 @@ window.__ModuleLoader__.load({
                 c.status === 'running' ? h('span', { className: 'dk-fine' }, 'zcode 工作中…') : null,
                 c.status === 'review'
                   ? (onGoReview !== undefined
-                      ? h('button', { className: 'dk-mini', onClick: onGoReview }, '🧾 去审阅')
-                      : h('button', { className: 'dk-mini', onClick: () => markDone(c.id) }, '✔ 审毕标完成'))
+                      ? h('button', { className: 'dk-mini', onClick: onGoReview }, '去审阅')
+                      : h('button', { className: 'dk-mini', onClick: () => markDone(c.id) }, '审毕标完成'))
                   : null,
                 h('button', { className: 'dk-mini', onClick: reload }, '↻'),
               ))
@@ -527,7 +546,7 @@ window.__ModuleLoader__.load({
               h('div', { className: 'dk-md', dangerouslySetInnerHTML: { __html: mdToHtml(r.body) } })),
             h('div', { className: 'dk-card-actions' },
               h('button', { className: 'dk-mini', disabled: busy || Object.keys(picked).length === 0, onClick: approve },
-                `📥 落库选中（${Object.keys(picked).length}）`),
+                `落库选中（${Object.keys(picked).length}）`),
               h('span', { className: 'dk-fine' }, '落库=追加 LESSONS.md 新章节 + git 提交 + 任务卡置 done')),
           ) : null,
         )
@@ -535,7 +554,7 @@ window.__ModuleLoader__.load({
       return h('div', { className: 'dk-col' },
         msg !== null ? h(Note, null, msg) : null,
         cards === null ? h(Note, null, '加载中…') : null,
-        cards !== null && cards.length === 0 ? h(Note, null, '没有待审阅的任务（zcode 交活后卡会变 👀 待审阅）') : null,
+        cards !== null && cards.length === 0 ? h(Note, null, '没有待审阅的任务（zcode 交活后卡会变为“待审阅”）') : null,
         h('div', { className: 'dk-grid' },
           (cards ?? []).map((c) =>
             h('div', { key: c.id, className: 'dk-card task rev', role: 'button', tabIndex: 0, onClick: () => setOpenId(c.id) },
@@ -591,17 +610,17 @@ window.__ModuleLoader__.load({
         h('div', { className: 'dk-fine' }, k), h('div', { style: { fontSize: 26, fontWeight: 750 } }, v), sub !== undefined ? h('div', { className: 'dk-fine' }, sub) : null)
       return h('div', { className: 'dk-col' },
         h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))', gap: 10 } },
-          stat('✈ Skills', S.skills), stat('📁 精选', S.collections), stat('↑ 今日新增', S.todayNew, '篇'),
-          stat('○ 待处理', S.raw), stat('目 回看', S.lessonsWarn, '待验证'), stat('→ 关注', S.watchChannels)),
-        h('div', { className: 'dk-field-label' }, '🔥 收藏 Top（互动量降序，点卡预览）'),
+          stat('Skills', S.skills), stat('精选', S.collections), stat('↑ 今日新增', S.todayNew, '篇'),
+          stat('○ 待处理', S.raw), stat('待复核', S.lessonsWarn, '待验证'), stat('→ 关注', S.watchChannels)),
+        h('div', { className: 'dk-field-label' }, '收藏 Top（互动量降序，点卡预览）'),
         h('div', { className: 'dk-grid' }, qv.hot.slice(0, 8).map((x, i) =>
           h('div', { key: x.file, className: 'dk-card', onClick: () => onOpenFile(x.file) },
             h('div', { className: 'dk-card-title' }, (i + 1) + '. ' + x.title),
-            h('div', { className: 'dk-card-sub' }, (x.heat > 0 ? x.heat + '♥ · ' : '') + x.file)))),
-        h('div', { className: 'dk-field-label' }, '🧭 Skills（点开方法论）'),
+            h('div', { className: 'dk-card-sub' }, (x.heat > 0 ? '热度 ' + x.heat + ' · ' : '') + x.file)))),
+        h('div', { className: 'dk-field-label' }, 'Skills（点开方法论）'),
         h('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap' } }, qv.skills.map((sk) =>
           h('button', { key: sk.file, className: 'dk-chip', title: sk.desc, onClick: () => onOpenFile(sk.file) }, sk.name))),
-        qv.watch.length > 0 ? h('div', { className: 'dk-field-label' }, '👀 关注（分渠道）') : null,
+        qv.watch.length > 0 ? h('div', { className: 'dk-field-label' }, '关注（分渠道）') : null,
         qv.watch.length > 0 ? h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))', gap: 10 } },
           qv.watch.map((w) => h('div', { key: w.channel, className: 'dk-card', style: { cursor: 'default' } },
             h('div', { className: 'dk-card-title' }, w.channel + ' · ' + w.entries.length),
@@ -609,7 +628,7 @@ window.__ModuleLoader__.load({
               h('a', { href: e.url, target: '_blank', rel: 'noopener noreferrer', style: { color: 'var(--dk-accent)' } }, e.who),
               e.grp ? h('span', { className: 'dk-chip', style: { fontSize: 10.5, padding: '0 8px', marginLeft: 6 } }, e.grp) : null,
               e.why !== '' ? h('span', { style: { opacity: .6 } }, ' — ' + e.why) : null))))) : null,
-        qv.lessonsWarnList.length > 0 ? h('div', { className: 'dk-field-label' }, '⚠️ 判断回看（' + qv.lessonsWarnList.length + ' 条待验证）') : null,
+        qv.lessonsWarnList.length > 0 ? h('div', { className: 'dk-field-label' }, '判断回看（' + qv.lessonsWarnList.length + ' 条待验证）') : null,
         qv.lessonsWarnList.length > 0 ? h('div', { className: 'dk-card', style: { cursor: 'default', display: 'flex', flexDirection: 'column', gap: 4 } },
           qv.lessonsWarnList.slice().reverse().map((l, i) => h('div', { key: i, style: { fontSize: 12.5, opacity: .8, borderBottom: '1px dashed var(--color-border-1,#2a2e37)', padding: '4px 0' } }, l))) : null,
       )
@@ -640,10 +659,10 @@ window.__ModuleLoader__.load({
 
     // ── 自媒体台（D4）：内容项看板四列 + 选题创建 + 详情（文件/产物/交 zcode）──
     const CONTENT_COLS = [
-      ['idea', '💡 选题', ['idea']],
-      ['drafting', '✍️ 创作', ['drafting']],
-      ['ready', '✅ 待发', ['ready', 'prefill']],
-      ['published', '📢 已发布', ['published']],
+      ['idea', '选题', ['idea']],
+      ['drafting', '创作', ['drafting']],
+      ['ready', '待发', ['ready', 'prefill']],
+      ['published', '已发布', ['published']],
     ]
     const CTYPE = { article: ['📝', '文章'], video: ['🎬', '视频'], ppt: ['📊', 'PPT'] }
     const NEXT_STATUS = { idea: 'drafting', drafting: 'ready', ready: 'prefill', prefill: 'published', published: null }
@@ -652,8 +671,8 @@ window.__ModuleLoader__.load({
       const [tab, setTab] = useState('board')
       return h('div', { className: 'dk-desk' },
         h('div', { className: 'dk-deskbar' },
-          [['board', '📋 看板'], ['new', '➕ 选题'], ['files', '📚 文件'], ['tasks', '🧾 任务']].map(([id, label]) =>
-            h('button', { key: id, className: tab === id ? 'on' : '', onClick: () => setTab(id) }, h(Icon, { name: label, size: 14, style: { marginRight: 5, verticalAlign: -2 } }), label === 'search' ? '搜索' : label === 'library' ? '文库' : label === 'ideas' ? '点子' : label === 'tasks' ? '任务' : label === 'review' ? '审阅' : label === 'lessons' ? '复盘' : label === 'graph' ? '图谱' : label))),
+          [['board', 'grid', '看板'], ['new', 'plus', '选题'], ['files', 'folder', '文件'], ['tasks', 'tasks', '任务']].map(([id, icon, text]) =>
+            h('button', { key: id, className: tab === id ? 'on' : '', onClick: () => setTab(id) }, h(Icon, { name: icon, size: 14, style: { marginRight: 5, verticalAlign: -2 } }), text))),
         h('div', { className: 'dk-deskmain' },
           tab === 'board' ? h(MediaBoard)
           : tab === 'new' ? h(NewTopic, { onDone: () => setTab('board') })
@@ -678,7 +697,7 @@ window.__ModuleLoader__.load({
       return h('div', { className: 'dk-col' },
         err !== null ? h(Err, null, err) : null,
         items === null && err === null ? h(Note, null, '加载内容项…') : null,
-        items !== null && items.length === 0 ? h(Note, null, 'content/ 还没有内容项——去「➕ 选题」建一个，或从知识台点子「→ 选题夹」') : null,
+        items !== null && items.length === 0 ? h(Note, null, 'content/ 还没有内容项——去「选题」建一个，或从知识台点子「→ 选题夹」') : null,
         h('div', { className: 'dk-board media' },
           CONTENT_COLS.map(([id, label, sts]) =>
             h('div', { key: id, className: 'dk-board-col' },
@@ -728,8 +747,8 @@ window.__ModuleLoader__.load({
           h('span', { style: { fontFamily: 'ui-monospace,monospace', fontSize: 12, opacity: .6 } }, 'P' + (ci + 1) + ' / ' + n),
           h('span', { style: { flex: 1 } }),
           h('button', { className: 'dk-mini', onClick: () => setOv(v => !v) }, ov ? '□ 退出概览' : '⊞ 概览'),
-          onEditSlide ? h('button', { className: 'dk-mini', onClick: () => onEditSlide(ci) }, '🤖 改这页') : null,
-          h('button', { className: 'dk-mini', onClick: onClose }, '✕ 退出放映')),
+          onEditSlide ? h('button', { className: 'dk-mini', onClick: () => onEditSlide(ci) }, '改这页') : null,
+          h('button', { className: 'dk-mini', onClick: onClose }, '退出放映')),
         h('div', { style: { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 0, padding: '12px 0' } }, stage),
         ov ? null : nav,
       )
@@ -739,7 +758,7 @@ window.__ModuleLoader__.load({
         h('div', { style: { height: 46, display: 'flex', alignItems: 'center', gap: 12, padding: '0 18px', borderBottom: '1px solid var(--color-border-1,#2a2e37)', flexShrink: 0 } },
           h('b', { style: { fontSize: 14 } }, title),
           h('span', { style: { flex: 1 } }),
-          h('button', { className: 'dk-mini', onClick: onClose }, '✕ 退出阅读')),
+          h('button', { className: 'dk-mini', onClick: onClose }, '退出阅读')),
         h('div', { style: { flex: 1, overflowY: 'auto', display: 'flex', justifyContent: 'center' } },
           h('div', { className: 'dk-md', style: { width: 'min(780px,92%)', padding: '28px 36px 60px', fontSize: 16, lineHeight: 2 }, dangerouslySetInnerHTML: { __html: mdToHtml(md) } })),
       )
@@ -816,8 +835,8 @@ window.__ModuleLoader__.load({
               ? h('button', { type: 'button', className: 'dk-ghost', onClick: () => {
                   const f = item.files.find(x => x.endsWith('.md') && !x.includes('meta') && !x.includes('发布记录'))
                   API.read('content', item.slug + '/' + f).then(j => { if (j.ok) setArtMd(j.content) })
-                } }, '📖 阅读') : null,
-            h('button', { type: 'button', className: 'dk-ghost', onClick: () => setPub(item.status) }, '📢 预填发布'),
+                } }, '阅读') : null,
+            h('button', { type: 'button', className: 'dk-ghost', onClick: () => setPub(item.status) }, '预填发布'),
             h('button', { type: 'button', disabled: busy, onClick: handoff }, '🚀 交给 zcode')),
         ),
         pub !== null ? h(PublishFlow, { item, stage: pub, onClose: () => setPub(null), onChanged }) : null,
@@ -852,7 +871,7 @@ window.__ModuleLoader__.load({
       }
       return h('div', { className: 'dk-modal-back', onClick: (e) => { if (e.target.className === 'dk-modal-back') onClose() } },
         h('div', { className: 'dk-modal' },
-          h('div', { className: 'dk-modal-title' }, '📢 预填发布 · ' + item.title),
+          h('div', { className: 'dk-modal-title' }, '预填发布 · ' + item.title),
           h('div', { className: 'dk-field-row' },
             h('div', { className: 'dk-field' }, h('label', null, '平台'),
               h('select', { value: platform, onChange: (e) => setPlatform(e.target.value) },
@@ -1098,9 +1117,9 @@ function openSession(id) { try { deckCtx && deckCtx.sessions && deckCtx.sessions
       }
       return h('div', { className: 'dk-desk' },
         h('div', { className: 'dk-deskbar' },
-          h('button', { className: tab === 'projects' ? 'on' : '', onClick: () => setTab('projects') }, '🗂️ 项目'),
-          h('button', { className: tab === 'board' ? 'on' : '', onClick: () => setTab('board') }, '📊 统一看板'),
-          h('button', { className: tab === 'sessions' ? 'on' : '', onClick: () => setTab('sessions') }, '💬 会话镜像')),
+          h('button', { className: tab === 'projects' ? 'on' : '', onClick: () => setTab('projects') }, '项目'),
+          h('button', { className: tab === 'board' ? 'on' : '', onClick: () => setTab('board') }, '统一看板'),
+          h('button', { className: tab === 'sessions' ? 'on' : '', onClick: () => setTab('sessions') }, '会话镜像')),
         h('div', { className: 'dk-deskmain' },
           msg !== null ? h(Note, null, msg) : null,
           tab === 'projects'
@@ -1120,15 +1139,15 @@ function openSession(id) { try { deckCtx && deckCtx.sessions && deckCtx.sessions
                       h('span', null, '✅ ' + countsOf(p.id, 'done'))),
                     p.bindSession
                       ? h('button', { className: 'dk-bind cur', title: '点按切换到该会话', onClick: () => openSession(p.bindSession) },
-                          '🔗 ' + (bound !== null && bound.running ? '🏃 ' : '') + sessTitle(bound !== null ? bound : { id: p.bindSession }))
-                      : h('button', { className: 'dk-bind', onClick: () => setPicking(picking === p.id ? null : p.id) }, '🔗 绑定会话'),
+                          (bound !== null && bound.running ? '🏃 ' : '') + sessTitle(bound !== null ? bound : { id: p.bindSession }))
+                      : h('button', { className: 'dk-bind', onClick: () => setPicking(picking === p.id ? null : p.id) }, '绑定会话'),
                     picking === p.id ? h(SessionPicker, {
                       project: p,
                       onDone: (e) => { setPicking(null); if (typeof e === 'string') setMsg(e) },
                     }) : null,
                     h('div', { className: 'dk-card-actions' },
                       h('button', { className: 'dk-mini', onClick: () => { goProject(p.id) } }, '打开 →'),
-                      h('button', { className: 'dk-mini', onClick: () => setEditing(p) }, '✏️'),
+                      h('button', { className: 'dk-mini', onClick: () => setEditing(p) }, '编辑'),
                       p.id.startsWith('builtin-')
                         ? h('button', { className: 'dk-mini', onClick: () => { API.projectUpdate(p.id, { hidden: !p.hidden }); setTimeout(loadState, 300) } }, p.hidden ? '取消隐藏' : '隐藏')
                         : h('button', { className: 'dk-mini danger', onClick: () => { if (window.confirm('删除工作台「' + p.name + '」？（只解除注册，不动磁盘文件）')) post('/api/deck/project/delete', { id: p.id }).then(() => { loadState() }) } }, '删除')),
@@ -1168,8 +1187,8 @@ function openSession(id) { try { deckCtx && deckCtx.sessions && deckCtx.sessions
         h(Note, null, '宿主会话快照订阅镜像（零轮询）· 共 ' + rows.length + ' 条 · 当前：' + (sessionsStore.current ? sessTitle(sessionsStore.byId[sessionsStore.current] || { id: sessionsStore.current }) : '无')),
         h('div', { className: 'dk-board' },
           h('div', { className: 'dk-board-col' }, h('div', { className: 'dk-board-colhead' }, '🏃 工作中 · ' + running.length), col(running.slice(0, 10))),
-          h('div', { className: 'dk-board-col' }, h('div', { className: 'dk-board-colhead' }, '🙋 待你决定 · ' + pending.length), col(pending.slice(0, 10))),
-          h('div', { className: 'dk-board-col' }, h('div', { className: 'dk-board-colhead' }, '💤 空闲'), col(rest)),
+          h('div', { className: 'dk-board-col' }, h('div', { className: 'dk-board-colhead' }, '待你决定 · ' + pending.length), col(pending.slice(0, 10))),
+          h('div', { className: 'dk-board-col' }, h('div', { className: 'dk-board-colhead' }, '空闲'), col(rest)),
         ),
       )
     }
@@ -1224,9 +1243,9 @@ function openSession(id) { try { deckCtx && deckCtx.sessions && deckCtx.sessions
       const loc = resolveAlias(project.folder)
       return h('div', { className: 'dk-desk' },
         h('div', { className: 'dk-deskbar' },
-          h('button', { className: tab === 'tasks' ? 'on' : '', onClick: () => setTab('tasks') }, '📋 任务'),
-          h('button', { className: tab === 'review' ? 'on' : '', onClick: () => setTab('review') }, '🧾 审阅'),
-          h('button', { className: tab === 'files' ? 'on' : '', onClick: () => setTab('files') }, '📚 文件'),
+          h('button', { className: tab === 'tasks' ? 'on' : '', onClick: () => setTab('tasks') }, '任务'),
+          h('button', { className: tab === 'review' ? 'on' : '', onClick: () => setTab('review') }, '审阅'),
+          h('button', { className: tab === 'files' ? 'on' : '', onClick: () => setTab('files') }, '文件'),
           loc === null ? h('span', { className: 'dk-fine', style: { alignSelf: 'center', marginLeft: 6 } }, '⚠ 文件夹不在注册根内，文件/审阅产物不可用') : null),
         h('div', { className: 'dk-deskmain' },
           tab === 'tasks'
@@ -1260,7 +1279,7 @@ function openSession(id) { try { deckCtx && deckCtx.sessions && deckCtx.sessions
       const inner = h('div', { className: 'dk-col' },
         msg !== null ? h(Note, null, msg) : null,
         reviewCards.length + readyItems.length === 0
-          ? h(Note, null, '✅ 没有待你决定的——agent 交活/内容待发会出现在这')
+          ? h(Note, null, '没有待你决定的——agent 交活/内容待发会出现在这')
           : h('div', { className: 'dk-col', style: { gap: 8 } },
               reviewCards.map(({ b, c }) =>
                 h('div', { key: 'r' + b.id + c.id, className: 'dk-card dk-todo urgent', onClick: goReview },
@@ -1269,10 +1288,10 @@ function openSession(id) { try { deckCtx && deckCtx.sessions && deckCtx.sessions
                   h('button', { className: 'dk-mini', onClick: (e) => { e.stopPropagation(); goReview() } }, '去审阅'))),
               readyItems.map((i) =>
                 h('div', { key: i.slug, className: 'dk-card dk-todo urgent', onClick: () => goItem(i.slug) },
-                  h('span', { className: 'ico' }, '📢'), h('span', { className: 'nm' }, '发布终审'),
+                  h(Icon, { name: 'publish', size: 26, style: { color: 'var(--dk-accent)' } }), h('span', { className: 'nm' }, '发布终审'),
                   h('span', { className: 'pv' }, i.title + ' · 预填就绪'),
                   h('button', { className: 'dk-mini', onClick: (e) => { e.stopPropagation(); goItem(i.slug) } }, '去点发')))),
-        h('div', { className: 'dk-toolbar' }, h('span', { className: 'dk-field-label' }, '🔁 进行中的件 · ' + (running.length + drafting.length))),
+        h('div', { className: 'dk-toolbar' }, h('span', { className: 'dk-field-label' }, '进行中的件 · ' + (running.length + drafting.length))),
         running.map(({ b, c }) =>
           h('div', { key: 't' + b.id + c.id, className: 'dk-flowrow' },
             h('span', { className: 'ftt' }, c.title),
@@ -1300,8 +1319,8 @@ function openSession(id) { try { deckCtx && deckCtx.sessions && deckCtx.sessions
                 h('span', { className: 'dk-step ' + (k < step ? 'done' : k === step ? 'now' : '') }, h('i', null, k < step ? '✓' : k + 1), st),
                 k < 4 ? h('span', { className: 'dk-stepline ' + (k < step ? 'done' : '') }) : null)
             })),
-            stepOfContent(i.status) === 3 ? h('button', { className: 'dk-mini', onClick: () => goItem(i.slug) }, '📢 去发布') : null)),
-        h('div', { className: 'dk-toolbar' }, h('span', { className: 'dk-field-label' }, '💡 灵感流 · ' + seedIdeas.length)),
+            stepOfContent(i.status) === 3 ? h('button', { className: 'dk-mini', onClick: () => goItem(i.slug) }, '去发布') : null)),
+        h('div', { className: 'dk-toolbar' }, h('span', { className: 'dk-field-label' }, '灵感流 · ' + seedIdeas.length)),
         h('div', { style: { display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 4 } },
           seedIdeas.map((idea) =>
             h('div', { key: idea.file, className: 'dk-card', style: { minWidth: 250, maxWidth: 250, cursor: 'default', flexShrink: 0 } },
@@ -1312,7 +1331,7 @@ function openSession(id) { try { deckCtx && deckCtx.sessions && deckCtx.sessions
                 h('button', { className: 'dk-mini', onClick: () => { goDesk('kb'); if (kbGoTab) kbGoTab('ideas') } }, '看全部'))))),
       )
       return h('div', { className: 'dk-desk' },
-        h('div', { className: 'dk-deskbar' }, h('button', { className: 'on' }, '🏠 今日动线 · 待办 → 进行中 → 灵感')),
+        h('div', { className: 'dk-deskbar' }, h('button', { className: 'on' }, '今日动线 · 待办 → 进行中 → 灵感')),
         h('div', { className: 'dk-deskmain' }, inner))
     }
 
@@ -1342,7 +1361,7 @@ function openSession(id) { try { deckCtx && deckCtx.sessions && deckCtx.sessions
       const replied = (msgs ?? []).filter((m) => m.status === 'replied')
       return h('div', { className: 'dk-desk' },
         h('div', { className: 'dk-deskbar' },
-          h('button', { className: 'on' }, '💬 消息台 · 新 ' + news.length + ' · 已回 ' + replied.length),
+          h('button', { className: 'on' }, '消息台 · 新 ' + news.length + ' · 已回 ' + replied.length),
           h('button', { style: { marginLeft: 8, background: 'none', border: '1px solid var(--color-border-1,#2a2e37)', borderRadius: 999, color: 'var(--dk-accent,#5b6cff)', cursor: 'pointer', padding: '4px 14px', fontSize: 13 } , onClick: () => setShowAdd(!showAdd) }, showAdd ? '收起' : '＋ 手动添加')),
         h('div', { className: 'dk-deskmain' },
           h('div', { className: 'dk-col' },
@@ -1350,16 +1369,16 @@ function openSession(id) { try { deckCtx && deckCtx.sessions && deckCtx.sessions
             showAdd ? h(AddMsgForm, { onAdd: addMsg }) : null,
             msgs === null ? h(Note, null, '加载中…') : null,
             msgs !== null && msgs.length === 0 ? h(Note, null, '没有消息——点「＋ 手动添加」把平台评论粘进来，或让 agent 从通知页导入') : null,
-            news.length > 0 ? h('div', { className: 'dk-field-label' }, '📥 新评论（' + news.length + '）') : null,
+            news.length > 0 ? h('div', { className: 'dk-field-label' }, '新评论（' + news.length + '）') : null,
             news.map((m) => h(MsgCard, { key: m.id, m, onDraft: doDraft, onReply: () => { setReplying(m.id); setReplyText('') }, onDelete: () => API.msgDelete(m.id).then(reload) })),
             replying !== null ? h('div', { className: 'dk-card', style: { cursor: 'default' } },
-              h('div', { className: 'dk-field-label' }, '✏️ 回复'),
+              h('div', { className: 'dk-field-label' }, '回复'),
               h('textarea', { value: replyText, onChange: (e) => setReplyText(e.target.value), rows: 3, style: { width: '100%', background: 'var(--color-bg-2,#1b1e26)', color: 'inherit', border: '1px solid var(--color-border-1,#2a2e37)', borderRadius: 8, padding: 8, font: '13px/1.6 system-ui', outline: 'none', resize: 'vertical' } }),
               h('div', { className: 'dk-card-actions' },
-                h('button', { className: 'dk-mini', onClick: doDraft }, '🤖 AI 起草'),
+                h('button', { className: 'dk-mini', onClick: doDraft }, 'AI 起草'),
                 h('button', { className: 'dk-mini', onClick: doReply, disabled: replyText.trim() === '' }, '✓ 已回复，记录'),
                 h('button', { className: 'dk-mini', onClick: () => setReplying(null) }, '取消'))) : null,
-            replied.length > 0 ? h('div', { className: 'dk-field-label' }, '✅ 已回复（' + replied.length + '）') : null,
+            replied.length > 0 ? h('div', { className: 'dk-field-label' }, '已回复（' + replied.length + '）') : null,
             replied.map((m) => h(MsgCard, { key: m.id, m, onDelete: () => API.msgDelete(m.id).then(reload) })),
           )))
     }
@@ -1392,8 +1411,8 @@ function openSession(id) { try { deckCtx && deckCtx.sessions && deckCtx.sessions
         m.reply ? h('div', { style: { marginTop: 8, padding: '8px 12px', background: 'var(--color-bg-2,#1b1e26)', borderRadius: 8, fontSize: 13, opacity: .8, borderLeft: '2px solid var(--dk-ok,#34d399)' } },
           h('span', { style: { fontSize: 11, color: 'var(--dk-ok,#34d399)', fontWeight: 600 } }, '回复：'), m.reply) : null,
         m.status === 'new' ? h('div', { className: 'dk-card-actions' },
-          onDraft ? h('button', { className: 'dk-mini', onClick: () => onDraft(m.id) }, '🤖 起草') : null,
-          onReply ? h('button', { className: 'dk-mini', onClick: onReply }, '✏️ 手写回复') : null) : null)
+          onDraft ? h('button', { className: 'dk-mini', onClick: () => onDraft(m.id) }, '起草') : null,
+          onReply ? h('button', { className: 'dk-mini', onClick: onReply }, '手写回复') : null) : null)
     }
 
     // 启动器弹窗
@@ -1417,7 +1436,7 @@ function openSession(id) { try { deckCtx && deckCtx.sessions && deckCtx.sessions
       }
       return h('div', { className: 'dk-modal-back', onClick: (e) => { if (e.target.className === 'dk-modal-back') onClose() } },
         h('div', { className: 'dk-modal' },
-          h('div', { className: 'dk-modal-title' }, '🚀 发给 agent · 启动器'),
+          h('div', { className: 'dk-modal-title' }, '发给 agent · 启动器'),
           h('div', { className: 'dk-field' }, h('label', null, 'CLI'),
             h('div', { className: 'dk-launchrow' }, ['opencode', 'zcode', 'custom'].map((c) =>
               h('button', { key: c, className: 'dk-chip', style: cli === c ? { borderColor: 'var(--dk-accent)', color: 'var(--dk-accent)' } : {}, onClick: () => setCli(c) }, c === 'custom' ? '自定义命令' : c)))),
@@ -1486,7 +1505,7 @@ function openSession(id) { try { deckCtx && deckCtx.sessions && deckCtx.sessions
           THEMES.map(([id, color]) =>
           h('button', { key: id, className: 'dk-thdot' + (themeStore.th === id ? ' on' : ''), style: { background: color, color }, title: '主题 ' + id, onClick: () => themeStore.set(id) }))),
         h('button', { className: 'dk-rail-btn' + (app === 'room' ? ' on' : ''), title: '控制室', onClick: () => setApp('room') },
-          h('span', { className: 'dk-rail-icon' }, '🖥️'),
+          h(Icon, { name: 'room', size: 22, className: 'dk-rail-icon' }),
           h('span', { className: 'dk-rail-label' }, '控制室')),
         h('button', { className: 'dk-rail-btn close', title: '收起工作台', onClick: () => setOpen(false) },
           h('span', { className: 'dk-rail-icon' }, '»')),
@@ -1508,7 +1527,7 @@ function openSession(id) { try { deckCtx && deckCtx.sessions && deckCtx.sessions
       if (openState === true) everOpened = true
       if (!isOpen()) {
         return everOpened
-          ? h('button', { className: 'dk-tile', title: '展开工作台', onClick: () => setOpen(true) }, '🗂️')
+          ? h('button', { className: 'dk-tile', title: '展开工作台', onClick: () => setOpen(true) }, '台')
           : null
       }
       const proj = app.startsWith('p:') ? (stateStore.projects.find((p) => p.id === app.slice(2)) ?? null) : null
@@ -1520,7 +1539,7 @@ function openSession(id) { try { deckCtx && deckCtx.sessions && deckCtx.sessions
           : app === 'kb' ? h(KnowledgeDesk)
           : app === 'research' ? h('div', { className: 'dk-desk' },
               h('div', { className: 'dk-deskbar' },
-                h('button', { className: 'on' }, '📋 调研任务 · 知识库项目'),
+                h('button', { className: 'on' }, '调研任务 · 知识库项目'),
                 h('span', { className: 'dk-fine', style: { alignSelf: 'center', marginLeft: 6 } }, 'TASK.md 队列 → 发给 agent → 审阅落库')),
               h('div', { className: 'dk-deskmain' }, h(TaskBoard, { projectId: 'builtin-kb', onGoReview: () => { setApp('kb'); if (kbGoTab) kbGoTab('review') } })))
           : app === 'msg' ? h(MsgDesk)
@@ -1548,7 +1567,7 @@ function openSession(id) { try { deckCtx && deckCtx.sessions && deckCtx.sessions
       const rows = sessionsStore.ids.map((id) => sessionsStore.byId[id]).filter(Boolean)
         .sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? ''))).slice(0, 12)
       return h('div', { className: 'dk-sessbar' },
-        h('div', { className: 'sbh' }, '💬 会话'),
+        h('div', { className: 'sbh' }, '会话'),
         h('div', { className: 'sbl' },
           rows.map((ss) =>
             h('button', { key: ss.id, style: { textAlign: 'left', width: '100%', background: 'var(--color-bg-2)', border: '1px solid ' + (ss.id === sessionsStore.current ? 'var(--dk-accent)' : 'var(--color-border-1)'), color: 'inherit', borderRadius: 9, padding: '6px 10px', cursor: 'pointer', font: 'inherit' }, onClick: () => openSession(ss.id), title: ss.cwd || '' },
@@ -1860,7 +1879,7 @@ button:active{transform:scale(.97);}
           () => h('button', {
             className: 'dk-sidebtn', title: '工作台（dsh-deck）',
             onClick: () => setOpen(!isOpen()),
-          }, '🗂️')))
+          }, '台')))
     }
 
     exports.apply = apply

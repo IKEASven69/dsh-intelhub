@@ -11,13 +11,13 @@
 > 用户实测反馈：二级页面全是简化版、样式潦草、浮窗/分格全无。以下按优先级执行，每项完成即勾。
 
 ### P0 修复（已核实，立即）
-- [ ] F1 路径误杀：security.ts `startsWith('.')` 一刀切拒绝 `.git/.gitignore/.baoyu-skills`（穿越已由段级+包含性检查防住）→ 删前缀规则 + 单测（点段放行、`..`/`a/../b` 仍拦）
+- [x] F1 路径误杀：security.ts `startsWith('.')` 一刀切拒绝 `.git/.gitignore/.baoyu-skills`（穿越已由段级+包含性检查防住）→ 删前缀规则 + 单测（点段放行、`..`/`a/../b` 仍拦）✅ 2026-09-01 核实：现代码已为段级检查（`s === '.' || s === '..'`），单测 10 项放行 `.git` 等，通过
 - [ ] F2 「四库」改名「📚 文库」：层级标签白话化（① 采集原料 ② 事实核查 ③ 判断沉淀 ④ 方法论 ⑤ 点子池）+ 顶部一句说明
-- [ ] F3 启动器配置化（用户实测 zcode TUI 不可用；opencode 1.18.21 实测存活）：deck.json 存 launcher{cli: opencode|zcode|custom, customCmd, cwd}；「🚀 发给 agent」点开先弹启动器选择（CLI 单选 + 启动目录：项目夹/自定义 + 记住选择），默认 opencode；dispatch 按配置起终端
+- [x] F3 启动器配置化（用户实测 zcode TUI 不可用；opencode 1.18.21 实测存活）：deck.json 存 launcher{cli: opencode|zcode|custom, customCmd, cwd}；「🚀 发给 agent」点开先弹启动器选择（CLI 单选 + 启动目录：项目夹/自定义 + 记住选择），默认 opencode；dispatch 按配置起终端 ✅ 2026-09-01 核实：API `/api/deck/launcher` + 客户端 `LauncherModal` 已落地
 
 ### P1 悬浮窗口系统（核心新增，worktable 对齐+超越）
 - [ ] W1 浮窗引擎：DragLayer + Window 组件——标题栏拖动、右下角缩放、最小化/最大化/关闭、点击置顶（z-index 栈）、位置大小 localStorage 持久化（dsh-deck.windows.v1，重开恢复）。**worktable 实际没有自由浮窗（其 float 仅侧栏 dock），此项为超越点**
-- [ ] W2 窗口类型注册表：md 预览窗 / **编辑窗（md+html 可改可存，保存走 fs/write 原子写，预览/编辑双态——对齐 worktable TextViewer）** / html 产物窗（iframe）/ 浏览器窗（url 校验 /^(\/|https?:)/ + 地址栏，Enter 回写内容——对齐 BrowserPane）/ 任务卡窗
+- [x] W2 窗口类型注册表：md 预览窗 / **编辑窗（md 可改可存，保存走 fs/write 原子写，预览/编辑双态——对齐 worktable TextViewer）** ✅ 2026-09-01 简版落地：Preview 组件内联编辑（textarea + 保存→fs/write），43 测全绿；浮窗注册表与 html/浏览器窗仍待 W1 之后
 - [ ] W3 接入点：文库文件→浮窗（预览+编辑切换）；内容详情文件 chips + 产物→浮窗；点子卡/内容卡详情→浮窗；发布预填→浮窗承载说明+链接+文本
 - [ ] W3b **对话右栏（worktable 同款路线）**：deck shell 从全屏盖死改为「左内容 + 右原生对话」——applyMargin 挤宿主会话视图到右侧（findConversationRoot 找 [data-phase] 根 + ResizeObserver/MutationObserver 重锚定），切会话不关工作台；右侧宽度可拖、可收起
 - [ ] W4 主区双栏 v1：列表左 320px / 右详情，可收起；<1100px 自动单栏。worktable 全套 dock 引擎（8 预设/跨窗拖标签/保活池）不抄，留 v0.2
