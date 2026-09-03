@@ -35,8 +35,9 @@ import { parseCargoAudit, parseGoVulncheck, parsePipAudit } from './vuln-parsers
 import { analyzeInstallScript, referencedScriptFiles, renderSignals } from './script-analysis.ts'
 import { mergeAllowBuildsYaml, mergeAllowScriptsDoc, parseAllowBuildsYaml } from './trust-writeback.ts'
 import { slopsquatFinding, typosquatFindings } from './trust-signals.ts'
-import { diffTrustRecord, mergeTrustRecord, scriptsFingerprint } from './trust-record.ts'
+import { diffTrustRecord, filesFingerprint, mergeTrustRecord, scriptsFingerprint } from './trust-record.ts'
 import type { TrustRecord } from './trust-record.ts'
+import { isModelFacingFile, scanInjectedText } from './prompt-injection.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -352,8 +353,11 @@ export class DepsecService extends TypertRemoteService {
     }
     const bundles = await this.listProfileBundles(root)
     const plugins: PluginRosterEntry[] = []
+    // 插件哈希锁：本 profile 全部插件的文件指纹记录（与依赖 version lock 同一套 trust-record 语义）
+    const prevPluginRecord = await this.loadTrustRecord(root, 'pluginRecord')
+    const pluginObserved: TrustRecord = {}
     for (const b of bundles) {
-      // 每个插件跑 supply-chain + secrets + sast（vuln 跳过——插件的依赖不一定
+      // 每个插件跑 supply-chain + secrets + sast + prompt-injection（vuln 跳过——插件的依赖不一定
       // 在 npm 体系下管理；直接跑它的 node_modules 意义不大）
       const sc = await this.runSupplyChain(b.dir)
       const secrets = await this.runSecrets(b.dir)
@@ -362,6 +366,53 @@ export class DepsecService extends TypertRemoteService {
       for (const f of sc.findings ?? []) findings.push(f)
       for (const f of secrets.findings ?? []) findings.push(f)
       for (const f of sast.findings ?? []) findings.push(f)
+
+      // v0.5 模型面文本：SKILL.md/commands/agents 的提示注入内容检测 + egress 目的地清单
+      const modelFiles = await this.collectModelFacingFiles(b.dir)
+      const INJ_RANK = { pass: 0, warn: 1, block: 2 }
+      let injVerdict: 'pass' | 'warn' | 'block' = 'pass'
+      const egressAll = new Set<string>()
+      for (const f of modelFiles) {
+        const r = scanInjectedText(f.rel, f.text)
+        if (INJ_RANK[r.verdict] > INJ_RANK[injVerdict]) injVerdict = r.verdict
+        for (const h of r.egress) egressAll.add(h)
+        for (const fd of r.findings) {
+          if (fd.severity === 'low') continue
+          findings.push({
+            kind: '插件提示注入',
+            name: `${b.name}/${f.rel}`,
+            detail: `${fd.category}/${fd.severity} L${fd.line}${fd.via !== undefined ? `（via ${fd.via}）` : ''}｜${fd.snippet}`,
+            severity: fd.severity === 'critical' || (fd.severity === 'high' && r.verdict === 'block') ? 'high' : 'medium',
+          })
+        }
+      }
+      // egress 分级：已知分发/主流 AI 厂商域名之外的 host 才出 finding
+      const KNOWN = await import('./script-analysis.ts').then((m) => m.KNOWN_DOWNLOAD_HOSTS)
+      const unknownEgress = [...egressAll].filter((h) => !KNOWN.has(h) && !/^(?:api\.)?(?:deepseek|openai|anthropic|googleapis|mistral|x\.ai)\b/.test(h) && !/\.npmmirror\.com$/.test(h))
+      if (unknownEgress.length > 0) {
+        findings.push({
+          kind: '插件外联目的地',
+          name: b.name,
+          detail: `模型面文本外联 ${unknownEgress.length} 个非白名单 host（装前知情）：${unknownEgress.slice(0, 10).join(', ')}`,
+          severity: 'low',
+        })
+      }
+
+      // 哈希锁：模型面文件 + package.json 指纹；变了 → 重审 finding
+      const fpFiles = modelFiles.map((f) => ({ path: f.rel, content: f.text }))
+      const pkgJson = await this.readJson(this.joinPath(b.dir, 'package.json'))
+      if (pkgJson !== null) fpFiles.push({ path: 'package.json', content: JSON.stringify(pkgJson) })
+      const pluginFp = filesFingerprint(fpFiles)
+      for (const c of diffTrustRecord(prevPluginRecord, { [b.name]: { version: b.version, fingerprint: pluginFp } })) {
+        findings.push({
+          kind: '已装插件文件变更',
+          name: b.name,
+          detail: `自上次 roster 扫描后文件内容变化（版本 ${c.fromVersion} → ${c.toVersion}）：装后篡改/热更新路径，原审计结论失效，建议重扫`,
+          severity: 'medium',
+        })
+      }
+      pluginObserved[b.name] = { version: b.version, fingerprint: pluginFp, verdict: injVerdict === 'block' ? 'block' : injVerdict === 'warn' ? 'warn' : 'pass', scripts: [], at: new Date().toISOString() }
+
       plugins.push({
         name: b.name,
         version: b.version,
@@ -371,16 +422,19 @@ export class DepsecService extends TypertRemoteService {
           supplyChain: (sc.blockVerdict ?? 'pass'),
           secrets: (secrets.blockVerdict ?? 'pass'),
           sast: (sast.blockVerdict ?? 'pass'),
+          promptInjection: injVerdict,
         },
         findings,
-        note: `supply-chain ${sc.blockVerdict ?? 'pass'} / secrets ${secrets.blockVerdict ?? 'pass'} / sast ${sast.blockVerdict ?? 'pass'}`,
+        egress: [...egressAll].sort(),
+        note: `supply-chain ${sc.blockVerdict ?? 'pass'} / secrets ${secrets.blockVerdict ?? 'pass'} / sast ${sast.blockVerdict ?? 'pass'} / 提示注入 ${injVerdict}（模型面文件 ${modelFiles.length} 个）`,
       })
     }
+    await this.saveTrustRecord(root, mergeTrustRecord(prevPluginRecord, pluginObserved, new Date().toISOString()), 'pluginRecord')
     // 排序：block 优先，warn 次之，pass 末尾
     const rank = (v: BlockVerdict): number => v === 'block' ? 0 : v === 'warn' ? 1 : 2
     plugins.sort((a, b) => {
-      const wa = Math.min(rank(a.verdicts.supplyChain), rank(a.verdicts.secrets), rank(a.verdicts.sast))
-      const wb = Math.min(rank(b.verdicts.supplyChain), rank(b.verdicts.secrets), rank(b.verdicts.sast))
+      const wa = Math.min(rank(a.verdicts.supplyChain), rank(a.verdicts.secrets), rank(a.verdicts.sast), rank(a.verdicts.promptInjection))
+      const wb = Math.min(rank(b.verdicts.supplyChain), rank(b.verdicts.secrets), rank(b.verdicts.sast), rank(b.verdicts.promptInjection))
       return wa - wb
     })
     return {
@@ -904,18 +958,19 @@ export class DepsecService extends TypertRemoteService {
     return this.joinPath(root, '.depsec-baseline.json')
   }
 
-  /** 版本锁记录与基线同文件（trustRecord 字段），读写都保留 scopes，互不覆盖。 */
-  private async loadTrustRecord(root: string): Promise<TrustRecord | undefined> {
+  /** 版本锁记录与基线同文件（trustRecord/pluginRecord 字段），读写都保留 scopes，互不覆盖。 */
+  private async loadTrustRecord(root: string, key: 'trustRecord' | 'pluginRecord' = 'trustRecord'): Promise<TrustRecord | undefined> {
     try {
       const t = await this.ctx.fs.resolve(this.baselinePath(root))
       const text = await this.ctx.fs.readText(t)
       if (text === null) return undefined
-      const data = JSON.parse(text) as { trustRecord?: TrustRecord }
-      return data && typeof data === 'object' && data.trustRecord && typeof data.trustRecord === 'object' ? data.trustRecord : undefined
+      const data = JSON.parse(text) as { trustRecord?: TrustRecord; pluginRecord?: TrustRecord }
+      const rec = data?.[key]
+      return rec !== undefined && typeof rec === 'object' ? rec : undefined
     } catch { return undefined }
   }
 
-  private async saveTrustRecord(root: string, record: TrustRecord): Promise<void> {
+  private async saveTrustRecord(root: string, record: TrustRecord, key: 'trustRecord' | 'pluginRecord' = 'trustRecord'): Promise<void> {
     try {
       const t = await this.ctx.fs.resolve(this.baselinePath(root))
       let doc: Record<string, unknown> = {}
@@ -923,8 +978,34 @@ export class DepsecService extends TypertRemoteService {
         const text = await this.ctx.fs.readText(t)
         if (text !== null) doc = JSON.parse(text) as Record<string, unknown>
       } catch { /* 无文件或损坏：从空文档开始 */ }
-      await this.ctx.fs.writeText(t, JSON.stringify({ ...doc, version: 1, updatedAt: new Date().toISOString(), trustRecord: record }, null, 2) + '\n')
+      await this.ctx.fs.writeText(t, JSON.stringify({ ...doc, version: 1, updatedAt: new Date().toISOString(), [key]: record }, null, 2) + '\n')
     } catch { /* 只读目录等场景静默跳过，不影响审计 */ }
+  }
+
+  /** 递归收集插件目录里的模型面文件（会被注入模型上下文的 SKILL.md/commands/agents 文本），限量防巨包。 */
+  private async collectModelFacingFiles(dir: string, budget = 60): Promise<Array<{ rel: string; text: string }>> {
+    const out: Array<{ rel: string; text: string }> = []
+    const SKIP = new Set(['node_modules', '.git', 'dist', 'lib', 'build', 'coverage', '.worktrees', '.claude'])
+    const walk = async (d: string, rel: string, depth: number): Promise<void> => {
+      if (depth > 4 || out.length >= budget) return
+      let entries: Array<{ name: string }> = []
+      try { entries = await this.ctx.fs.listDir(await this.ctx.fs.resolve(d)) } catch { return }
+      for (const e of entries) {
+        if (out.length >= budget) return
+        const name = e.name
+        if (SKIP.has(name) || name.startsWith('.')) continue
+        const child = `${d}/${name}`
+        const childRel = rel === '' ? name : `${rel}/${name}`
+        const text = await this.readTextFile(child)
+        if (text !== null) {
+          if (isModelFacingFile(childRel) && text.length <= 200_000) out.push({ rel: childRel, text })
+          continue
+        }
+        await walk(child, childRel, depth + 1)
+      }
+    }
+    await walk(dir, '', 0)
+    return out
   }
 
   private async loadBaseline(root: string): Promise<Partial<Record<DepsecScope, string[]>>> {

@@ -10,8 +10,8 @@ Dependency trust list for DeepSeek Harness — when `pnpm install` blocks an ins
 - **`trust-list`** — read every install script in the block; grade each with **PASS / WARN / BLOCK**; show the script content and the exact file:line evidence; one-click rewrite of `pnpm.onlyBuiltDependencies` and `trustedDependencies` with only the PASS-graded packages.
 - **`secrets`** — high-confidence regex + Shannon entropy + last 20 git commits; `.depsecignore` honored.
 - **`sast`** — base rule set (eval / command injection / innerHTML / `shell=True` / weak hashes / deserialization); for depth, wire in `semgrep` separately.
-- **`plugin roster`** — audit every bundle installed in the current profile; per-plugin PASS/WARN/BLOCK summary; SARIF export for CI.
-- **version lock** — every audit records `pkg → {version, install-scripts fingerprint, verdict}` in `.depsec-baseline.json`; when a dependency upgrades **and its scripts changed**, the old PASS no longer carries over — you get a “依赖版本变更重审” finding instead. This closes the coa/rc-style hijack path where a name-level allowlist survives a malicious republish.
+- **`plugin roster`** — audit every bundle installed in the current profile; per-plugin PASS/WARN/BLOCK across four dimensions (supply-chain / secrets / sast / **prompt-injection**); model-facing text (SKILL.md / commands / agents) is scanned for injection content — the #1 dsh-plugin attack vector that every other scanner skips; static egress destination inventory; post-install hash lock (files changed since last scan → re-audit finding); SARIF export for CI.
+- **version lock** — every audit records `pkg → {version, install-scripts fingerprint, verdict}` in `.depsec-baseline.json`; when a dependency upgrades **and its scripts changed**, the old PASS no longer carries over — you get a “依赖版本变更重审” finding instead. This closes the coa/rc-style hijack path where a name-level allowlist survives a malicious republish. The same fingerprinting covers **installed plugins** (hash lock: files changed after install → “已装插件文件变更”).
 
 Plus: Windows notification on new high-severity hits; baseline diff so the 200th audit only shows what's *new*; click-to-open in VS Code (falls back to Explorer).
 
@@ -50,6 +50,15 @@ Settings → **Trust List** → pick a mode → **Run**. Leave the path empty to
 | 误拦截（top 包被判 BLOCK） | **0** |
 | 误警告率 | 7%（修复前 75%——"未能识别的命令"误警已按真实语料聚类修掉） |
 | 漏报探针（9 种真实投毒 TTP：`node -e` 混淆载荷 / child_process 拼接域名 / Chrome 凭据窃取 / 下载→chmod→执行链 等） | **9/9 拦截** |
+
+**提示注入内容检测**（v0.5 新增，扫描 SKILL.md/commands/agents 模型面文本——四家同类工具均不读的盲区）：
+
+| 语料 | 条数 | 结果 |
+|---|---|---|
+| 双语恶意 TTP（凭据外传+隐蔽、伪权威覆盖、持久化渗透、解码执行、零宽/同形字/base64 变体） | 14 | **0 漏报**（block 或 warn） |
+| 真实技能文件（本地 560 个 SKILL.md/commands：baoyu 系、apify 系、gsd、hippo 等生产技能） | 560 | **0 误报**（pass 560） |
+
+设计要点（详见 `research/2026-09-01-v0.5设计文档.md`）：凭据外传类规则要求「凭据语境 + URL/webhook 靶标」双命中才判 critical；代码围栏与内联反引号内的命中降级（技能教学 curl/git 是常态）；「`--force` to bypass safety gates」这类 flag 能力描述自动豁免；同形字/零宽字符/base64 变体归一化后复扫。
 
 单元/回归语料（`tests/`）：
 

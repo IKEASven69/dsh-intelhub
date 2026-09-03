@@ -23,7 +23,7 @@ export interface ScriptAnalysis {
 }
 
 /** install 脚本里常见、可放心的下载域名（预编译二进制等的官方分发处）。 */
-const KNOWN_DOWNLOAD_HOSTS = new Set([
+export const KNOWN_DOWNLOAD_HOSTS = new Set([
   'github.com', 'objects.githubusercontent.com', 'raw.githubusercontent.com',
   'nodejs.org', 'nodejs.com', 'registry.npmjs.org', 'npmjs.org', 'www.npmjs.org',
   'yarnpkg.com', 'registry.yarnpkg.com', 'pypi.org', 'files.pythonhosted.org',

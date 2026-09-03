@@ -26,6 +26,15 @@ function fnv1a(text: string): string {
   return h.toString(16).padStart(8, '0')
 }
 
+/** 文件内容指纹（插件哈希锁用）：对「路径\0内容\0」排序后 FNV-1a——路径或内容任一变化即变化。 */
+export function filesFingerprint(files: { path: string; content: string }[]): string {
+  const joined = files
+    .map((f) => `${f.path}\0${f.content}\0`)
+    .sort()
+    .join('')
+  return fnv1a(joined)
+}
+
 /** 脚本指纹：对「脚本名\0命令\0」条目按字典序排序后哈希——顺序无关，只对内容敏感。 */
 export function scriptsFingerprint(scripts: { script: string; command: string }[]): string {
   const joined = scripts

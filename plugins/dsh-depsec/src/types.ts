@@ -160,8 +160,12 @@ export interface PluginRosterEntry {
     supplyChain: BlockVerdict
     secrets: BlockVerdict
     sast: BlockVerdict
+    /** v0.5：模型面文本（SKILL.md/commands/agents）的提示注入判定 */
+    promptInjection: BlockVerdict
   }
   findings: DepsecFinding[]
+  /** v0.5：模型面文本里提取到的外联目的地（URL host，小写去重） */
+  egress?: string[]
   note?: string
   error?: string
 }
