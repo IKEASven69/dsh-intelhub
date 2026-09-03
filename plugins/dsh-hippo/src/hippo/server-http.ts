@@ -966,15 +966,21 @@ export function buildHttpApp(opts: HttpServerOptions & { autoTimer?: boolean } =
     }
   });
 
-  // 全文搜索（含中文）：≥3 字符 trigram 索引，更短回退 LIKE
-  app.get('/api/sessions/search', (req, res) => {
+  // 会话搜索（H11 M-A）：FTS 关键字 + 向量语义 RRF 融合（嵌入源随引擎注入；
+  // LLM 语义嵌入不可用时自动退化为纯关键字）。惰性补向量在请求内完成，
+  // 首次全量较慢（每会话一次嵌入），之后走缓存。
+  app.get('/api/sessions/search', async (req, res) => {
     const q = String(req.query.q ?? '');
     const agent = req.query.agent ? String(req.query.agent) : undefined;
     if (!sessionIndexSynced) {
       try { syncSessionIndex(); sessionIndexSynced = true; } catch { /* 搜索降级为空结果 */ }
     }
     try {
-      res.json(searchSessions(q, { agent }));
+      const { searchSessionsHybrid } = await import('../agents/session-index.js');
+      const { withEngine } = await import('./engine-holder.js');
+      // withEngine 确保引擎已开（嵌入器在 openEngine 时接线）
+      const hits = await withEngine((held) => searchSessionsHybrid(q, { agent }));
+      res.json(hits);
     } catch (err) {
       res.status(500).json({ error: (err as Error).message });
     }

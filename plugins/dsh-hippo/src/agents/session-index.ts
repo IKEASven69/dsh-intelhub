@@ -301,7 +301,11 @@ export function searchSessions(q: string, opts: { dataDir?: string; agent?: stri
     // 片段等排序截断后只对返回的头部命中逐个补查。
     let bodyHits: { session_id: string; hits: number }[] = []
     if (needle.length >= 3) {
-      const matchExpr = `"${needle.replace(/"/g, '""')}"`
+      // 多词查询拆 OR 词项（短语匹配对"知识库 搜索"这类查询必然落空）
+      const terms = needle.split(/\s+/).filter((t) => t.length >= 2)
+      const matchExpr = terms.length > 1
+        ? terms.map((t) => `"${t.replace(/"/g, '""')}"`).join(' OR ')
+        : `"${needle.replace(/"/g, '""')}"`
       bodyHits = db.prepare(`
         SELECT t.session_id AS session_id, COUNT(*) AS hits
         FROM turns_fts f
@@ -460,3 +464,108 @@ export function findSessionBySource(sourceId: string, opts: { dataDir?: string }
 }
 
 void inventory // 保留引用：未来 inventory 面板接索引状态时复用
+
+// ── 会话语义检索（H11 M-A）：FTS 关键字 + 向量语义 → RRF 融合 ──────────
+// 会话向量惰性生成：搜索时对无向量会话嵌入 title+首轮用户消息（≤1000 会话
+// 直接 JS 余弦，无需向量索引）。向量缓存于 sessions.vec 列（老库自动迁移）。
+
+let embedFn: ((text: string) => Promise<Float32Array>) | null = null
+/** 注入嵌入函数（engine-holder 启动时接 bge-m3；未注入=纯关键字搜索）。 */
+export function setSessionEmbedder(fn: (text: string) => Promise<Float32Array>): void {
+  embedFn = fn
+}
+
+/** 确保老库有 vec 列（ALTER TABLE 幂等）。 */
+function ensureVecColumn(db: RoDatabase): void {
+  try { db.prepare('SELECT vec FROM sessions LIMIT 1').get() } catch {
+    db.exec('ALTER TABLE sessions ADD COLUMN vec BLOB')
+  }
+}
+
+/** 会话摘要文本：标题 + 首轮用户消息（截 400 字符）。 */
+export function sessionSummaryText(title: string, firstUserText: string): string {
+  return `${title}\n${firstUserText.slice(0, 400)}`.trim()
+}
+
+function cosSim(a: Float32Array | null, b: Float32Array): number {
+  if (a === null || a.length !== b.length) return 0
+  let dot = 0, na = 0, nb = 0
+  for (let i = 0; i < b.length; i++) { dot += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i] }
+  return na === 0 || nb === 0 ? 0 : dot / (Math.sqrt(na) * Math.sqrt(nb))
+}
+
+function bytesToVec(buf: Buffer | Uint8Array | null | undefined): Float32Array | null {
+  if (!buf) return null
+  try { return new Float32Array(buf.buffer, buf.byteOffset, buf.byteLength / 4) } catch { return null }
+}
+
+/**
+ * 语义+混合会话搜索：关键字（searchSessions 的 FTS/LIKE）与向量语义（RRF 融合）。
+ * embedFn 未注入或无会话向量时退化为纯关键字。
+ */
+export async function searchSessionsHybrid(
+  q: string,
+  opts: { dataDir?: string; agent?: string; limit?: number } = {},
+): Promise<SessionSearchHit[]> {
+  const limit = Math.min(Math.max(opts.limit ?? 30, 1), 200)
+  const kw = searchSessions(q, opts)
+  if (embedFn === null || q.trim() === '') return kw
+  const db = openSessionIndex(opts.dataDir)
+  try {
+    ensureVecColumn(db)
+    const qvec = await embedFn(q)
+    const agentFilterSql = opts.agent ? 'AND agent = ?' : ''
+    const agentArg = opts.agent ? [opts.agent] : []
+    // 惰性补向量：无向量的会话现场嵌入（首个用户轮 + 标题），写回缓存
+    const missing = db.prepare(
+      `SELECT ext_id, title FROM sessions WHERE vec IS NULL ${agentFilterSql} LIMIT 60`,
+    ).all(...agentArg) as { ext_id: string; title: string }[]
+    if (missing.length > 0) {
+      const upd = db.prepare('UPDATE sessions SET vec = ? WHERE ext_id = ?')
+      for (const m of missing) {
+        const first = db.prepare(
+          "SELECT text FROM turns WHERE session_id = ? AND role = 'user' AND text != '' ORDER BY seq LIMIT 1",
+        ).get(m.ext_id) as { text?: string } | undefined
+        try {
+          const vec = await embedFn(sessionSummaryText(m.title, first?.text ?? ''))
+          upd.run(Buffer.from(vec.buffer, vec.byteOffset, vec.byteLength), m.ext_id)
+        } catch { upd.run(null, m.ext_id) } // 嵌入失败不缓存，下次重试
+      }
+    }
+    // 全量余弦（库 ≤1000 会话量级，JS 足够）
+    const rows = db.prepare(
+      `SELECT ext_id, vec FROM sessions WHERE vec IS NOT NULL ${agentFilterSql}`,
+    ).all(...agentArg) as { ext_id: string; vec: Buffer }[]
+    const sem = rows
+      .map((r) => ({ id: r.ext_id, sim: cosSim(bytesToVec(r.vec), qvec) }))
+      .filter((x) => x.sim > 0.35)
+      .sort((a, b) => b.sim - a.sim)
+      .slice(0, limit)
+    // RRF 融合：关键字榜 + 语义榜
+    const metaStmt = db.prepare(`SELECT ${SESSION_COLS} FROM sessions WHERE ext_id = ?`)
+    const merged = new Map<string, SessionSearchHit>()
+    const add = (id: string, score: number, semantic: boolean): void => {
+      const hit = merged.get(id)
+      if (hit === undefined) {
+        const row = metaStmt.get(id) as Record<string, unknown> | undefined
+        if (row === undefined) return
+        merged.set(id, { ...toIndexed(row), matchCount: 0, snippet: '' })
+      }
+      const cur = merged.get(id)!
+      cur.matchCount += score
+      if (semantic && cur.snippet === '') cur.snippet = '语义命中'
+    }
+    kw.forEach((h, i) => add(h.id, 1 / (60 + i + 1), false))
+    sem.forEach((s, i) => add(s.id, 1 / (60 + i + 1), true))
+    const ranked = [...merged.values()]
+      .sort((a, b) => b.matchCount - a.matchCount)
+      .slice(0, limit)
+    // 语义-only 命中补 snippet
+    for (const h of ranked) {
+      if (h.snippet === '') h.snippet = makeSnippet(h.title, q)
+    }
+    return ranked
+  } finally {
+    db.close()
+  }
+}

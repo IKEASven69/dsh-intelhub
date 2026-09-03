@@ -19,6 +19,8 @@ export { parseJsonl, entryToTurns, cwdToProject, makeTurn } from '../patterns/tr
 export type { Turn } from '../patterns/transcript.js';
 // 会话适配器层（GUI 浏览 / distill / dsh 插件 import 三个消费者共用）
 export { AGENTS, inventory, discoverAll, parseSession, loadIgnoreRules, readImportState, writeImportState } from '../agents/index.js';
+import { setSessionEmbedder } from '../agents/session-index.js';
+export { searchSessionsHybrid, setSessionEmbedder } from '../agents/session-index.js';
 export type { SessionAdapter, SessionRef, AgentInventory, IgnoreRules, ImportState } from '../agents/index.js';
 // 会话索引层（G1）：搜索/详情/导出/蒸馏记录
 export {
@@ -66,6 +68,8 @@ export function openEngine(dir?: string): OpenedEngine {
   const provider = getProvider();
   const store = new ZvecStore(dir ?? dataDir(), provider.dim);
   const engine = new MemoryEngine(store, (text) => provider.embed(text));
+  // 会话语义检索：复用同一嵌入源（bge-m3），惰性生成会话向量
+  setSessionEmbedder((text) => provider.embed(text));
   return { engine, store, close: () => store.close() };
 }
 
