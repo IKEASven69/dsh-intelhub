@@ -38,7 +38,13 @@ function buildVariant(name, { readme, description, keywords, dropDsh }) {
     main: pkg.main,
     types: pkg.types,
     bin: pkg.bin,
-    exports: pkg.exports,
+    exports: dropDsh
+      ? {
+          '.': { types: './dist/hippo/engine.d.ts', default: './dist/hippo/engine.js' },
+          './client': './lib/client.js',
+          './package.json': './package.json',
+        }
+      : pkg.exports,
     files: [...COMMON_FILES.map((f) => f.replace(/\/$/, '')), 'package.json', 'README.md'],
     license: pkg.license,
     scripts: { postinstall: pkg.scripts?.postinstall ?? '' },

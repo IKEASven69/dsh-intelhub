@@ -1,7 +1,7 @@
 {
   "name": "dsh-hippo",
   "description": "记忆桥：把 Claude Code / Codex / opencode 会话里积累的记忆蒸馏进 dsh——开局即认识你的项目与偏好（引擎已内置，hippo gui 另有桌面工作台）",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",

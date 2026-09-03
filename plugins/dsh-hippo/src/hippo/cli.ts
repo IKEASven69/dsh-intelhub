@@ -10,6 +10,11 @@
  * the store without a socket hop.
  */
 import { Command } from 'commander';
+import { createRequire } from 'node:module';
+
+const req = createRequire(import.meta.url);
+// 版本单点真源：package.json（发布包内 dist/hippo → ../package.json；源码运行同构）
+const pkgVersion: string = (req('../../package.json') as { version?: string }).version ?? '0.3.0';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { openEngine } from './engine.js';
@@ -22,7 +27,7 @@ const program = new Command();
 program
   .name('hippo')
   .description('hippo memory engine (TypeScript)')
-  .version('0.2.0');
+  .version(pkgVersion);
 
 // ── remember ──────────────────────────────────────
 

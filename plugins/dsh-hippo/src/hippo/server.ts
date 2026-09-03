@@ -5,6 +5,7 @@
  * SQLite WAL allows many processes on one store, so every server instance
  * just opens its own engine.
  */
+import { createRequire } from 'node:module';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
@@ -50,7 +51,9 @@ const MEMORY_TYPE = z.enum(VALID_TYPES);
  * which the HTTP API doesn't expose. remember/recall/update/forget are
  * fully proxied and cover the agent's everyday memory operations. */
 export function createHippoMcpServer(engine: McpEngine, opts: { distillUnavailable?: boolean } = {}): McpServer {
-  const server = new McpServer({ name: 'hippo', version: '0.2.0' });
+  const req = createRequire(import.meta.url);
+  const pkgVersion = (req('../../package.json') as { version?: string }).version ?? '0.3.0';
+  const server = new McpServer({ name: 'hippo', version: pkgVersion });
 
   server.registerTool('remember', {
     description:
