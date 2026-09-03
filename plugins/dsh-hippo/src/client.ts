@@ -653,6 +653,7 @@ function FooterMemoryButton({ wide }: { wide: boolean }): ReturnType<typeof crea
 /** shell.overlay 条目：独立浮层（Esc / 点背景关闭；内容=AutoCard + 设置页同一 Panel）。 */
 function MemoryOverlay(): ReturnType<typeof createElement> | null {
   const open = useSyncExternalStore(overlayStore.subscribe, () => overlayStore.open)
+  const [width, setWidth] = useState(() => Number(localStorage.getItem('hb-dock-w') ?? 460))
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent): void => { if (e.key === 'Escape') overlayStore.close() }
@@ -660,30 +661,50 @@ function MemoryOverlay(): ReturnType<typeof createElement> | null {
     return () => { window.removeEventListener('keydown', onKey) }
   }, [open])
   if (!open) return null
+  // 右侧停靠面板：不挡主界面，可拖宽（行情侧栏同型）；宽度记忆在 localStorage
+  const startDrag = (e: React.PointerEvent): void => {
+    e.preventDefault()
+    const mv = (ev: PointerEvent): void => {
+      const w = Math.max(320, Math.min(720, window.innerWidth - ev.clientX))
+      setWidth(w)
+      localStorage.setItem('hb-dock-w', String(w))
+    }
+    const up = (): void => {
+      document.removeEventListener('pointermove', mv)
+      document.removeEventListener('pointerup', up)
+    }
+    document.addEventListener('pointermove', mv)
+    document.addEventListener('pointerup', up)
+  }
   return createElement('div', {
     style: {
-      position: 'fixed', inset: 0, zIndex: 90, pointerEvents: 'auto',
-      background: 'rgba(0,0,0,.45)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-      padding: 24,
+      position: 'fixed', top: 0, right: 0, bottom: 0, zIndex: 90,
+      width: `${width}px`, maxWidth: '90vw',
+      background: 'var(--bg, #fff)', borderLeft: '1px solid var(--border, rgba(127,127,127,.28))',
+      boxShadow: '-16px 0 40px rgba(0,0,0,.22)', display: 'flex', flexDirection: 'column',
     },
-    onPointerDown: (e: React.PointerEvent) => { if (e.target === e.currentTarget) overlayStore.close() },
   },
     createElement('div', {
-      style: {
-        width: 'min(920px, 100%)', maxHeight: '86vh', overflowY: 'auto',
-        background: 'var(--bg, #fff)', borderRadius: 16, padding: 20,
-        boxShadow: '0 24px 64px rgba(0,0,0,.35)',
-      },
-      onPointerDown: (e: React.PointerEvent) => { e.stopPropagation() },
-    },
+      onPointerDown: startDrag,
+      title: '拖动调宽',
+      style: { position: 'absolute', left: -3, top: 0, bottom: 0, width: 6, cursor: 'col-resize', zIndex: 2 },
+    }),
+    createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderBottom: '1px solid var(--border, rgba(127,127,127,.28))' } },
+      createElement('span', { className: 'hb-logo', style: { width: 26, height: 26, borderRadius: 8, fontSize: 12 } }, 'H'),
+      createElement('span', { style: { fontWeight: 700, fontSize: 13 } }, '记忆面板'),
+      createElement('span', { style: { flex: 1 } }),
+      createElement('button', {
+        className: 'hb-btn hb-btn-ghost', style: { padding: '3px 10px', fontSize: 12 },
+        onClick: () => { window.open('/dsh-hippo/app/', '_blank') },
+        title: '完整工作台',
+      }, '工作台 ↗'),
+      createElement('button', {
+        className: 'hb-btn hb-btn-ghost', style: { padding: '3px 10px', fontSize: 12 },
+        onClick: overlayStore.close,
+      }, '✕'),
+    ),
+    createElement('div', { style: { flex: 1, overflowY: 'auto', padding: 14 } },
       createElement('div', { className: 'hb-panel' },
-        createElement('div', { className: 'hb-hero' },
-          createElement('div', { className: 'hb-logo' }, 'H'),
-          createElement('div', { className: 'hb-hero-txt' },
-            createElement('div', { className: 'hb-title' }, '记忆面板 🦛'),
-            createElement('div', { className: 'hb-sub' }, 'hippo · 本地优先 · 独立浮层')),
-          createElement('span', { className: 'hb-spacer' }),
-          createElement('button', { className: 'hb-btn hb-btn-ghost', onClick: overlayStore.close }, '关闭 ✕')),
         createElement(AutoCard, null),
         createElement(Panel, null))))
 }
