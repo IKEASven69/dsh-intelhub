@@ -121,6 +121,20 @@ const CSS = `
 .hb-phase { font-size: 12px; color: var(--hb-mut); font-variant-numeric: tabular-nums; display: flex;
   justify-content: space-between; gap: 10px; }
 
+.hb-status-pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600;
+  padding: 3px 12px; border-radius: 999px; align-self: flex-start; }
+.hb-status-pill.ok { color: var(--hb-ok); background: rgba(21,128,61,.1); border: 1px solid rgba(21,128,61,.35); }
+.hb-status-pill.warn { color: var(--hb-warn); background: rgba(180,83,9,.1); border: 1px solid rgba(180,83,9,.35); }
+.hb-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.hb-check-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+.hb-check-card { border: 1px solid var(--hb-line); border-radius: 10px; padding: 10px 12px; display: flex;
+  gap: 9px; align-items: flex-start; background: rgba(127,127,127,.04); transition: border-color .15s ease; }
+.hb-check-card:hover { border-color: var(--hb-a); }
+.hb-check-card .hb-check-name { display: block; }
+.hb-check-card .hb-check-detail { display: block; margin-top: 2px; }
+.hb-note { font-size: 11.5px; color: var(--hb-mut); line-height: 1.6; border-left: 2px solid var(--hb-line);
+  padding-left: 10px; }
+
 .hb-headline { font-size: 14px; font-weight: 700; line-height: 1.6; }
 .hb-headline b { background: linear-gradient(90deg, var(--hb-a), var(--hb-b));
   -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
@@ -220,25 +234,33 @@ const AGENT_META: Record<string, { label: string; mono: string; cls: string }> =
 
 function DoctorCard({ report }: { report: DoctorReport }): ReturnType<typeof createElement> {
   return createElement('div', { className: 'hb-card' },
-    createElement('div', { className: 'hb-row', style: { gridTemplateColumns: '1fr', marginBottom: '-2px' } },
-      createElement('div', { className: 'hb-banner hb-banner-ok', style: { display: report.ok ? 'block' : 'none' } },
-        '环境就绪，可以开始迁移'),
-      createElement('div', { className: 'hb-banner hb-banner-warn', style: { display: report.ok ? 'none' : 'block' } },
-        '环境不完整，按下方指引处理后再迁移'),
+    createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 8 } },
+      createElement('span', { className: `hb-status-pill ${report.ok ? 'ok' : 'warn'}` },
+        report.ok ? '✓ 环境就绪，可以开始迁移' : '⚠ 环境不完整，按下方指引处理后再迁移'),
     ),
-    ...report.checks.map((c, i) =>
-      createElement('div', { key: i, className: 'hb-check' },
-        createElement('span', { className: `hb-dot ${c.ok ? 'hb-dot-ok' : 'hb-dot-err'}`, style: { animationDelay: `${i * 60}ms` } }, c.ok ? '✓' : '✕'),
-        createElement('span', { className: 'hb-check-name' }, c.name),
-        createElement('span', { className: 'hb-check-detail' }, c.detail),
+    createElement('div', { className: 'hb-check-grid' },
+      ...report.checks.map((c, i) =>
+        createElement('div', { key: i, className: 'hb-check-card', title: c.detail },
+          createElement('span', { className: `hb-dot ${c.ok ? 'hb-dot-ok' : 'hb-dot-err'}`, style: { animationDelay: `${i * 60}ms`, marginTop: 1 } }, c.ok ? '✓' : '✕'),
+          createElement('span', { style: { minWidth: 0 } },
+            createElement('span', { className: 'hb-check-name' }, c.name),
+            createElement('span', { className: 'hb-check-detail' }, c.detail),
+          ),
+        ),
       ),
     ),
-    createElement('div', { className: 'hb-banner hb-banner-info' }, `💡 ${report.modelNote}`),
+    createElement('div', { className: 'hb-note' }, `💡 ${report.modelNote}`),
     ...report.guidance.map((g, i) => createElement('div', { key: 'g' + i, className: 'hb-banner hb-banner-warn' }, g)),
   )
 }
 
-function AgentsCard({ inv }: { inv: AgentInventory[] }): ReturnType<typeof createElement> {
+function AgentsCard({ inv, busy, ready, hasSessions, start }: {
+  inv: AgentInventory[]
+  busy: 'none' | 'doctor' | 'preview' | 'import'
+  ready: boolean
+  hasSessions: boolean
+  start: (dryRun: boolean) => void
+}): ReturnType<typeof createElement> {
   const total = inv.reduce((n, a) => n + a.sessions, 0)
   return createElement('div', { className: 'hb-card' },
     createElement('div', { className: 'hb-hero' },
@@ -256,6 +278,21 @@ function AgentsCard({ inv }: { inv: AgentInventory[] }): ReturnType<typeof creat
           ),
         )
       }),
+    ),
+    createElement('div', { className: 'hb-actions', style: { marginTop: 2 } },
+      createElement('button', {
+        className: 'hb-btn hb-btn-primary', onClick: () => { start(false) },
+        disabled: busy !== 'none' || !ready || !hasSessions,
+      }, busy === 'import' ? createElement('span', { className: 'hb-spin' }) : null, busy === 'import' ? '迁移中…' : '开始迁移'),
+      createElement('button', {
+        className: 'hb-btn hb-btn-ghost', onClick: () => { start(true) },
+        disabled: busy !== 'none' || !ready || !hasSessions,
+      }, busy === 'preview' ? '预览中…' : '预览（不写入）'),
+      !ready && busy === 'none'
+        ? createElement('span', { className: 'hb-sub' }, '环境自检未通过，暂不可迁移')
+        : !hasSessions
+          ? createElement('span', { className: 'hb-sub' }, '未发现可迁移的会话')
+          : null,
     ),
   )
 }
@@ -467,50 +504,34 @@ function Panel(): ReturnType<typeof createElement> {
   return createElement('div', { className: 'hb-panel' },
     createElement('style', null, CSS),
 
-    createElement('div', { className: 'hb-card' },
-      createElement('button', {
-        className: 'hb-btn hb-btn-primary', style: { alignSelf: 'flex-end', fontSize: 12 },
-        onClick: () => { window.open('/dsh-hippo/app/', '_blank') },
-        title: '完整工作台：记忆 / 会话 / 蒸馏 / 编译 / 图谱 / 时间线 / 生活流',
-      }, '🦛 打开完整工作台'),
-      createElement('button', {
-        className: 'hb-btn hb-btn-ghost', style: { alignSelf: 'flex-end', fontSize: 12 },
-        onClick: overlayStore.toggle,
-        title: '在浮层中打开本面板（不占设置页空间）',
-      }, '⧉ 浮层'),
+    createElement('div', { className: 'hb-card', style: { gap: 12 } },
       createElement('div', { className: 'hb-hero' },
         createElement('span', { className: 'hb-logo' }, '桥'),
         createElement('span', { className: 'hb-hero-txt' },
           createElement('span', { className: 'hb-title' }, '记忆桥', createElement('span', { className: 'hb-beta' }, '迁移引擎 beta')),
           createElement('span', { className: 'hb-sub' }, '把 Claude Code / Codex / opencode 会话里积累的记忆蒸馏进 dsh——开局即认识你的项目与偏好'),
         ),
-        createElement('span', { className: 'hb-spacer' }),
+      ),
+      createElement('div', { className: 'hb-actions' },
+        createElement('button', {
+          className: 'hb-btn hb-btn-primary',
+          onClick: () => { window.open('/dsh-hippo/app/', '_blank') },
+          title: '完整工作台：记忆 / 会话 / 蒸馏 / 编译 / 图谱 / 时间线 / 生活流',
+        }, '🦛 打开完整工作台'),
+        createElement('button', {
+          className: 'hb-btn hb-btn-ghost',
+          onClick: overlayStore.toggle,
+          title: '在浮层中打开本面板（不占设置页空间）',
+        }, '⧉ 浮层'),
+        createElement('span', { style: { flex: 1 } }),
         createElement('button', { className: 'hb-btn hb-btn-ghost', onClick: runDoctor, disabled: busy !== 'none' },
-          busy === 'doctor' ? '自检中…' : '重新自检'),
+          busy === 'doctor' ? '自检中…' : '⟳ 重新自检'),
       ),
       error !== null ? createElement('div', { className: 'hb-banner hb-banner-err' }, error) : null,
     ),
 
     report !== null ? createElement(DoctorCard, { report }) : null,
-    inv !== null ? createElement(AgentsCard, { inv }) : null,
-
-    createElement('div', { className: 'hb-card' },
-      createElement('div', { style: { display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' } },
-        createElement('button', {
-          className: 'hb-btn hb-btn-primary', onClick: () => { void start(false) },
-          disabled: busy !== 'none' || !ready || !hasSessions,
-        }, busy === 'import' ? createElement('span', { className: 'hb-spin' }) : null, busy === 'import' ? '迁移中…' : '开始迁移'),
-        createElement('button', {
-          className: 'hb-btn hb-btn-ghost', onClick: () => { void start(true) },
-          disabled: busy !== 'none' || !ready || !hasSessions,
-        }, busy === 'preview' ? '预览中…' : '预览（不写入）'),
-        !ready && report !== null
-          ? createElement('span', { className: 'hb-sub' }, '环境自检未通过，暂不可迁移')
-          : !hasSessions && inv !== null
-            ? createElement('span', { className: 'hb-sub' }, '未发现可迁移的会话')
-            : null,
-      ),
-    ),
+    inv !== null ? createElement(AgentsCard, { inv, busy, ready, hasSessions, start }) : null,
 
     job !== null && job.state === 'running' ? createElement(ProgressCard, { job }) : null,
     job !== null && job.state === 'done' ? createElement(StatsCard, { job }) : null,
