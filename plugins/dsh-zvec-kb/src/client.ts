@@ -22,7 +22,8 @@ async function rpc<T>(method: string, args: Record<string, unknown> = {}): Promi
         type: 'client-request',
         rpcId: (globalThis.crypto?.randomUUID?.() ?? String(Date.now() + Math.random())),
         method: `zvecKb/${method}`,
-        payload: { args },
+        // host 方法都是单参数 p 的 SRC 签名:args 必须按形参名包一层
+        payload: { args: Object.keys(args).length > 0 ? { p: args } : args },
       }),
     })
     const msg = await res.json() as { result?: { ok: boolean; value?: T; error?: { message?: string } } }

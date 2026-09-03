@@ -8,7 +8,7 @@ export interface FileEntry {
   path: string
   chunks: number
   status: 'indexing' | 'done' | 'failed'
-  error?: string
+  error?: string | null
   importedAt: number
 }
 
@@ -26,25 +26,26 @@ export interface SearchResult {
   mode: 'hybrid' | 'fts' | 'none'
   hits: SearchHit[]
   note?: string
-  error?: string
+  error?: string | null
 }
 
 export interface StatusResult {
   ok: boolean
+  note?: string | null
   home: string
   files: number
   chunks: number
   indexing: number
   model: 'ready' | 'loading' | 'absent'
   dim: number | null
-  error?: string
+  error?: string | null
 }
 
 export interface ListResult {
   ok: boolean
   files: FileEntry[]
   indexing: number
-  error?: string
+  error?: string | null
 }
 
 export interface ImportResult {
@@ -52,13 +53,13 @@ export interface ImportResult {
   queued: number
   skippedUnchanged: number
   failedScan: string[]
-  error?: string
+  error?: string | null
 }
 
 export interface RemoveResult {
   ok: boolean
   removed: boolean
-  error?: string
+  error?: string | null
 }
 
 export interface SearchRpcResult extends SearchResult {}
@@ -71,7 +72,7 @@ export interface DemoResult {
   fts: SearchHit[]
   hybrid: SearchHit[]
   note?: string
-  error?: string
+  error?: string | null
 }
 
 export type { FileEntry as KbFileEntry }

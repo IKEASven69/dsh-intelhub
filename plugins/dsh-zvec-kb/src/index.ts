@@ -64,6 +64,7 @@ export class ZvecKbService extends TypertRemoteService {
   static inject = ['tools', 'systemPrompt']
 
   private readonly homeDir: string
+  private recoveryNote: string | null = null
   private embedder: Embedder | null = null
   private store: KbStore | null = null
   private registry = new Map<string, FileEntryInternal>()
@@ -215,10 +216,15 @@ export class ZvecKbService extends TypertRemoteService {
     }
     if (this.store === null) {
       await mkdir(this.homeDir, { recursive: true })
-      const s = new KbStore(join(this.homeDir, 'store'), this.embedder.dim)
+      let s = new KbStore(join(this.homeDir, 'store'), this.embedder.dim)
       s.open()
       if (!s.ok) {
-        return { error: `zvec 存储打开失败:${s.error ?? '未知'}` }
+        // 双实例/崩溃残留会占写锁:降级到独立恢复目录,而不是让知识库整个不可用
+        const alt = join(this.homeDir, `store-recovery-${Date.now().toString(36)}`)
+        s = new KbStore(alt, this.embedder.dim)
+        s.open()
+        if (!s.ok) return { error: `zvec 存储打开失败:${s.error ?? '未知'}` }
+        this.recoveryNote = '检测到另一个实例占用索引,本次运行写入恢复目录;关闭其他实例后重启 dsh 可回到主目录。'
       }
       this.store = s
     }
@@ -411,7 +417,10 @@ export class ZvecKbService extends TypertRemoteService {
       score: r.score,
       text: r.text,
     }))
-    return { ok: true, mode: queryVec === null ? 'fts' : 'hybrid', hits, note }
+    // typert 边界:note 不命中时不写键
+    const out: SearchResult = { ok: true, mode: queryVec === null ? 'fts' : 'hybrid', hits }
+    if (note !== undefined) out.note = note
+    return out
   }
 
   // ── 列表 / 删除 / 状态 ───────────────────────────────────
@@ -467,7 +476,8 @@ export class ZvecKbService extends TypertRemoteService {
       const e = rt.embedder
       model = e.ready === null ? 'ready' : await Promise.race([e.ready.then(() => 'ready' as const), new Promise<'loading'>((res) => setTimeout(() => res('loading'), 50))])
     }
-    return {
+    // typert 边界校验:可选字段绝不写入键(显式 undefined 键也会被拒)
+    const out: StatusResult = {
       ok: rt !== null && !('error' in rt),
       home: this.homeDir,
       files: files.length,
@@ -475,8 +485,10 @@ export class ZvecKbService extends TypertRemoteService {
       indexing: this.queuedFiles,
       model,
       dim: this.embedder?.dim ?? null,
-      error: rt !== null && 'error' in rt ? rt.error : undefined,
     }
+    if (rt !== null && 'error' in rt && rt.error != null) out.error = rt.error
+    if (this.recoveryNote !== null) out.note = this.recoveryNote
+    return out
   }
 
   // ── RPC(面板) ────────────────────────────────────────────
@@ -541,7 +553,10 @@ export class ZvecKbService extends TypertRemoteService {
     const query = '怎么配置超时时间'
     const fts = await this.searchRaw(query, 3, true)
     const hybrid = await this.searchRaw(query, 3, false)
-    return { ok: true, imported: !existed, query, fts: fts.hits, hybrid: hybrid.hits, note: fts.hits.length === 0 ? '关键词检索找不到——文档里没有"超时"二字' : undefined }
+    // typert 边界:note 为空时不写键
+    const out: DemoResult = { ok: true, imported: !existed, query, fts: fts.hits, hybrid: hybrid.hits }
+    if (fts.hits.length === 0) out.note = '关键词检索找不到——文档里没有"超时"二字'
+    return out
   }
 
   /** demo 用:可强制 FTS-only 的检索。 */
