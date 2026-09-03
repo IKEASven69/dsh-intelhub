@@ -65,8 +65,15 @@ export function createHippoMcpServer(engine: McpEngine, opts: { distillUnavailab
       project: z.string().default('global'),
       agent: z.string().default('unknown'),
     },
-  }, safe(async ({ text, type, project, agent }: { text: string; type: string; project: string; agent: string }) =>
-    engine.remember(text, { type, project, agent })));
+  }, safe(async ({ text, type, project, agent }: { text: string; type: string; project: string; agent: string }) => {
+    const r = await engine.remember(text, { type, project, agent });
+    if (r.status === 'rejected') {
+      return `❌ 已拒绝入库：疑似敏感信息（${r.reason}）。密钥不应进入记忆库。`;
+    }
+    return r.status === 'reinforced'
+      ? `已强化既有记忆（${r.id}，strength ${r.strength}）`
+      : `已记住（${r.id}）`;
+  }));
 
   server.registerTool('recall', {
     description:

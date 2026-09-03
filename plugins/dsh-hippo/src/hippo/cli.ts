@@ -39,9 +39,14 @@ program
       const r = await engine.remember(text, {
         type: options.type, project: options.project, agent: options.agent,
       });
-      console.log(r.status === 'reinforced'
-        ? `reinforced ${r.id} (strength ${r.strength})`
-        : `created ${r.id}`);
+      if (r.status === 'rejected') {
+        console.error(`❌ 已拒绝入库：疑似敏感信息（${r.reason}）。密钥不应进入记忆库。`);
+        process.exitCode = 1;
+      } else {
+        console.log(r.status === 'reinforced'
+          ? `reinforced ${r.id} (strength ${r.strength})`
+          : `created ${r.id}`);
+      }
     } finally {
       close();
     }

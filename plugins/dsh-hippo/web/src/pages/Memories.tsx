@@ -397,8 +397,12 @@ function NewMemory({ onCreated }: { onCreated: () => void }) {
     if (!text.trim()) return;
     setBusy(true); setErr('');
     try {
-      await api.createMemory(text, { type, project });
-      setText(''); onCreated();
+      const r = await api.createMemory(text, { type, project });
+      if (r.status === 'rejected') {
+        setErr(`❌ 已拒绝入库：疑似敏感信息（${r.reason ?? 'secret'}）`);
+      } else {
+        setText(''); onCreated();
+      }
     } catch (e) { setErr((e as Error).message); }
     setBusy(false);
   };

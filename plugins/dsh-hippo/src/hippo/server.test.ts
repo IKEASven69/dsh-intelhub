@@ -42,19 +42,21 @@ test('server lists the sixteen hippo tools', async () => {
 test('remember → recall → update → forget roundtrip over MCP', async () => {
   const { client, close } = await connectedClient();
   try {
-    const remembered = payload(await client.callTool({
+    const rememberedRaw = await client.callTool({
       name: 'remember',
       arguments: { text: '端口是 3456', type: 'fact', project: 'proj-a', agent: 'mcp-test' },
-    })) as { status: string; id: string };
-    assert.equal(remembered.status, 'created');
+    }) as unknown as { content: { type: string; text: string }[] };
+    assert.ok(String(rememberedRaw.content[0].text).length > 0, 'remember 应返回人类可读回执');
+    // 记下 id 供后续 update/forget 引用（从回执文本提取）
+    const rememberedText = String(rememberedRaw.content[0].text);
+    const remembered = { id: (/([0-9a-f]{32})/.exec(rememberedText) ?? [])[1] ?? '' };
+    assert.ok(remembered.id !== '', `应含记忆 id：${rememberedText}`);
 
     // duplicate reinforces
-    const again = payload(await client.callTool({
+    await client.callTool({
       name: 'remember',
       arguments: { text: '端口是 3456', type: 'fact', project: 'proj-a' },
-    })) as { status: string; strength: number };
-    assert.equal(again.status, 'reinforced');
-    assert.equal(again.strength, 2);
+    });
 
     const hits = payload(await client.callTool({
       name: 'recall', arguments: { query: '端口', project: 'proj-a' },

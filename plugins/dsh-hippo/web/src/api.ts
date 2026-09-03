@@ -303,7 +303,7 @@ export const api = {
   getMemory: (id: string) => getJSON<MemoryRecord>(`/api/memories/${id}`),
 
   createMemory: (text: string, opts: { type?: MemoryType; project?: string; agent?: string } = {}) =>
-    postJSON<{ status: string; id: string; strength?: number }>('/api/memories', { text, ...opts }),
+    postJSON<{ status: string; id: string; strength?: number; reason?: string }>('/api/memories', { text, ...opts }),
 
   updateMemory: (id: string, fields: { text?: string; type?: MemoryType; project?: string }) =>
     patchJSON<{ status: string; id: string }>(`/api/memories/${id}`, fields),
