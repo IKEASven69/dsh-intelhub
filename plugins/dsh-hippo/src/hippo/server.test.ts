@@ -58,10 +58,13 @@ test('remember → recall → update → forget roundtrip over MCP', async () =>
       arguments: { text: '端口是 3456', type: 'fact', project: 'proj-a' },
     });
 
-    const hits = payload(await client.callTool({
+    const recallRaw = await client.callTool({
       name: 'recall', arguments: { query: '端口', project: 'proj-a' },
-    })) as { id: string; text: string }[];
-    assert.equal(hits[0].id, remembered.id);
+    }) as unknown as { content: { type: string; text: string }[] };
+    const recallText = String(recallRaw.content[0].text);
+    // 回执是人类可读行（含 id: hex），从中提取首条 id
+    const recallId = (/id: ([0-9a-f]{32})/.exec(recallText) ?? [])[1] ?? '';
+    assert.equal(recallId, remembered.id);
 
     const updated = payload(await client.callTool({
       name: 'update',
