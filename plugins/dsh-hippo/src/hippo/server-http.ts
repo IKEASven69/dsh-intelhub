@@ -609,6 +609,33 @@ export function buildHttpApp(opts: HttpServerOptions & { autoTimer?: boolean } =
     }
   });
 
+  // ── H12 M-01：tier 老化归档（诊断页入口）──
+  app.get('/api/tier-aging', async (_req, res) => {
+    try {
+      const { tierAge } = await import('./tier-aging.js');
+      const { getRefinerBridge } = await import('./auto-distill-run.js');
+      await withEngine(async ({ engine }) => {
+        const report = await tierAge(engine as never, getRefinerBridge(), { apply: false });
+        res.json({ groupsFound: report.groupsFound, groups: report.groups });
+      });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
+  app.post('/api/tier-aging', async (_req, res) => {
+    try {
+      const { tierAge } = await import('./tier-aging.js');
+      const { getRefinerBridge } = await import('./auto-distill-run.js');
+      await withEngine(async ({ engine }) => {
+        const report = await tierAge(engine as never, getRefinerBridge(), { apply: true });
+        res.json({ groupsFound: report.groupsFound, digestsCreated: report.digestsCreated, archived: report.archived, llmUsed: report.llmUsed });
+      });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
   // 编译配置管理：查看 / 删除自动重编译的目标
   app.get('/api/compile-config', async (_req, res) => {
     const { getCompileTargets } = await import('./compile-config.js');

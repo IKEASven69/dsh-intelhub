@@ -374,6 +374,9 @@ export const api = {
   handoffInbox: () => getJSON<{ pending: Array<{ id: string; from: { agent: string; sessionId: string; title: string }; to: string; project: string; pushedAt: number; git: { branch: string; changed: string[] }; activeTasks: Array<{ text: string; status: string }>; candidates: string[] }> }>('/api/handoff/inbox'),
   handoffLoad: (id: string) => postJSON<{ text: string }>('/api/handoff/load', { id }),
 
+  tierAgingDryRun: () => getJSON<{ groupsFound: number; groups: Array<{ project: string; month: string; type: string; ids: string[]; texts: string[] }> }>('/api/tier-aging'),
+  tierAgingApply: () => postJSON<{ groupsFound: number; digestsCreated: number; archived: number; llmUsed: boolean }>('/api/tier-aging', {}),
+
   memoryValue: () => getJSON<MemoryValueReport>('/api/memories/value'),
 
   doctor: () => getJSON<Diagnostics>('/api/doctor'),

@@ -15,6 +15,25 @@ export default function DoctorPage() {
   } | null>(null);
   const [sleepApplied, setSleepApplied] = useState(false);
   const [sleepBusy, setSleepBusy] = useState(false);
+  // tier 老化归档（H12 M-01）
+  const [tierDry, setTierDry] = useState<{ groupsFound: number; groups: Array<{ project: string; month: string; type: string; ids: string[] }> } | null>(null);
+  const [tierResult, setTierResult] = useState<{ groupsFound: number; digestsCreated: number; archived: number; llmUsed: boolean } | null>(null);
+  const [tierBusy, setTierBusy] = useState(false);
+
+  const runTierDry = async () => {
+    setTierBusy(true);
+    try { setTierDry(await api.tierAgingDryRun()); } catch (e) { setError((e as Error).message); }
+    setTierBusy(false);
+  };
+  const runTierApply = async () => {
+    setTierBusy(true);
+    try {
+      setTierResult(await api.tierAgingApply());
+      setTierDry(null);
+      reload();
+    } catch (e) { setError((e as Error).message); }
+    setTierBusy(false);
+  };
 
   const runSleepDry = async () => {
     setSleepBusy(true); setSleepApplied(false);
@@ -114,6 +133,43 @@ export default function DoctorPage() {
                 <button className="primary" onClick={runSleepApply} disabled={sleepBusy || (sleepReport.dupClusters.length === 0 && sleepReport.orphanSources.length === 0 && sleepReport.staleShelvedDropped === 0)}>
                   {sleepBusy ? '…' : '执行'}
                 </button>
+              )}
+            </div>
+          </div>
+
+          {/* tier 老化归档（H12 M-01）：90 天前 lesson/decision 群卷摘要，原始条目沉底可逆 */}
+          <div className="card" style={{ marginTop: 12, padding: '12px 16px' }}>
+            <div style={{ fontWeight: 700, marginBottom: 6 }}>🦛 tier 老化归档（上下文瘦身）</div>
+            <div className="meta" style={{ fontSize: 12.5, marginBottom: 8 }}>
+              90 天前的教训/决策/事实按 项目+月 分组（≥3 条）卷成一条归档摘要——LLM 压缩（走你配置的模型），原始条目经演化链沉底（recall 降权、可追溯、可逆）
+            </div>
+            {tierDry ? (
+              tierDry.groupsFound === 0 ? (
+                <div className="meta" style={{ fontSize: 12.5 }}>没有可归档的分组（不足 3 条同类或都不够老）。</div>
+              ) : (
+                <div className="meta" style={{ fontSize: 12.5 }}>
+                  发现 <b>{tierDry.groupsFound}</b> 组：
+                  {tierDry.groups.map(g => (
+                    <div key={g.project + g.month + g.type} style={{ marginLeft: 10 }}>
+                      · {g.project} {g.month} [{g.type}] {g.ids.length} 条
+                    </div>
+                  ))}
+                </div>
+              )
+            ) : (
+              <div className="meta" style={{ fontSize: 12.5 }}>点击「体检」先看 dry-run 报告，不会动任何数据。</div>
+            )}
+            <div className="toolbar" style={{ marginTop: 8 }}>
+              <button onClick={runTierDry} disabled={tierBusy}>{tierBusy ? '…' : '体检（只读报告）'}</button>
+              {tierDry && tierDry.groupsFound > 0 && (
+                <button className="primary" onClick={runTierApply} disabled={tierBusy}>
+                  {tierBusy ? '归档中…' : `执行归档（LLM 压缩）`}
+                </button>
+              )}
+              {tierResult && (
+                <span className="meta" style={{ fontSize: 12.5 }}>
+                  ✅ {tierResult.groupsFound} 组 → 摘要 {tierResult.digestsCreated} · 沉底 {tierResult.archived} 条{tierResult.llmUsed ? ' · LLM 压缩' : ' · 规则拼接降级'}
+                </span>
               )}
             </div>
           </div>
