@@ -411,6 +411,56 @@ program
     console.log(`已入库 ${samples.length} 条人工判决 → ${all.length} 条样例。后续 LLM 精炼自动引用。`);
   });
 
+// ── refine-stats（H13 M-3）：判决特征挖掘报告 ──
+
+program
+  .command('refine-stats')
+  .description('mine the refine few-shot library: accept/discard rates by type, source_rule and verdict patterns')
+  .action(async () => {
+    const { loadSamples } = await import('./refine.js');
+    const samples = loadSamples();
+    if (samples.length === 0) { console.log('样例库为空——先跑 hippo refine-learn --file <shelved-backup>'); return; }
+    const by = <K extends string>(key: (x: typeof samples[number]) => K): Map<K, { total: number; acc: number }> => {
+      const m = new Map<K, { total: number; acc: number }>();
+      for (const x of samples) {
+        const k = key(x);
+        const cur = m.get(k) ?? { total: 0, acc: 0 };
+        cur.total++; if (x.verdict === 'accept') cur.acc++;
+        m.set(k, cur);
+      }
+      return m;
+    };
+    const pct = (a: number, b: number): string => b === 0 ? '—' : `${Math.round((a / b) * 100)}%`;
+    const byType = by(x => (x as unknown as { candidate?: { type?: string } }).candidate?.type ?? '未知');
+    const byRule = by(x => (x as unknown as { candidate?: { source_rule?: string } }).candidate?.source_rule ?? '未知');
+    const bySource = by(x => x.source ?? '未知');
+    console.log(`样例 ${samples.length} 条（收 ${samples.filter(x => x.verdict === 'accept').length} / 弃 ${samples.filter(x => x.verdict === 'discard').length}）`);
+    console.log(String.fromCharCode(10) + '按来源 agent：');
+    for (const [k, v] of bySource) console.log(`  ${k}: ${v.total} 条 · 收率 ${pct(v.acc, v.total)}`);
+    console.log(String.fromCharCode(10) + '按 source_rule：');
+    for (const [k, v] of byRule) console.log(`  ${k}: ${v.total} 条 · 收率 ${pct(v.acc, v.total)}`);
+    console.log(String.fromCharCode(10) + '按类型：');
+    for (const [k, v] of byType) console.log(`  ${k}: ${v.total} 条 · 收率 ${pct(v.acc, v.total)}`);
+  });
+
+// ── fidelity（H13 M-2）：交接快照质量对账 ──
+
+program
+  .command('fidelity')
+  .description('audit a handoff snapshot: reconcile claims against memory library + git history (hallucination/noise metrics)')
+  .argument('<handoffPath>', 'path to HANDOFF.md snapshot')
+  .option('-p, --project <project>', 'project scope for evidence recall')
+  .action(async (handoffPath: string, options: { project?: string }) => {
+    const { existsSync } = await import('node:fs');
+    if (!existsSync(handoffPath)) { console.error(`快照不存在：${handoffPath}`); process.exitCode = 1; return; }
+    const { runFidelity, formatFidelityReport } = await import('./fidelity.js');
+    const { withEngine } = await import('./engine.js');
+    await withEngine(async ({ engine }) => {
+      const report = await runFidelity(engine as never, handoffPath, { project: options.project });
+      console.log(formatFidelityReport(report));
+    });
+  });
+
 // ── secrets（H9）：存量库敏感信息扫描/清除 ─────────
 
 program

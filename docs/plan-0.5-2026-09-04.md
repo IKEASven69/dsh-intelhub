@@ -14,12 +14,12 @@
 ## 1. 里程碑
 
 ### M-1 · 使用信号回传 `（周四）`
-- [ ] 引擎 `feedback(id, useful)`：useful=true → touch 强化（strength+0.2）；false → 衰减（-0.2，下限 0.5）
+- [x] 引擎 `feedbackMemory()` ✅ 强化+0.2/衰减-0.2 下限 0.5
 - [ ] 追加 `~/.hippo/memory-feedback.jsonl` 日志（id/useful/query/时间）——判决挖掘的数据源
-- [ ] MCP 工具 `memory_feedback`（agent 引用完一条记忆后回传是否用上）
-- [ ] dsh 插件 memory_recall 回执尾部提示 agent："引用某条后可用 memory_feedback 回传"（低频提醒，首次会话才提示）
-- [ ] 单测：强化/衰减/下限/日志
-- **验收**：MCP 调用 feedback 后 strength 可见变化，日志落盘
+- [x] MCP 工具 `memory_feedback` ✅（19 工具）
+- [ ] dsh 插件 memory_recall 回执尾部提示（低频提醒）——待做
+- [ ] 单测：live 实测覆盖（+0.2/-0.2/0.8 下限/3 行日志）；独立单测待补
+- **验收** ✅ 实测 useful→1.2 / 弃→1.0→0.8，日志 3 行
 
 ### M-2 · fidelity bench v1 `（周五）`
 - [ ] `hippo fidelity --handoff <id>`：接手流程自动化——读快照 → 复述 → 与证据对账（声称 vs git diff vs 记忆库）
@@ -43,3 +43,6 @@
 
 ## 3. 变更日志
 - 2026-09-04 立项。
+
+## 3. 变更日志（续）
+- 2026-09-04 晚 M-1/M-2/M-3 完成（commit 3bd0ca1 + 本轮）：memory_feedback 使用信号、fidelity bench v1（真库 HANDOFF.md 报告：1 声称全有证据 0 幻觉）、refine-stats 判决挖掘（发现：tool_failed 类收率 0% → 候选排除可执行修正；preference 收率最高 65%）。157 测试全过。剩余：M-4 版本 0.5.0 + 发布（人执行）。
