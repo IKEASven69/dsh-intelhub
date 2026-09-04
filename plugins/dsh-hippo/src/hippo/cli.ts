@@ -461,6 +461,34 @@ program
     });
   });
 
+// ── weekly-report（H12 M9）：周期摘要——本周新记忆/高频主题/冷门预警 ──
+
+program
+  .command('weekly-report')
+  .description('weekly digest: new memories this week, top themes, stale warnings')
+  .action(async () => {
+    const { withEngine } = await import('./engine.js');
+    const { listRecords } = await import('./transfer.js');
+    const now = Date.now() / 1000;
+    const weekAgo = now - 7 * 86400;
+    await withEngine(async ({ engine }) => {
+      const rows = listRecords(engine.store as never, { includeSuperseded: false }) as unknown as Record<string, unknown>[];
+      const recent = rows.filter(r => (r.created_at as number) > weekAgo);
+      const never = rows.filter(r => (r.accessed_at as number) === (r.created_at as number));
+      const byType: Record<string, number> = {};
+      const byProject: Record<string, number> = {};
+      for (const r of recent) {
+        const t = String(r.type); byType[t] = (byType[t] ?? 0) + 1;
+        const p = String(r.project); byProject[p] = (byProject[p] ?? 0) + 1;
+      }
+      const topProjects = Object.entries(byProject).sort((a, b) => b[1] - a[1]).slice(0, 5);
+      console.log('═══ 本周记忆摘要 ═══');
+      console.log(`新记忆: ${recent.length} 条 | 零召回占比: ${never.length}/${rows.length}`);
+      console.log(`活跃项目 TOP5: ${topProjects.map(([p, n]) => `${p}(${n})`).join(', ')}`);
+      if (never.length > rows.length * 0.3) console.log('⚠ 零召回占比 >30%——建议跑 hippo sleep + 检查蒸馏质量');
+    });
+  });
+
 // ── secrets（H9）：存量库敏感信息扫描/清除 ─────────
 
 program

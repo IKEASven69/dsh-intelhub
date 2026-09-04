@@ -62,7 +62,11 @@ export async function runSleep(engine: MemoryEngine, opts: { apply?: boolean } =
       const gain = dropList.reduce((s, d) => s + (d.strength ?? 1), 0);
       try {
         await engine.store.touch(keep.id, { accessedAt: Date.now() / 1000, strength: (keep.strength ?? 1) + gain });
-        for (const d of dropList) { await engine.forget(d.id); dropped.add(d.id); }
+        // H12：合并可逆化——重复条目 supersede 到 keep 而非硬删（原文可溯可恢复）
+        for (const d of dropList) {
+          await engine.markSuperseded(d.id, keep.id);
+          dropped.add(d.id);
+        }
         report.merged += dropList.length;
       } catch { /* 单簇失败不拖垮整轮 */ }
     }

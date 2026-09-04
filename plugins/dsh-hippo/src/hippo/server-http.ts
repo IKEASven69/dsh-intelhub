@@ -294,6 +294,88 @@ export function buildHttpApp(opts: HttpServerOptions & { autoTimer?: boolean } =
       res.status(500).json({ error: (err as Error).message });
     }
   }));
+  // ── H12 0.5 M5：记忆合并——选 2~3 条 LLM 合成一条（原条目 supersede 可逆）──
+  app.post('/api/memories/merge', async (req, res) => {
+    const { ids, project } = req.body ?? {};
+    if (!Array.isArray(ids) || ids.length < 2) {
+      res.status(400).json({ error: 'ids array (≥2) required' }); return;
+    }
+    try {
+      const { listRecords } = await import('./transfer.js');
+      const { getRefinerBridge } = await import('./auto-distill-run.js');
+      await withEngine(async ({ engine }) => {
+        const rows = listRecords(engine.store as never, { includeSuperseded: false }) as Record<string, unknown>[];
+        const texts: string[] = [];
+        const validIds: string[] = [];
+        for (const id of ids) {
+          const r = rows.find(x => String(x.id) === String(id));
+          if (r) { texts.push(String(r.text ?? '')); validIds.push(String(id)); }
+        }
+        if (validIds.length < 2) { res.status(400).json({ error: '有效记忆不足 2 条' }); return; }
+        // LLM 合成
+        const bridge = getRefinerBridge();
+        let digest: string;
+        if (bridge) {
+          try {
+            const NL = String.fromCharCode(10);
+            digest = await bridge('把以下多条记忆合并成一条自包含的记忆（保留所有具体细节和技术名词，去掉重复）', texts.map((t, i) => `${i + 1}. ${t}`).join(NL));
+            digest = digest.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+          } catch { digest = texts.join('；'); }
+        } else {
+          digest = texts.join('；');
+        }
+        // 入库 + supersede
+        const r = await engine.remember(digest, { type: 'lesson', project: project ?? 'merged', agent: 'merge' });
+        for (const id of validIds) { await engine.markSuperseded(id, r.id); }
+        res.json({ id: r.id, text: digest, merged: validIds.length, status: r.status });
+      });
+    } catch (err) { res.status(500).json({ error: (err as Error).message }); }
+  });
+
+  // ── H12 0.5 M2：冲突检测——sim≥0.80 的同项目记忆对中含否定/矛盾信号 ──
+  app.get('/api/memories/conflicts', async (_req, res) => {
+    try {
+      const { listRecords } = await import('./transfer.js');
+      const { searchSessions } = await import('../agents/session-index.js');
+      await withEngine(async ({ engine }) => {
+        const rows = listRecords(engine.store as never, { includeSuperseded: false }) as Record<string, unknown>[];
+        const conflicts: Array<{ a: { id: string; text: string }; b: { id: string; text: string }; sim: number; project: string }> = [];
+        // 按项目分组，组内两两 similar() 找高相似但文本方向相反的对
+        const byProj = new Map<string, Record<string, unknown>[]>();
+        for (const r of rows) {
+          const proj = String(r.project ?? '');
+          if (!byProj.has(proj)) byProj.set(proj, []);
+          byProj.get(proj)!.push(r);
+        }
+        for (const [, mems] of byProj) {
+          if (mems.length < 2) continue;
+          for (let i = 0; i < mems.length; i++) {
+            for (let j = i + 1; j < mems.length; j++) {
+              const a = mems[i], b = mems[j];
+              try {
+                const sims = await engine.similar(String(a.id), { limit: 5 });
+                const sim = sims.find(s => s.id === String(b.id))?.similarity ?? 0;
+                if (sim < 0.75) continue;
+                // 矛盾信号：两条中一条含否定词
+                const NEG = /不用|不再|放弃|弃用|改用|换成了|never|instead of|no longer|deprecated|替代/i;
+                const aNeg = NEG.test(String(a.text ?? ''));
+                const bNeg = NEG.test(String(b.text ?? ''));
+                if (aNeg !== bNeg && sim >= 0.75) {
+                  conflicts.push({
+                    a: { id: String(a.id), text: String(a.text ?? '').slice(0, 100) },
+                    b: { id: String(b.id), text: String(b.text ?? '').slice(0, 100) },
+                    sim: Math.round(sim * 100) / 100, project: String(a.project ?? ''),
+                  });
+                }
+              } catch { /* 单对失败跳过 */ }
+            }
+          }
+        }
+        res.json({ conflicts: conflicts.slice(0, 50) });
+      });
+    } catch (err) { res.status(500).json({ error: (err as Error).message }); }
+  });
+
   // ── H12 0.5：零召回清单（must be before :id to avoid capture）──
   app.get('/api/never-recalled', async (_req, res) => {
     try {
