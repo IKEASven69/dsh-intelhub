@@ -180,6 +180,7 @@ window.__ModuleLoader__.load({
         h('div', { className: 'dk-preview-head' },
           h('button', { className: 'dk-back', onClick: onBack }, '‹ 返回'),
           h('span', { className: 'dk-path' }, title || path),
+          text !== null ? h('button', { className: 'dk-chip', style: { marginLeft: 4 }, title: '在浮窗中打开（可拖拽多开）', onClick: () => winStore.open({ title: title || path, root, path }) }, '浮窗') : null,
           text !== null && isMd ? h('button', { className: 'dk-chip', style: { marginLeft: 8 }, onClick: () => { if (editing) { setEditText(text); setSaveMsg(null) } setEditing(!editing) }, disabled: saving }, editing ? '预览' : '编辑') : null,
           editing ? h('button', { className: 'dk-chip', style: { marginLeft: 4 }, onClick: doSave, disabled: saving }, saving ? '保存中…' : '保存') : null,
           editing ? h('button', { className: 'dk-chip', style: { marginLeft: 4 }, onClick: () => { setEditing(false); setEditText(text); setSaveMsg(null) }, disabled: saving }, '取消') : null),
@@ -1547,6 +1548,7 @@ function openSession(id) { try { deckCtx && deckCtx.sessions && deckCtx.sessions
           : proj !== null ? h(GenericDesk, { project: proj })
           : h('div', { className: 'dk-empty' }, h('div', { className: 'dk-empty-title' }, '项目不存在（可能已删除）'))),
         h(SessBar),
+        h(FloatLayer),
         h('div', { className: 'dk-chatdiv', title: '拖动调右侧对话区宽度 · 双击复位', onPointerDown: (e) => {
           const el = e.currentTarget
           el.setPointerCapture(e.pointerId)
@@ -1562,6 +1564,69 @@ function openSession(id) { try { deckCtx && deckCtx.sessions && deckCtx.sessions
     const zoomStore = { z: Number(localStorage.getItem('dk-zoom')) || 1, set(v) { this.z = v; try { localStorage.setItem('dk-zoom', String(v)) } catch {} notify() }, cycle() { const i = ZOOMS.indexOf(this.z); this.set(ZOOMS[(i + 1) % ZOOMS.length]) } }
     const themeStore = { th: (() => { try { return localStorage.getItem('dk-theme') || 'glass' } catch { return 'glass' } })(), set(t) { this.th = t; try { localStorage.setItem('dk-theme', t) } catch {} notify() } }
     const chatStore = { w: Number(localStorage.getItem('dk-chatw')) || 420, setW(v) { this.w = Math.round(v); try { localStorage.setItem('dk-chatw', String(this.w)) } catch {} notify() } }
+
+    // ── W1 浮窗引擎：窗口栈 + localStorage 持久化（dsh-deck.windows.v1）──
+    const WIN_LS = 'dsh-deck.windows.v1'
+    const winStore = {
+      list: (() => { try { const raw = localStorage.getItem(WIN_LS); const arr = raw !== null ? JSON.parse(raw) : []; return Array.isArray(arr) ? arr.filter((w) => w && typeof w.id === 'string' && typeof w.path === 'string') : [] } catch { return [] } })(),
+      zTop: 100,
+      save() { try { localStorage.setItem(WIN_LS, JSON.stringify(this.list.slice(0, 12))) } catch {} },
+      open({ title, root, path }) {
+        const n = this.list.length
+        const w = { id: 'w' + Date.now().toString(36) + n, title: String(title || path).slice(0, 60), root, path,
+          x: 90 + (n % 6) * 36, y: 56 + (n % 6) * 30, w: 660, h: 480, min: false, max: false, z: ++this.zTop }
+        this.list = [...this.list.slice(-11), w]
+        this.save(); notify()
+        return w.id
+      },
+      close(id) { this.list = this.list.filter((w) => w.id !== id); this.save(); notify() },
+      patch(id, p) { this.list = this.list.map((w) => w.id === id ? Object.assign({}, w, p) : w); this.save(); notify() },
+      front(id) { this.list = this.list.map((w) => w.id === id ? Object.assign({}, w, { z: ++this.zTop }) : w); this.save(); notify() },
+    }
+
+    function FloatWin({ w }) {
+      const onTitleDown = (e) => {
+        if (e.button !== 0 || (e.target.closest && e.target.closest('button'))) return
+        winStore.front(w.id)
+        if (w.max) return
+        const el = e.currentTarget
+        try { el.setPointerCapture(e.pointerId) } catch {}
+        const dx = e.clientX - w.x, dy = e.clientY - w.y
+        const mv = (ev) => { winStore.patch(w.id, { x: Math.max(-w.w + 120, ev.clientX - dx), y: Math.max(0, ev.clientY - dy) }) }
+        const up = () => { el.removeEventListener('pointermove', mv); el.removeEventListener('pointerup', up) }
+        el.addEventListener('pointermove', mv); el.addEventListener('pointerup', up)
+      }
+      const onResizeDown = (e) => {
+        if (e.button !== 0) return
+        e.stopPropagation()
+        winStore.front(w.id)
+        const el = e.currentTarget
+        try { el.setPointerCapture(e.pointerId) } catch {}
+        const sw = w.w, sh = w.h, sx = e.clientX, sy = e.clientY
+        const mv = (ev) => { winStore.patch(w.id, { max: false, w: Math.max(320, sw + ev.clientX - sx), h: Math.max(200, sh + ev.clientY - sy) }) }
+        const up = () => { el.removeEventListener('pointermove', mv); el.removeEventListener('pointerup', up) }
+        el.addEventListener('pointermove', mv); el.addEventListener('pointerup', up)
+      }
+      const style = w.max
+        ? { left: 12, top: 12, right: 12, bottom: 12, zIndex: w.z }
+        : { left: w.x, top: w.y, width: w.w, height: w.min ? 'auto' : w.h, zIndex: w.z }
+      return h('div', { className: 'dk-win' + (w.max ? ' max' : ''), style, onPointerDown: () => winStore.front(w.id) },
+        h('div', { className: 'dk-win-head', onPointerDown: onTitleDown, onDoubleClick: () => winStore.patch(w.id, { max: !w.max }) },
+          h('span', { className: 'dk-win-title' }, w.title),
+          h('span', { className: 'dk-win-btns' },
+            h('button', { title: '最小化', onClick: () => winStore.patch(w.id, { min: !w.min }) }, w.min ? '▢' : '–'),
+            h('button', { title: '最大化', onClick: () => winStore.patch(w.id, { max: !w.max }) }, '▢'),
+            h('button', { title: '关闭', onClick: () => winStore.close(w.id) }, '×'))),
+        w.min ? null : h('div', { className: 'dk-win-body' },
+          h(Preview, { root: w.root, path: w.path, title: w.title, onBack: () => winStore.close(w.id) })),
+        w.min || w.max ? null : h('div', { className: 'dk-win-resize', onPointerDown: onResizeDown }))
+    }
+
+    function FloatLayer() {
+      if (winStore.list.length === 0) return null
+      return h('div', { className: 'dk-floatlayer' },
+        winStore.list.map((w) => h(FloatWin, { key: w.id, w })))
+    }
 
     function SessBar() {
       const rows = sessionsStore.ids.map((id) => sessionsStore.byId[id]).filter(Boolean)
@@ -1860,7 +1925,18 @@ button:active{transform:scale(.97);}
 .dk-shell[data-th="term"]{--color-bg-0:#080d09;--color-bg-1:#0b120d;--color-bg-2:#0f1a12;--color-bg-3:#14241a;--color-border-1:#1d3a24;--color-text-1:#c8f2cf;--dk-accent:#39ff6e;--dk-ok:#39ff6e;font-family:ui-monospace,Consolas,monospace;}
 .dk-shell[data-th="cyber"]{--color-bg-0:#0b0b10;--color-bg-1:#12121a;--color-bg-2:#181824;--color-bg-3:#1f1f2e;--color-border-1:#2a2a3a;--color-text-1:#f2f2f8;--dk-accent:#fcee0a;--dk-ok:#00f0aa;}
 .dk-shell[data-th="paper"]{--color-bg-0:#f6f1e7;--color-bg-1:#fffdf8;--color-bg-2:#f4eee1;--color-bg-3:#ece4d2;--color-border-1:#ddd4c2;--color-text-1:#26211a;--dk-accent:#b03a2e;--dk-ok:#3d7a4f;}
-.dk-launchrow{display:flex;gap:10px;flex-wrap:wrap;}`
+.dk-launchrow{display:flex;gap:10px;flex-wrap:wrap;}
+/* ═══ W1 浮窗引擎 ═══ */
+.dk-floatlayer{position:absolute;inset:0;z-index:70;pointer-events:none;}
+.dk-win{position:absolute;pointer-events:auto;display:flex;flex-direction:column;background:var(--color-bg-1,#14161c);border:1px solid var(--color-border-1,#2a2e37);border-radius:12px;box-shadow:0 24px 80px rgba(0,0,0,.55);overflow:hidden;min-width:320px;min-height:200px;}
+.dk-win-head{display:flex;align-items:center;gap:8px;padding:8px 10px;cursor:move;user-select:none;background:var(--color-bg-2,#1b1e26);border-bottom:1px solid var(--color-border-1,#2a2e37);flex-shrink:0;}
+.dk-win-title{flex:1;font-size:13px;font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.dk-win-btns{display:flex;gap:4px;}
+.dk-win-btns button{background:none;border:none;color:inherit;font-size:13px;cursor:pointer;padding:2px 8px;border-radius:6px;opacity:.7;}
+.dk-win-btns button:hover{opacity:1;background:var(--color-bg-3,#232732);}
+.dk-win-body{flex:1;overflow-y:auto;padding:12px 14px;min-height:0;}
+.dk-win-resize{position:absolute;right:0;bottom:0;width:18px;height:18px;cursor:nwse-resize;}
+.dk-win-resize::after{content:'';position:absolute;right:4px;bottom:4px;width:8px;height:8px;border-right:2px solid var(--color-border-1,#2a2e37);border-bottom:2px solid var(--color-border-1,#2a2e37);}`
       document.head.appendChild(el)
     }
 

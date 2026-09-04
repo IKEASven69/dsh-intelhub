@@ -16,7 +16,7 @@
 - [x] F3 启动器配置化（用户实测 zcode TUI 不可用；opencode 1.18.21 实测存活）：deck.json 存 launcher{cli: opencode|zcode|custom, customCmd, cwd}；「🚀 发给 agent」点开先弹启动器选择（CLI 单选 + 启动目录：项目夹/自定义 + 记住选择），默认 opencode；dispatch 按配置起终端 ✅ 2026-09-01 核实：API `/api/deck/launcher` + 客户端 `LauncherModal` 已落地
 
 ### P1 悬浮窗口系统（核心新增，worktable 对齐+超越）
-- [ ] W1 浮窗引擎：DragLayer + Window 组件——标题栏拖动、右下角缩放、最小化/最大化/关闭、点击置顶（z-index 栈）、位置大小 localStorage 持久化（dsh-deck.windows.v1，重开恢复）。**worktable 实际没有自由浮窗（其 float 仅侧栏 dock），此项为超越点**
+- [x] W1 浮窗引擎：DragLayer + Window 组件——标题栏拖动、右下角缩放、最小化/最大化/关闭、点击置顶（z-index 栈）、位置大小 localStorage 持久化（dsh-deck.windows.v1，重开恢复）。**worktable 实际没有自由浮窗（其 float 仅侧栏 dock），此项为超越点** ✅ 2026-09-03 落地：winStore + FloatLayer/FloatWin + Preview 头「浮窗」入口 + 多开层叠；node 实测开/置顶/改/关/持久/重载全过，43 单测全绿；真机拖拽手感待浏览器复验
 - [x] W2 窗口类型注册表：md 预览窗 / **编辑窗（md 可改可存，保存走 fs/write 原子写，预览/编辑双态——对齐 worktable TextViewer）** ✅ 2026-09-01 简版落地：Preview 组件内联编辑（textarea + 保存→fs/write），43 测全绿；浮窗注册表与 html/浏览器窗仍待 W1 之后
 - [ ] W3 接入点：文库文件→浮窗（预览+编辑切换）；内容详情文件 chips + 产物→浮窗；点子卡/内容卡详情→浮窗；发布预填→浮窗承载说明+链接+文本
 - [ ] W3b **对话右栏（worktable 同款路线）**：deck shell 从全屏盖死改为「左内容 + 右原生对话」——applyMargin 挤宿主会话视图到右侧（findConversationRoot 找 [data-phase] 根 + ResizeObserver/MutationObserver 重锚定），切会话不关工作台；右侧宽度可拖、可收起
