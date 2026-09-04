@@ -99,6 +99,24 @@ export function createHippoMcpServer(engine: McpEngine, opts: { distillUnavailab
     return lines.length > 0 ? lines.join('\n') : '未找到相关记忆。';
   }));
 
+  server.registerTool('memory_feedback', {
+    description:
+      'Report whether a recalled memory was actually useful for your work. ' +
+      'Call this after using a memory from memory_recall: useful=true reinforces it ' +
+      '(stronger recall later), useful=false decays it (less noise). ' +
+      'This trains the memory library to your actual usage.',
+    inputSchema: {
+      memory_id: z.string().describe('id from memory_recall'),
+      useful: z.boolean(),
+      query: z.string().optional().describe('the query that surfaced it'),
+    },
+  }, safe(async ({ memory_id, useful, query }: { memory_id: string; useful: boolean; query?: string }) => {
+    const { feedbackMemory } = await import('./memory.js');
+    const r = await feedbackMemory(engine as never, memory_id, useful, { query });
+    if (!r.ok) return { deleted: false, error: 'memory not found' };
+    return { ok: true, strength: r.strength };
+  }));
+
   server.registerTool('update', {
     description:
       'Edit an existing memory in place, preserving its strength. Use this ' +

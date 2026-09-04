@@ -21,6 +21,7 @@ export type { Turn } from '../patterns/transcript.js';
 export { AGENTS, inventory, discoverAll, parseSession, loadIgnoreRules, readImportState, writeImportState } from '../agents/index.js';
 import { setSessionEmbedder } from '../agents/session-index.js';
 export { searchSessionsHybrid, setSessionEmbedder } from '../agents/session-index.js';
+export { feedbackMemory } from './memory.js';
 export type { SessionAdapter, SessionRef, AgentInventory, IgnoreRules, ImportState } from '../agents/index.js';
 // 会话索引层（G1）：搜索/详情/导出/蒸馏记录
 export {

@@ -26,13 +26,13 @@ function payload(result: unknown): unknown {
   return JSON.parse(r.content[0].text);
 }
 
-test('server lists the eighteen hippo tools', async () => {
+test('server lists the nineteen hippo tools', async () => {
   const { client, close } = await connectedClient();
   try {
     const { tools } = await client.listTools();
     assert.deepEqual(
       tools.map(t => t.name).sort(),
-      ['compile', 'context_fold', 'distill', 'forget', 'handoff_inbox', 'handoff_load', 'memory_archive', 'memory_review', 'memory_status', 'recall', 'remember', 'session_delete', 'sleep', 'stats', 'supersede', 'task_list', 'task_update', 'update'],
+      ['compile', 'context_fold', 'distill', 'forget', 'handoff_inbox', 'handoff_load', 'memory_archive', 'memory_feedback', 'memory_review', 'memory_status', 'recall', 'remember', 'session_delete', 'sleep', 'stats', 'supersede', 'task_list', 'task_update', 'update'],
     );
   } finally {
     await close();

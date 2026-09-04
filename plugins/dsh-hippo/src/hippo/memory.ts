@@ -15,6 +15,9 @@
  * (remember's search→touch dedup path) against interleaved callers.
  */
 import crypto from 'node:crypto';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 // Dedup bands. The original 0.92/0.75 values were tuned on bge-small-zh;
 // bge-m3 has a much higher similarity baseline (unrelated pairs median
@@ -319,5 +322,46 @@ export class MemoryEngine {
 
   async forget(memoryId: string): Promise<boolean> {
     return this._withLock(() => this._store.delete(memoryId));
+  }
+}
+
+// ── H13 M-1：使用信号回传——压缩自学习的数据源 ─────────────────────
+export interface FeedbackResult {
+  ok: boolean;
+  strength?: number;
+  /** 追加到 ~/.hippo/memory-feedback.jsonl 的日志已写 */
+  logged: boolean;
+}
+
+/**
+ * agent 引用一条记忆干活后回传"用上了/没用上"。
+ * useful=true → 强化（+0.2）；false → 衰减（-0.2，下限 0.5）。
+ * 同时追加 feedback 日志（判决特征挖掘 M-3 的数据源）。
+ */
+export async function feedbackMemory(
+  engine: { store: { get(id: string): Promise<[MemoryRecord, unknown] | null>; touch(id: string, o: { accessedAt: number; strength?: number }): Promise<void> } },
+  id: string,
+  useful: boolean,
+  opts: { query?: string } = {},
+): Promise<FeedbackResult> {
+  const got = await engine.store.get(id);
+  if (!got) return { ok: false, logged: false };
+  const [record] = got;
+  const now = Date.now() / 1000;
+  const cur = record.strength ?? 1;
+  const next = useful ? Math.min(5, cur + 0.2) : Math.max(0.5, cur - 0.2);
+  await engine.store.touch(id, { accessedAt: now, strength: next });
+  try {
+    const dir = process.env.HIPPO_DATA_DIR ?? path.join(os.homedir(), '.hippo');
+    const logFile = path.join(dir, 'memory-feedback.jsonl');
+    fs.appendFileSync(logFile, JSON.stringify({
+      id, useful, query: opts.query?.slice(0, 100),
+      strength: Math.round(next * 100) / 100,
+      textPreview: (record.text ?? '').slice(0, 60),
+      ts: now,
+    }) + '\n', 'utf-8');
+    return { ok: true, strength: Math.round(next * 100) / 100, logged: true };
+  } catch {
+    return { ok: true, strength: next, logged: false };
   }
 }
