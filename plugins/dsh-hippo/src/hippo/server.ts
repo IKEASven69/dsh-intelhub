@@ -251,6 +251,44 @@ export function createHippoMcpServer(engine: McpEngine, opts: { distillUnavailab
   }));
 
   // ── H7 M5b：handoff 收件箱（推准备、拉消费；消费即弃）──
+  // ── H12 M-03/M-01：context_fold（会话内压缩即服务）+ memory_archive（tier 老化）──
+  server.registerTool('context_fold', {
+    description:
+      'Fold a consumed conversation segment into structured memories. Pass the raw text ' +
+      'of a discussion you are about to discard from working context; hippo distills it into ' +
+      'durable memories (with your refiner pipeline) and returns the folded points. ' +
+      'After folding you can safely drop the original text — recall can retrieve details later.',
+    inputSchema: {
+      text: z.string().describe('consumed conversation/discussion segment to fold'),
+      project: z.string().default('global'),
+    },
+  }, safe(async ({ text, project }: { text: string; project: string }) => {
+    const { foldText } = await import('./fold.js');
+    const { getDistillRefiner } = await import('./auto-distill-run.js');
+    const r = await foldText(engine as never, text, { project, refiner: getDistillRefiner() ?? undefined });
+    const list = r.folded.map((f, i) => `${i + 1}. ${f}`).join('\n');
+    return `${r.note}\n${list}`;
+  }));
+
+  server.registerTool('memory_archive', {
+    description:
+      'Tier-aging archive: roll up memories older than 90 days (per project+month, groups of 3+) ' +
+      'into digest memories; originals sink via supersede chain (reversible). ' +
+      'Pass apply=true to execute; default is a dry-run report.',
+    inputSchema: {
+      apply: z.boolean().default(false),
+    },
+  }, safe(async ({ apply }: { apply: boolean }) => {
+    const { tierAge } = await import('./tier-aging.js');
+    const { getRefinerBridge } = await import('./auto-distill-run.js');
+    const report = await tierAge(engine as never, getRefinerBridge(), { apply, olderThanDays: 90 });
+    const head = apply
+      ? `归档完成：${report.groupsFound} 组 → 创建摘要 ${report.digestsCreated}，沉底 ${report.archived} 条${report.llmUsed ? '（LLM 压缩）' : '（规则拼接降级）'}`
+      : `dry-run：发现 ${report.groupsFound} 组可归档（apply=true 执行）`;
+    const rows = report.groups.map(g => `  · ${g.project} ${g.month} [${g.type}] ${g.ids.length} 条`).join('\n');
+    return `${head}\n${rows}`;
+  }));
+
   server.registerTool('handoff_inbox', {
     description:
       'List pending handoff snapshots pushed from other agent sessions (cross-agent context handoff). ' +

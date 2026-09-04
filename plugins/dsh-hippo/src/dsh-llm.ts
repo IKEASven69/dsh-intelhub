@@ -159,6 +159,7 @@ export async function providerDirectComplete(system: string, user: string, opts:
   const nextProv = rest.search(/\n    \S[^:\n]*:/)
   const sect = nextProv === -1 ? rest : rest.slice(0, nextProv)
   const baseURL = sect.match(/baseURL:\s*(\S+)/)?.[1]
+  const api = sect.match(/api:\s*(\S+)/)?.[1]
   const apiKeyEnv = sect.match(/apiKeyEnv:\s*(\S+)/)?.[1]
   if (baseURL === undefined) throw new Error(route.provider + ' 缺 baseURL')
   // key：凭证库优先，环境变量兜底
@@ -171,20 +172,50 @@ export async function providerDirectComplete(system: string, user: string, opts:
     } catch { /* 无凭证库 */ }
   }
   if (key === '') throw new Error('key 未配置（' + apiKeyEnv + '）')
-  const url = baseURL.replace(/\/$/, '') + '/chat/completions'
-  const resp = await fetch(url, {
-    method: 'POST',
-    headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
+  // 协议分派：anthropic-messages → /messages + x-api-key + thinking 块拼接；
+  // openai-completions → /chat/completions。两形态都兼容思考模型。
+  const isAnthropic = api === 'anthropic-messages' || api === 'anthropic'
+  const url = isAnthropic
+    ? baseURL.replace(/\/$/, '') + '/v1/messages'
+    : baseURL.replace(/\/$/, '') + '/chat/completions'
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  let body: Record<string, unknown>
+  if (isAnthropic) {
+    headers['x-api-key'] = key
+    headers['anthropic-version'] = '2023-06-01'
+    body = {
+      model: route.model, max_tokens: 8192,
+      thinking: { type: 'enabled', budget_tokens: 2048 },
+      ...(opts.temperature !== undefined ? { temperature: opts.temperature } : {}),
+      system,
+      messages: [{ role: 'user', content: user }],
+    }
+  } else {
+    headers['Authorization'] = 'Bearer ' + key
+    body = {
       model: route.model,
-      messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
+      messages: [
+        { role: 'system', content: system },
+        { role: 'user', content: user },
+      ],
       max_tokens: 8192,
       ...(opts.temperature !== undefined ? { temperature: opts.temperature } : {}),
-    }),
+    }
+  }
+  const resp = await fetch(url, {
+    method: 'POST', headers,
+    body: JSON.stringify(body),
     signal: AbortSignal.timeout(opts.timeoutMs ?? 180_000),
   })
   if (!resp.ok) throw new Error(`provider ${resp.status}: ${await resp.text().catch(() => '')}`.slice(0, 200))
-  const d = (await resp.json()) as { choices?: Array<{ message?: { content?: string; reasoning_content?: string } }> }
-  const msg = d.choices?.[0]?.message
-  return msg?.content?.trim() !== '' && msg?.content !== undefined ? msg.content : (msg?.reasoning_content ?? '')
+  const d = (await resp.json()) as
+    | { choices?: Array<{ message?: { content?: string; reasoning_content?: string } }> }
+    | { content?: Array<{ type: string; text?: string }> };
+  if ('content' in d && Array.isArray(d.content)) {
+    // anthropic-messages：拼接 text 块（thinking 块由服务端分开返回）
+    return d.content.filter(b => b.type === 'text').map(b => b.text ?? '').join('');
+  }
+  const choices = (d as { choices?: Array<{ message?: { content?: string; reasoning_content?: string } }> }).choices;
+  const msg = choices?.[0]?.message;
+  return msg?.content?.trim() !== '' && msg?.content !== undefined ? msg.content : (msg?.reasoning_content ?? '');
 }

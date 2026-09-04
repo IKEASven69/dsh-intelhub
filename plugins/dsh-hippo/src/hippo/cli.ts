@@ -359,6 +359,30 @@ program
     console.log('GUI 蒸馏页可按建议勾选确认，或 hippo shelved-apply 人工执行');
   });
 
+// ── fold（H12 M-03）：会话内压缩即服务 ──
+
+program
+  .command('fold')
+  .description('fold a consumed conversation segment into durable memories (compression as a service)')
+  .argument('<file>', 'text file containing the consumed segment (- for stdin)')
+  .option('-p, --project <project>', 'project scope', 'global')
+  .action(async (file: string, options: { project?: string }) => {
+    const { foldText } = await import('./fold.js');
+    const { openEngine } = await import('./engine.js');
+    const { readFileSync } = await import('node:fs');
+    const text = file === '-' ? await new Promise<string>((res) => {
+      let d = '';
+      process.stdin.on('data', (c) => { d += String(c); });
+      process.stdin.on('end', () => res(d));
+    }) : readFileSync(file, 'utf8');
+    const { engine, close } = openEngine();
+    try {
+      const r = await foldText(engine, text, { project: options.project ?? 'global' });
+      console.log(r.note);
+      for (const f of r.folded) console.log(` · ${f.slice(0, 80)}`);
+    } finally { close(); }
+  });
+
 // ── refine-learn（H12 M-02）：人工判决 → few-shot 样例库 ──
 
 program

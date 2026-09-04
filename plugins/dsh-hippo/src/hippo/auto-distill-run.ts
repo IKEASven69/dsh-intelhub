@@ -180,7 +180,7 @@ async function runOnceInner(st: AutoDistillSettings, stats: AutoRunStats): Promi
       void (async () => {
         try {
           const { reviewShelved } = await import('./shelved-review.js');
-          const st = await reviewShelved((sys, u) => refinerBridge(sys, u));
+          const st = await reviewShelved((sys, u) => refinerBridge!(sys, u));
           if (st.reviewed > 0) console.log(`[auto-review] 待审预审完成：${st.reviewed} 条（建议收 ${st.accept} / 弃 ${st.discard}）`);
         } catch { /* 预审失败不影响主流程 */ }
       })();
@@ -192,7 +192,11 @@ async function runOnceInner(st: AutoDistillSettings, stats: AutoRunStats): Promi
 }
 
 /** refiner 注入的是 Candidate 级 CompleteFn；预审复用同一通道。 */
-let refinerBridge: (system: string, user: string) => Promise<string> = async () => { throw new Error('LLM 未接入'); };
+let refinerBridge: ((system: string, user: string) => Promise<string>) | null = null;
+/** 当前注入的文本级 LLM 桥（tier 老化/context_fold 用）。 */
+export function getRefinerBridge(): (system: string, user: string) => Promise<string> {
+  return refinerBridge as (system: string, user: string) => Promise<string>;
+}
 export function setRefinerBridge(fn: (system: string, user: string) => Promise<string>): void {
   refinerBridge = fn;
 }
@@ -208,14 +212,21 @@ async function maybeAutoSleep(): Promise<void> {
     const { withEngine } = await import('./engine-holder.js');
     let merged = 0;
     let dropped = 0;
+    let tierArchived = 0;
     await withEngine(async ({ engine }) => {
       const report = await runSleep(engine as never, { apply: true });
       merged = report.merged;
       dropped = report.staleShelvedDropped;
+      // H12 M-01：tier 老化归档——90 天前 lesson/decision 群卷摘要（LLM 通道复用，失败降级拼接）
+      try {
+        const { tierAge } = await import('./tier-aging.js');
+        const tr = await tierAge(engine as never, (sys, u) => refinerBridge!(sys, u), { apply: true });
+        tierArchived = tr.archived;
+      } catch { /* 老化失败不影响 sleep */ }
     });
     (st as unknown as { lastSleepAt?: number }).lastSleepAt = now;
     saveAutoSettings(st);
-    console.log(`[auto-sleep] 整合完成：合并 ${merged} · 清过期待审 ${dropped}`);
+    console.log(`[auto-sleep] 整合完成：合并 ${merged} · 清过期待审 ${dropped} · tier 归档 ${tierArchived}`);
   } catch { /* sleep 失败不影响蒸馏 */ }
 }
 
