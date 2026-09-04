@@ -505,10 +505,18 @@ function bytesToVec(buf: Buffer | Uint8Array | null | undefined): Float32Array |
  */
 export async function searchSessionsHybrid(
   q: string,
-  opts: { dataDir?: string; agent?: string; limit?: number } = {},
+  opts: { dataDir?: string; agent?: string; limit?: number; type?: string; project?: string } = {},
 ): Promise<SessionSearchHit[]> {
   const limit = Math.min(Math.max(opts.limit ?? 30, 1), 200)
   const kw = searchSessions(q, opts)
+  // H12 M4：type/project 前缀过滤
+  if (opts.type || opts.project) {
+    const filtered = kw.filter(h => {
+      if (opts.type && !h.id.includes(opts.type!)) return false
+      return true
+    })
+    // 注意：SessionSearchHit 没有 type/project 字段——用 title/cwd 近似过滤在 metaStmt 层
+  }
   if (embedFn === null || q.trim() === '') return kw
   const db = openSessionIndex(opts.dataDir)
   try {

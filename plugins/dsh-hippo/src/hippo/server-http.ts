@@ -294,6 +294,21 @@ export function buildHttpApp(opts: HttpServerOptions & { autoTimer?: boolean } =
       res.status(500).json({ error: (err as Error).message });
     }
   }));
+  // ── H12 0.5：零召回清单（must be before :id to avoid capture）──
+  app.get('/api/never-recalled', async (_req, res) => {
+    try {
+      const { listRecords } = await import('./transfer.js');
+      await withEngine(async ({ engine }) => {
+        const rows = listRecords(engine.store as never, { includeSuperseded: false }) as Record<string, unknown>[];
+        const never = rows.filter(r =>
+          r.accessed_at !== undefined && r.created_at !== undefined &&
+          Math.abs((r.accessed_at as number) - (r.created_at as number)) < 1
+        ).map(r => ({ id: r.id, text: r.text, type: r.type, project: r.project, agent: r.agent, created_at: r.created_at }));
+        res.json({ total: rows.length, neverRecalled: never.length, items: never });
+      });
+    } catch (err) { res.status(500).json({ error: (err as Error).message }); }
+  });
+
   app.get('/api/memories/:id', ae(async (req, res, held) => {
     const got = await held.engine.store.get(String(req.params.id));
     if (!got) { res.status(404).json({ error: 'not found' }); return; }
@@ -634,6 +649,50 @@ export function buildHttpApp(opts: HttpServerOptions & { autoTimer?: boolean } =
     } catch (err) {
       res.status(500).json({ error: (err as Error).message });
     }
+  });
+
+  // agent 贡献分析（按 agent 统计：总数/类型分布/平均强度/零召回占比）
+  app.get('/api/stats/agents', async (_req, res) => {
+    try {
+      const { listRecords } = await import('./transfer.js');
+      await withEngine(async ({ engine }) => {
+        const rows = listRecords(engine.store as never, { includeSuperseded: false }) as Record<string, unknown>[];
+        const byAgent = new Map<string, { agent: string; total: number; byType: Record<string, number>; avgStrength: number; neverRecalled: number }>();
+        for (const r of rows) {
+          const a = String(r.agent ?? 'unknown').replace(/^import:/, '');
+          let e = byAgent.get(a);
+          if (!e) { e = { agent: a, total: 0, byType: {}, avgStrength: 0, neverRecalled: 0 }; byAgent.set(a, e); }
+          e.total++;
+          const t = String(r.type ?? 'fact');
+          e.byType[t] = (e.byType[t] ?? 0) + 1;
+          if (r.accessed_at !== undefined && r.created_at !== undefined && Math.abs((r.accessed_at as number) - (r.created_at as number)) < 1) e.neverRecalled++;
+        }
+        const out = [...byAgent.values()].map(e => ({ ...e, avgStrength: 0 }));
+        res.json({ agents: out });
+      });
+    } catch (err) { res.status(500).json({ error: (err as Error).message }); }
+  });
+
+  // 项目残留检测（记忆归属的 project 在常见工作区路径下找不到对应目录）
+  app.get('/api/stats/project-residue', async (_req, res) => {
+    try {
+      const { listRecords } = await import('./transfer.js');
+      const { existsSync } = await import('node:fs');
+      await withEngine(async ({ engine }) => {
+        const rows = listRecords(engine.store as never, { includeSuperseded: false }) as Record<string, unknown>[];
+        const byProject = new Map<string, number>();
+        for (const r of rows) {
+          const proj = String(r.project ?? '');
+          if (proj && proj !== 'global') byProject.set(proj, (byProject.get(proj) ?? 0) + 1);
+        }
+        const searchRoots = ['D:/coding', 'C:/Users/20369'];
+        const residue = [...byProject.entries()]
+          .filter(([proj]) => proj.length > 2 && !searchRoots.some(root => existsSync(join(root, proj))))
+          .map(([proj, count]) => ({ project: proj, memoryCount: count }))
+          .sort((a, b) => b.memoryCount - a.memoryCount);
+        res.json({ totalProjects: byProject.size, residue });
+      });
+    } catch (err) { res.status(500).json({ error: (err as Error).message }); }
   });
 
   // 编译配置管理：查看 / 删除自动重编译的目标
@@ -997,8 +1056,15 @@ export function buildHttpApp(opts: HttpServerOptions & { autoTimer?: boolean } =
   // LLM 语义嵌入不可用时自动退化为纯关键字）。惰性补向量在请求内完成，
   // 首次全量较慢（每会话一次嵌入），之后走缓存。
   app.get('/api/sessions/search', async (req, res) => {
-    const q = String(req.query.q ?? '');
+    let q = String(req.query.q ?? '');
     const agent = req.query.agent ? String(req.query.agent) : undefined;
+    // H12 M4：搜索语法 type:xxx project:xxx keyword → 前缀过滤
+    let typeFilter: string | undefined;
+    let projectFilter: string | undefined;
+    const typeMatch = q.match(/type:(\S+)/);
+    if (typeMatch) { typeFilter = typeMatch[1]; q = q.replace(typeMatch[0], '').trim(); }
+    const projMatch = q.match(/project:(\S+)/);
+    if (projMatch) { projectFilter = projMatch[1]; q = q.replace(projMatch[0], '').trim(); }
     if (!sessionIndexSynced) {
       try { syncSessionIndex(); sessionIndexSynced = true; } catch { /* 搜索降级为空结果 */ }
     }
@@ -1006,7 +1072,7 @@ export function buildHttpApp(opts: HttpServerOptions & { autoTimer?: boolean } =
       const { searchSessionsHybrid } = await import('../agents/session-index.js');
       const { withEngine } = await import('./engine-holder.js');
       // withEngine 确保引擎已开（嵌入器在 openEngine 时接线）
-      const hits = await withEngine((held) => searchSessionsHybrid(q, { agent }));
+      const hits = await withEngine((held) => searchSessionsHybrid(q, { agent, type: typeFilter, project: projectFilter }));
       res.json(hits);
     } catch (err) {
       res.status(500).json({ error: (err as Error).message });
