@@ -11,9 +11,10 @@
  *   （宁多勿丢——LLM 漏判的候选走原有阈值分流）
  */
 import type { Candidate } from './distill.js'
-import { appendFileSync, mkdirSync } from 'node:fs'
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
+import { appPath } from '../core/paths.js'
 
 /** 精炼审计日志（~/.hippo/llm-refine.log）：每批一行——dsh 宿主吞 console，
  *  文件是唯一可靠的可观测面；也是产品级审计数据。 */
@@ -28,6 +29,64 @@ function audit(line: string): void {
 
 export interface CompleteOpts { temperature?: number }
 export type CompleteFn = (system: string, user: string, opts?: CompleteOpts) => Promise<string>
+
+// ── few-shot 样例库（H12 M-02）：人工判决随积累回填，压缩质量随使用变好 ──
+
+export interface RefineSample { text: string; verdict: 'accept' | 'discard'; reason?: string; source?: string }
+
+/** 样例库路径（~/.hippo/refine-samples.jsonl）。 */
+export function samplesPath(): string {
+  const dir = process.env.HIPPO_DATA_DIR ?? join(homedir(), '.hippo')
+  return join(dir, 'refine-samples.jsonl')
+}
+
+/** 读样例（文件不存在/坏行容错）。 */
+export function loadSamples(path?: string): RefineSample[] {
+  const p = path ?? samplesPath()
+  if (!existsSync(p)) return []
+  const out: RefineSample[] = []
+  for (const line of readFileSync(p, 'utf8').split('\n')) {
+    const t = line.trim()
+    if (t === '') continue
+    try {
+      const d = JSON.parse(t) as RefineSample
+      if (typeof d.text === 'string' && (d.verdict === 'accept' || d.verdict === 'discard')) out.push(d)
+    } catch { /* 坏行跳过 */ }
+  }
+  return out
+}
+
+/** 追加样例（refine-learn 命令用）。 */
+export function appendSamples(samples: RefineSample[], path?: string): void {
+  const p = path ?? samplesPath()
+  const prev = existsSync(p) ? readFileSync(p, 'utf8') : ''
+  const lines = samples.map((x) => JSON.stringify(x)).join('\n')
+  writeFileSync(p, (prev.endsWith('\n') || prev === '' ? prev : prev + '\n') + lines + '\n', 'utf-8')
+}
+
+/** 挑 K 条多样样例（收/弃各半，文本去重）。 */
+export function pickDiverse(samples: RefineSample[], k = 6): RefineSample[] {
+  const seen = new Set<string>()
+  const uniq = samples.filter((x) => {
+    const key = x.text.slice(0, 40)
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+  const half = Math.max(1, Math.floor(k / 2))
+  const acc = uniq.filter((x) => x.verdict === 'accept')
+  const dis = uniq.filter(x => x.verdict === 'discard')
+  return [...acc.slice(0, half), ...dis.slice(0, k - Math.min(half, acc.length))].slice(0, k)
+}
+
+/** few-shot 块（无样例返回空串）。 */
+export function fewShotBlock(samples: RefineSample[]): string {
+  if (samples.length === 0) return ''
+  const rows = samples.map((x) =>
+    `- ${x.verdict === 'accept' ? '[收]' : '[弃]'} "${x.text.slice(0, 60)}"${x.reason ? ` —— ${x.reason}` : ''}`,
+  )
+  return '\n\n以下是你之前判过的真实例子（本机历史判决，照此口径）：\n' + rows.join('\n')
+}
 
 const SYSTEM_PROMPT = `你是记忆库审核员。判断每条从 AI 编程会话提取的候选是否值得作为**长期记忆**（未来新会话能让 agent 做得更好/避坑）。
 
@@ -80,12 +139,14 @@ export function parseVerdicts(rawInput: string): Map<number, { keep: boolean; te
  */
 export async function llmRefine(candidates: Candidate[], complete: CompleteFn, timeoutMs = 60_000): Promise<Candidate[]> {
   if (candidates.length === 0) return candidates
+  // few-shot（H12 M-02）：人工判决样例随积累注入——压缩质量随使用变好
+  const system = SYSTEM_PROMPT + fewShotBlock(loadSamples())
   const numbered = candidates
     .map((c, i) => `${i}. [${c.type}] ${c.text}`)
     .join('\n')
   let raw: string
   try {
-    raw = await complete(SYSTEM_PROMPT, numbered, { temperature: 0 })
+    raw = await complete(system, numbered, { temperature: 0 })
   } catch (e) {
     audit(`FAIL ${(e as Error).message?.slice(0, 100)}`)
     return candidates // LLM 不可用：纯规则降级

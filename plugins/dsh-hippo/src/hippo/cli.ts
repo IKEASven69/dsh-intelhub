@@ -359,6 +359,34 @@ program
     console.log('GUI 蒸馏页可按建议勾选确认，或 hippo shelved-apply 人工执行');
   });
 
+// ── refine-learn（H12 M-02）：人工判决 → few-shot 样例库 ──
+
+program
+  .command('refine-learn')
+  .description('feed human accept/discard verdicts into the refine few-shot library (~/.hippo/refine-samples.jsonl)')
+  .option('-f, --file <file>', 'shelved backup jsonl (items with suggest/suggestReason fields)', '')
+  .action(async (options: { file?: string }) => {
+    const { appendSamples, loadSamples } = await import('./refine.js');
+    const { readFileSync, existsSync } = await import('node:fs');
+    const src = options.file !== '' && options.file !== undefined ? options.file : '';
+    if (src === '' || !existsSync(src)) { console.error('--file <shelved-backup.jsonl> required（条目需含 suggest/suggestReason）'); process.exitCode = 1; return; }
+    const samples: Array<{ text: string; verdict: 'accept' | 'discard'; reason?: string; source?: string }> = [];
+    for (const line of readFileSync(src, 'utf8').split('\n')) {
+      const t = line.trim();
+      if (t === '') continue;
+      try {
+        const d = JSON.parse(t) as { suggest?: string; suggestReason?: string; candidate?: { text?: string; source_rule?: string } };
+        if ((d.suggest === 'accept' || d.suggest === 'discard') && d.candidate?.text) {
+          samples.push({ text: d.candidate.text, verdict: d.suggest, reason: d.suggestReason, source: d.candidate.source_rule });
+        }
+      } catch { /* 坏行跳过 */ }
+    }
+    if (samples.length === 0) { console.log('文件里没有带 suggest 标注的条目'); return; }
+    appendSamples(samples);
+    const all = loadSamples();
+    console.log(`已入库 ${samples.length} 条人工判决 → ${all.length} 条样例。后续 LLM 精炼自动引用。`);
+  });
+
 // ── secrets（H9）：存量库敏感信息扫描/清除 ─────────
 
 program
