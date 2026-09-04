@@ -108,6 +108,7 @@ export class OpencliService extends TypertRemoteService {
 
   protected async [Service.init](): Promise<void> {
     this.registerBrowserTools()
+    this.registerAdvancedTools()
     this.registerSiteTool()
     this.registerApprovalGate()
     void this.injectSystemPrompt()
@@ -306,6 +307,100 @@ export class OpencliService extends TypertRemoteService {
         if (argv.length === 0) return { text: 'args 为空' }
         const out = await this.runOpencli(argv)
         return { text: this.renderOut(out) }
+      },
+    }))
+  }
+
+  private registerAdvancedTools(): void {
+    const t = this.ctx.tools
+    const out = (text: string): { text: string } => ({ text })
+    t.register(defineTool({
+      name: 'script_catalog',
+      description: '列出内置只读脚本 article/links/jsonld/forms（不跑外来代码，读文章最稳）',
+      parameters: {},
+      output: { schema: { type: 'json' }, render: (_a: unknown, v: { text: string }) => [{ type: 'text', text: v.text }] },
+      execute: async () => out('内置只读脚本：article（正文Markdown）/ links（链接）/ jsonld / forms，用 script_run_builtin 运行'),
+    }))
+    t.register(defineTool({
+      name: 'script_run_builtin',
+      description: '运行内置只读脚本（独立 context，不执行外来代码）',
+      parameters: {
+        name: { type: 'string', description: 'article|links|jsonld|forms' },
+        url: { type: 'string', description: '目标 URL（可选，默认当前页）' },
+      },
+      output: { schema: { type: 'json' }, render: (_a: unknown, v: { text: string }) => [{ type: 'text', text: v.text }] },
+      execute: async (a: ToolArgs) => {
+        const r = await this.scriptRunBuiltin({ name: String(a.command ?? a.value ?? 'article'), url: a.url !== undefined ? String(a.url) : undefined })
+        return out(r.result ?? r.error ?? 'ok')
+      },
+    }))
+    t.register(defineTool({
+      name: 'script_validate',
+      description: '校验外部 UserScript（需 @match + @grant none，≤64KB），不执行',
+      parameters: { code: { type: 'string', description: 'UserScript 源码' } },
+      output: { schema: { type: 'json' }, render: (_a: unknown, v: { text: string }) => [{ type: 'text', text: v.text }] },
+      execute: async (a: ToolArgs) => {
+        const r = await this.scriptValidate({ code: String(a.text ?? '') })
+        return out(JSON.stringify(r).slice(0, 2000))
+      },
+    }))
+    t.register(defineTool({
+      name: 'userscript_run',
+      description: '运行外部 UserScript（强制域名匹配，standard 需审批，unrestricted 直行）',
+      parameters: {
+        code: { type: 'string', description: '已 validate 通过的源码' },
+        url: { type: 'string', description: '目标 URL' },
+      },
+      output: { schema: { type: 'json' }, render: (_a: unknown, v: { text: string }) => [{ type: 'text', text: v.text }] },
+      execute: async (a: ToolArgs) => {
+        const r = await this.userscriptRun({ code: String(a.text ?? ''), url: String(a.url ?? '') })
+        return out(r.result ?? r.error ?? 'ok')
+      },
+    }))
+    t.register(defineTool({
+      name: 'recipe_run',
+      description: '跑 25 步内 Playwright Recipe（wait/click/fill/type/press/select/check/hover/scroll/extract/assert/screenshot，可审计）',
+      parameters: { steps: { type: 'string', description: 'JSON 数组字符串' } },
+      output: { schema: { type: 'json' }, render: (_a: unknown, v: { text: string }) => [{ type: 'text', text: v.text }] },
+      execute: async (a: ToolArgs) => {
+        try {
+          const steps = JSON.parse(String(a.text ?? a.value ?? '[]')) as Array<{ type: string; selector?: string; value?: string }>
+          const r = await this.recipeRun({ steps })
+          return out(r.ok ? 'recipe 执行成功' : (r.error ?? '失败'))
+        } catch (e) { return out(`steps 解析失败：${e instanceof Error ? e.message : String(e)}`) }
+      },
+    }))
+    t.register(defineTool({
+      name: 'automation_search',
+      description: '检索已存自动化资产（录制/定时），只回 ID+摘要，不进全文',
+      parameters: { query: { type: 'string', description: '关键词' } },
+      output: { schema: { type: 'json' }, render: (_a: unknown, v: { text: string }) => [{ type: 'text', text: v.text }] },
+      execute: async (a: ToolArgs) => {
+        const r = await this.automationSearch({ query: a.text !== undefined ? String(a.text) : undefined })
+        return out(JSON.stringify(r.hits).slice(0, 2000))
+      },
+    }))
+    t.register(defineTool({
+      name: 'automation_run',
+      description: '按 ID 运行已存资产（录制/定时），限域+限流仍生效',
+      parameters: { id: { type: 'string', description: '资产 ID' } },
+      output: { schema: { type: 'json' }, render: (_a: unknown, v: { text: string }) => [{ type: 'text', text: v.text }] },
+      execute: async (a: ToolArgs) => {
+        const r = await this.automationRun({ id: String(a.value ?? a.text ?? '') })
+        return out(r.ok ? '执行成功' : (r.error ?? '失败'))
+      },
+    }))
+    t.register(defineTool({
+      name: 'browser_crawl',
+      description: '有限广度遍历（同源默认，maxPages 20 / maxDepth 2 硬限，usagePolicy 限流）',
+      parameters: {
+        url: { type: 'string', description: '起始 URL' },
+        maxPages: { type: 'string', description: '最大页数，默认 20' },
+      },
+      output: { schema: { type: 'json' }, render: (_a: unknown, v: { text: string }) => [{ type: 'text', text: v.text }] },
+      execute: async (a: ToolArgs) => {
+        const r = await this.crawl({ url: String(a.url ?? ''), maxPages: Number(a.value ?? 20) })
+        return out(r.ok ? 'crawl 已启动（MVP 单页）' : (r.error ?? '失败'))
       },
     }))
   }
