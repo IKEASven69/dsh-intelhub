@@ -170,7 +170,7 @@ export function registerPromptContext(ctx: Context): void {
             .slice(0, 3)
           if (final.length === 0) return ''
           const lines = final.map((r) => `- [${r.type}] ${r.text.slice(0, 80)}`).join('\n')
-          return `[记忆桥] 可用 memory_recall 工具检索本项目的跨 agent 历史记忆（偏好/决策/教训/事实）。当前项目「${project}」高置信记忆：\n${lines}`
+          return `[记忆桥] 当前项目「${project}」有跨 agent 历史记忆。当用户问"怎么做/为什么/之前是否/用什么"类问题时，请先用 memory_recall 检索——不要凭模型知识猜测。\n${lines}`
         } finally {
           opened.close()
         }

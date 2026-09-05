@@ -269,8 +269,9 @@ export function startAutoDistillTimer(): () => void {
     void runAutoDistillOnce().catch(() => {});
   }, intervalMs);
   timer.unref?.();
-  // 启动后延迟首跑，给会话索引同步留时间
-  const first = setTimeout(() => { void runAutoDistillOnce().catch(() => {}); }, 30_000);
+  // 启动后延迟首跑（含随机错峰 0~intervalMin/2 防双实例同触）
+  const stagger = Math.floor(Math.random() * Math.min(intervalMs / 2, 120_000));
+  const first = setTimeout(() => { void runAutoDistillOnce().catch(() => {}); }, 30_000 + stagger);
   first.unref?.();
   return () => { clearInterval(timer); clearTimeout(first); };
 }
