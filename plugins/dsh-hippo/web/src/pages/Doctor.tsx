@@ -19,6 +19,45 @@ export default function DoctorPage() {
   const [tierDry, setTierDry] = useState<{ groupsFound: number; groups: Array<{ project: string; month: string; type: string; ids: string[] }> } | null>(null);
   const [tierResult, setTierResult] = useState<{ groupsFound: number; digestsCreated: number; archived: number; llmUsed: boolean } | null>(null);
   const [tierBusy, setTierBusy] = useState(false);
+  // 零召回 / 项目残留
+  const [neverData, setNeverData] = useState<{ total: number; neverRecalled: number; items: Array<{ id: string; text: string; type: string; project: string }> } | null>(null);
+  const [neverBusy, setNeverBusy] = useState(false);
+  const [residueData, setResidueData] = useState<{ totalProjects: number; residue: Array<{ project: string; memoryCount: number }> } | null>(null);
+  const [residueBusy, setResidueBusy] = useState(false);
+  // 冲突检测（H14）
+  const [conflictData, setConflictData] = useState<{ conflicts: Array<{ a: { id: string; text: string }; b: { id: string; text: string }; sim: number; project: string }> } | null>(null);
+  const [conflictBusy, setConflictBusy] = useState(false);
+  const runConflicts = async () => {
+    setConflictBusy(true);
+    try {
+      const r = await fetch(`${BASE}/api/memories/conflicts`);
+      setConflictData(await r.json());
+    } catch (e) { setError((e as Error).message); }
+    setConflictBusy(false);
+  };
+  const resolveConflict = async (keepId: string, supersedeId: string) => {
+    try {
+      await fetch(`${BASE}/api/memories/${supersedeId}/supersede`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ newId: keepId }) });
+      runConflicts();
+    } catch (e) { setError((e as Error).message); }
+  };
+
+  const runNeverScan = async () => {
+    setNeverBusy(true);
+    try {
+      const r = await fetch(`${BASE}/api/memories/never-recalled`);
+      setNeverData(await r.json());
+    } catch (e) { setError((e as Error).message); }
+    setNeverBusy(false);
+  };
+  const runResidue = async () => {
+    setResidueBusy(true);
+    try {
+      const r = await fetch(`${BASE}/api/stats/project-residue`);
+      setResidueData(await r.json());
+    } catch (e) { setError((e as Error).message); }
+    setResidueBusy(false);
+  };
 
   const runTierDry = async () => {
     setTierBusy(true);
@@ -135,6 +174,105 @@ export default function DoctorPage() {
                 </button>
               )}
             </div>
+          </div>
+
+          {/* 零召回清单（H12 0.5 M1）*/}
+          <div className="card" style={{ marginTop: 12, padding: '12px 16px' }}>
+            <div style={{ fontWeight: 700, marginBottom: 6 }}>🔍 零召回清单</div>
+            <div className="meta" style={{ fontSize: 12.5, marginBottom: 8 }}>
+              从未被 recall 命中过的记忆（accessed_at == created_at）——占库一半的沉默候选，人工确认后归档或删除
+            </div>
+            <div className="toolbar" style={{ marginTop: 8 }}>
+              <button onClick={runNeverScan} disabled={neverBusy}>{neverBusy ? '…' : '扫描'}</button>
+              {neverData && (
+                <span className="meta" style={{ fontSize: 12.5 }}>
+                  共 {neverData.total} 条记忆 · <b>{neverData.neverRecalled}</b> 条零召回
+                </span>
+              )}
+            </div>
+            {neverData && neverData.items.length > 0 && (
+              <div style={{ maxHeight: 200, overflowY: 'auto', marginTop: 8 }}>
+                {neverData.items.slice(0, 20).map((x: { id: string; text: string; type: string; project: string }) => (
+                  <div key={x.id} className="meta" style={{ fontSize: 11.5, padding: '2px 0' }}>
+                    [{x.type}] ({x.project}) {x.text.slice(0, 70)}
+                  </div>
+                ))}
+                {neverData.items.length > 20 && (
+                  <div className="meta" style={{ fontSize: 11 }}>…共 {neverData.items.length} 条</div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* 记忆合并（H12 0.5 M5）*/}
+          <div className="card" style={{ marginTop: 12, padding: '12px 16px' }}>
+            <div style={{ fontWeight: 700, marginBottom: 6 }}>🔗 记忆合并</div>
+            <div className="meta" style={{ fontSize: 12.5, marginBottom: 8 }}>
+              选两条相近的记忆 → LLM 合成一条 → 原始条目 supersede 可逆
+            </div>
+            <div className="toolbar" style={{ marginTop: 8 }}>
+              <span className="meta" style={{ fontSize: 12 }}>在工作台记忆列表中选中多条后操作（即将开放）</span>
+            </div>
+          </div>
+
+          {/* 冲突检测（H14）*/}
+          <div className="card" style={{ marginTop: 12, padding: '12px 16px' }}>
+            <div style={{ fontWeight: 700, marginBottom: 6 }}>⚠️ 冲突记忆检测</div>
+            <div className="meta" style={{ fontSize: 12.5, marginBottom: 8 }}>
+              同项目内 sim≥0.75 且含否定词不对称的记忆对——可能是矛盾的决策或教训，需人工裁决
+            </div>
+            <div className="toolbar" style={{ marginTop: 8 }}>
+              <button onClick={runConflicts} disabled={conflictBusy}>{conflictBusy ? '…' : '检测冲突'}</button>
+              {conflictData && (
+                <span className="meta" style={{ fontSize: 12.5 }}>
+                  发现 <b>{conflictData.conflicts.length}</b> 组潜在冲突
+                </span>
+              )}
+            </div>
+            {conflictData && conflictData.conflicts.length > 0 && (
+              <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {conflictData.conflicts.slice(0, 10).map((c, i) => (
+                  <div key={i} style={{ border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px' }}>
+                    <div className="meta" style={{ fontSize: 11, marginBottom: 4 }}>sim {c.sim} · {c.project}</div>
+                    <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                      <div style={{ flex: 1, fontSize: 12 }}>A: {c.a.text}</div>
+                      <div style={{ flex: 1, fontSize: 12 }}>B: {c.b.text}</div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                      <button style={{ fontSize: 11, padding: '2px 8px', cursor: 'pointer', borderRadius: 4, border: '1px solid var(--border)', background: 'none', color: 'inherit' }}
+                        onClick={() => resolveConflict(c.a.id, c.b.id)}>保留 A</button>
+                      <button style={{ fontSize: 11, padding: '2px 8px', cursor: 'pointer', borderRadius: 4, border: '1px solid var(--border)', background: 'none', color: 'inherit' }}
+                        onClick={() => resolveConflict(c.b.id, c.a.id)}>保留 B</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 项目残留检测（H12 0.5 M8）*/}
+          <div className="card" style={{ marginTop: 12, padding: '12px 16px' }}>
+            <div style={{ fontWeight: 700, marginBottom: 6 }}>📁 项目残留检测</div>
+            <div className="meta" style={{ fontSize: 12.5, marginBottom: 8 }}>
+              记忆归属的项目在工作区路径下找不到对应目录——可能是已删除或改名的项目残留
+            </div>
+            <div className="toolbar" style={{ marginTop: 8 }}>
+              <button onClick={runResidue} disabled={residueBusy}>{residueBusy ? '…' : '扫描'}</button>
+              {residueData && (
+                <span className="meta" style={{ fontSize: 12.5 }}>
+                  {residueData.totalProjects} 个项目 · <b>{residueData.residue.length}</b> 个残留
+                </span>
+              )}
+            </div>
+            {residueData && residueData.residue.length > 0 && (
+              <div style={{ marginTop: 8 }}>
+                {residueData.residue.slice(0, 10).map((r: { project: string; memoryCount: number }) => (
+                  <div key={r.project} className="meta" style={{ fontSize: 11.5, padding: '2px 0' }}>
+                    {r.project} ({r.memoryCount} 条记忆)
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* tier 老化归档（H12 M-01）：90 天前 lesson/decision 群卷摘要，原始条目沉底可逆 */}

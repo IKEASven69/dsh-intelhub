@@ -137,13 +137,39 @@ export function registerPromptContext(ctx: Context): void {
         const project = root !== undefined ? cwdToProject(root) : undefined
         const opened = openEngine()
         try {
+          const now = Date.now() / 1000
           const records = opened.store.scan()
-            .map(([r]) => r as { text: string; type: string; project: string; strength: number })
-            .filter((r) => project !== undefined && r.project === project && r.strength >= 2)
-            .sort((a, b) => b.strength - a.strength)
+            .map(([r]) => r as { text: string; type: string; project: string; strength: number; created_at?: number; superseded_by?: string })
+            .filter((r) => project !== undefined && r.project === project && r.strength >= 2 && !r.superseded_by)
+            .map((r) => {
+              // 综合分：strength × 时间衰减（半衰期 60 天）
+              const age = Math.max(0, now - (r.created_at ?? now))
+              const recency = Math.exp((-age * Math.LN2) / 60)
+              return { ...r, _score: r.strength * (0.6 + 0.4 * recency) }
+            })
+          // 类型多样性：决策/教训/偏好各取最高分，再补最高分（≤3 条）
+          const byType = new Map<string, typeof records>()
+          for (const r of records) {
+            const arr = byType.get(r.type) ?? []
+            arr.push(r)
+            byType.set(r.type, arr)
+          }
+          const picked: typeof records = []
+          for (const t of ['decision', 'lesson', 'preference']) {
+            const best = byType.get(t)?.sort((a, b) => b._score - a._score)[0]
+            if (best) picked.push(best)
+          }
+          // 不足 3 条时从剩余里补（按 _score 降序）
+          if (picked.length < 3) {
+            const usedIds = new Set(picked.map(r => r.text))
+            const rest = records.filter(r => !usedIds.has(r.text)).sort((a, b) => b._score - a._score)
+            picked.push(...rest.slice(0, 3 - picked.length))
+          }
+          const final = picked
+            .sort((a, b) => b._score - a._score)
             .slice(0, 3)
-          if (records.length === 0) return ''
-          const lines = records.map((r) => `- [${r.type}] ${r.text.slice(0, 80)}`).join('\n')
+          if (final.length === 0) return ''
+          const lines = final.map((r) => `- [${r.type}] ${r.text.slice(0, 80)}`).join('\n')
           return `[记忆桥] 可用 memory_recall 工具检索本项目的跨 agent 历史记忆（偏好/决策/教训/事实）。当前项目「${project}」高置信记忆：\n${lines}`
         } finally {
           opened.close()
