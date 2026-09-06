@@ -586,7 +586,8 @@ export function apply(ctx: Context, config: Config): void {
   const ensureIndex = (): void => {
     if (Date.now() - lastIndexAt < 5 * 60 * 1000) return
     lastIndexAt = Date.now()
-    setImmediate(() => { try { index.sync() } catch (e) { ctx.logger.warn(`dsh-deck fts sync: ${e instanceof Error ? e.message : String(e)}`) } })
+    // FTS 同步也是重阻塞（28k 文件 stat+SQLite），延迟到服务器完全启动后
+    setTimeout(() => { try { index.sync() } catch (e) { ctx.logger.warn(`dsh-deck fts sync: ${e instanceof Error ? e.message : String(e)}`) } }, 6000)
   }
 
   reg('exact', '/api/deck/search', (req, res) => {
@@ -599,7 +600,7 @@ export function apply(ctx: Context, config: Config): void {
         ensureIndex()
         const t0 = Date.now()
         // 首查可能索引未建：同步补一次（首建全量约 2.4s，之后毫秒级）
-        if (index.count() === 0) index.sync()
+        if (index.count() === 0) { sendJson(res, 200, { ok: true, results: [], tookMs: 0, indexed: 0, hint: '索引构建中，稍后重试' }); return }
         const results = index.query(q, 20)
         sendJson(res, 200, { ok: true, results, tookMs: Date.now() - t0, indexed: index.count() })
       } catch (e) {
@@ -618,10 +619,27 @@ export function apply(ctx: Context, config: Config): void {
       sendJson(res, 404, { ok: false, error: `读取失败：${e instanceof Error ? e.message : String(e)}` })
     }
   }
+  // ── 速览：TTL 缓存 + 延迟预计算（setImmediate 也会阻塞——改为 setTimeout 让服务器先完全启动）──
+  let qvCache: { data: unknown; at: number } | null = null
+  const QV_TTL = 3 * 60 * 1000
+  const buildQv = (): unknown => buildQuickview({ read: (p) => { try { return readFileSync(p, 'utf8') } catch { return null } } }, nodeWalk(kbRoot), kbRoot)
+  // 延迟 3 秒预计算（让 HTTP 监听/路由注册/首轮请求先完成；扫描期间会短暂阻塞 2-5s）
+  setTimeout(() => { try { qvCache = { data: buildQv(), at: Date.now() } } catch { /* 首次失败不阻断 */ } }, 3000)
   reg('exact', '/api/deck/kb/quickview', (_req, res) => {
     if (!guard(_req, res)) return
-    try { sendJson(res, 200, { ok: true, qv: buildQuickview({ read: (p) => { try { return readFileSync(p, 'utf8') } catch { return null } } }, nodeWalk(kbRoot), kbRoot) }) }
-    catch (e) { sendJson(res, 500, { ok: false, error: e instanceof Error ? e.message : String(e) }) }
+    if (qvCache !== null && Date.now() - qvCache.at < QV_TTL) {
+      sendJson(res, 200, { ok: true, qv: qvCache.data })
+      return
+    }
+    // 缓存过期：先返回旧数据（若有），后台刷新
+    if (qvCache !== null) {
+      sendJson(res, 200, { ok: true, qv: qvCache.data })
+      setImmediate(() => { try { qvCache = { data: buildQv(), at: Date.now() } } catch { /* 刷新失败保旧 */ } })
+      return
+    }
+    // 首次且无缓存：返回空骨架（前端显示加载态），后台建
+    sendJson(res, 200, { ok: true, qv: { stats: { skills: 0, collections: 0, raw: 0, todayNew: 0, lessonsWarn: 0, watchChannels: 0 }, skills: [], hot: [], watch: [], raw: { count: 0, latest: [] }, lessonsWarnList: [] } })
+    setImmediate(() => { try { qvCache = { data: buildQv(), at: Date.now() } } catch { /* */ } })
   })
 
   reg('exact', '/api/deck/kb/index', fileRoute((r) => joinPath(r, 'INDEX.md')))
