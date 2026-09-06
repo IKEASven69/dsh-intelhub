@@ -68,3 +68,22 @@ describe('mergeTrustRecord', () => {
     expect(next.keep!.at).toBe('2026-09-01T00:00:00Z')
   })
 })
+
+import { appendHistory, HISTORY_CAP } from '../src/trust-record.ts'
+
+describe('appendHistory', () => {
+  const e = (high: number): { at: string; high: number; medium: number; low: number; newCount: number } =>
+    ({ at: '2026-09-01T00:00:00Z', high, medium: 0, low: 0, newCount: 0 })
+  it('追加到尾部；超上限裁掉最旧', () => {
+    let h = appendHistory(undefined, e(0))
+    expect(h).toHaveLength(1)
+    for (let i = 0; i < HISTORY_CAP + 5; i++) h = appendHistory(h, e(i))
+    expect(h).toHaveLength(HISTORY_CAP)
+    expect(h![h!.length - 1]!.high).toBe(HISTORY_CAP + 4)
+  })
+  it('不修改入参（纯函数）', () => {
+    const prev = [e(1)]
+    appendHistory(prev, e(2))
+    expect(prev).toHaveLength(1)
+  })
+})

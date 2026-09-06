@@ -82,3 +82,23 @@ export function mergeTrustRecord(
   for (const k of Object.keys(out)) if (!(k in observed)) delete out[k]
   return out
 }
+
+/** 审计历史条目与追加（走势图数据源）：新条目追加到尾部，超上限裁掉最旧的。 */
+export interface AuditHistoryEntry {
+  at: string
+  high: number
+  medium: number
+  low: number
+  newCount: number
+}
+
+export const HISTORY_CAP = 30
+
+export function appendHistory(
+  prev: AuditHistoryEntry[] | undefined,
+  entry: AuditHistoryEntry,
+  cap: number = HISTORY_CAP,
+): AuditHistoryEntry[] {
+  const out = [...(prev ?? []), entry]
+  return out.length > cap ? out.slice(out.length - cap) : out
+}

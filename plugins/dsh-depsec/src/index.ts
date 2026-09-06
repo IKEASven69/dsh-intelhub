@@ -35,8 +35,8 @@ import { parseCargoAudit, parseGoVulncheck, parsePipAudit } from './vuln-parsers
 import { analyzeInstallScript, referencedScriptFiles, renderSignals } from './script-analysis.ts'
 import { mergeAllowBuildsYaml, mergeAllowScriptsDoc, parseAllowBuildsYaml } from './trust-writeback.ts'
 import { slopsquatFinding, typosquatFindings } from './trust-signals.ts'
-import { diffTrustRecord, filesFingerprint, mergeTrustRecord, scriptsFingerprint } from './trust-record.ts'
-import type { TrustRecord } from './trust-record.ts'
+import { appendHistory, diffTrustRecord, filesFingerprint, mergeTrustRecord, scriptsFingerprint } from './trust-record.ts'
+import type { AuditHistoryEntry, TrustRecord } from './trust-record.ts'
 import { isModelFacingFile, scanInjectedText } from './prompt-injection.ts'
 
 declare module '@deepseek-ai/cordis' {
@@ -982,6 +982,29 @@ export class DepsecService extends TypertRemoteService {
     } catch { /* 只读目录等场景静默跳过，不影响审计 */ }
   }
 
+  /** 审计走势历史：基线同文件 history 字段，与 scopes/trustRecord/pluginRecord 互不覆盖。 */
+  private async loadHistory(root: string): Promise<AuditHistoryEntry[]> {
+    try {
+      const t = await this.ctx.fs.resolve(this.baselinePath(root))
+      const text = await this.ctx.fs.readText(t)
+      if (text === null) return []
+      const data = JSON.parse(text) as { history?: AuditHistoryEntry[] }
+      return Array.isArray(data?.history) ? data.history : []
+    } catch { return [] }
+  }
+
+  private async saveHistory(root: string, history: AuditHistoryEntry[]): Promise<void> {
+    try {
+      const t = await this.ctx.fs.resolve(this.baselinePath(root))
+      let doc: Record<string, unknown> = {}
+      try {
+        const text = await this.ctx.fs.readText(t)
+        if (text !== null) doc = JSON.parse(text) as Record<string, unknown>
+      } catch { /* 无文件或损坏 */ }
+      await this.ctx.fs.writeText(t, JSON.stringify({ ...doc, version: 1, updatedAt: new Date().toISOString(), history }, null, 2) + '\n')
+    } catch { /* 只读目录静默跳过 */ }
+  }
+
   /** 递归收集插件目录里的模型面文件（会被注入模型上下文的 SKILL.md/commands/agents 文本），限量防巨包。 */
   private async collectModelFacingFiles(dir: string, budget = 60): Promise<Array<{ rel: string; text: string }>> {
     const out: Array<{ rel: string; text: string }> = []
@@ -1150,11 +1173,18 @@ export class DepsecService extends TypertRemoteService {
     const counts: Record<string, number> = { high: 0, medium: 0, low: 0, info: 0 }
     for (const f of findings) counts[f.severity] = (counts[f.severity] ?? 0) + 1
     const summary: DepsecSummary = { total: findings.length, high: counts.high, medium: counts.medium, low: counts.low, info: counts.info, newCount }
+    // 走势历史：写入基线 history（上限 30），并随结果回传给客户端画 sparkline
+    const prevHistory = await this.loadHistory(root)
+    const history = appendHistory(prevHistory, {
+      at: new Date().toISOString(),
+      high: counts.high, medium: counts.medium, low: counts.low, newCount,
+    })
+    await this.saveHistory(root, history)
     return {
       ok: true, scope: 'supply-chain', root, manager: det.manager, verdict: verdictOf(summary), blockVerdict: blockVerdictOf(summary),
       project: { name: (pkg.name as string) ?? '', version: (pkg.version as string) ?? '', depCount: depNames.length },
       summary, findings: findings.slice(0, 200),
-      approvals,
+      history,
       stats: {
         nodeModulesScanned: nm.scanned,
         reputationScanned: rep.items.length,

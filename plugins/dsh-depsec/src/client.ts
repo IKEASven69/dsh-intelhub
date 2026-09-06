@@ -20,6 +20,8 @@ import type {
   BlockVerdict,
   DepsecResult,
   OpenFileRequest,
+  PluginRosterEntry,
+  PluginRosterResult,
   WriteApprovalsRequest,
 } from './types.ts'
 
@@ -241,6 +243,7 @@ function FindingsView({ result, label, remote, path, ignoreSet, onIgnore, onIgno
     createElement('div', { className: 'da-boxTitle' }, `${label}（${result.manager ?? '通用'}）`),
     createElement(VerdictBanner, { verdict: result.verdict, blockVerdict: result.blockVerdict }),
     createElement(SeverityBadges, { summary: result.summary, supply: true }),
+    result.scope === 'supply-chain' ? createElement(QualityBar) : null,
     createElement('div', { className: 'da-total' }, `共 ${s?.total ?? 0} 个告警，新增 ${s?.newCount ?? 0}${sev !== 'all' || newOnly ? `（筛选后 ${filtered.length}）` : ''}`),
     createElement(FilterBar, { value: sev, newOnly, chips: [['all', '全部'], ['high', '高危'], ['medium', '中危'], ['low', '低危'], ['info', '信息']], onChange: setSev, onNewOnly: setNewOnly }),
     createElement('div', { className: 'da-muted' },
@@ -263,6 +266,7 @@ function FindingsView({ result, label, remote, path, ignoreSet, onIgnore, onIgno
         )
       : null,
     approvalsMsg ? createElement('div', { className: 'da-note' }, approvalsMsg) : null,
+    result.scope === 'supply-chain' ? createElement(Spark, { history: result.history }) : null,
     rows.length > 0 ? createElement('div', { className: 'da-list' }, rows) : createElement('div', { className: 'da-muted' }, '无匹配告警。'),
   )
 }
@@ -274,34 +278,129 @@ interface DepsecRemote {
   writeApprovals: (req: WriteApprovalsRequest) => Promise<{ ok: boolean; value: { ok: boolean; added?: string[]; total?: number; error?: string; note?: string }; error: { message: string } }>
   monitorStatus: () => Promise<{ ok: boolean; value: { verdict?: string; total?: number } | null; error: { message: string } }>
   openFile: (req: OpenFileRequest) => Promise<{ ok: boolean; value: { ok: boolean; via?: string; error?: string }; error: { message: string } }>
-  // scanInstalledPlugins 暂未在 UI 暴露（dsh sandbox 限制），但 host 端 RPC 仍在
-  // —— DepsecService 上 @Remote('scan-installed-plugins') 已注册，类型为
-  // { profile?: string } → PluginRosterResult。等沙箱放开后 un-comment 客户端即可。
-  // scanInstalledPlugins: (req: { profile?: string }) => Promise<{ ok: boolean; value: PluginRosterResult; error: { message: string } }>
+  scanInstalledPlugins: (req: { profile?: string }) => Promise<{ ok: boolean; value: PluginRosterResult; error: { message: string } }>
 }
 
 /**
- * 已安装插件审查视图 —— 暂未启用：
- * dsh sandbox workspace-write 模式下插件无法访问 ~/.dsh/profiles/*（不在 workspace
- * 根下，被 windows-acl-run 拒绝），所以这个功能现在点下去必然失败。等 dsh 沙箱放开
- * profile 访问，把这个组件 un-comment 即可恢复（host 端 @Remote('scan-installed-plugins')
- * RPC + listProfileBundles() 都在，零行 host 代码改动）。
- *
- * function PluginRosterView({ result, onScan, scanning }: {
- *   result: PluginRosterResult | null
- *   onScan: () => void
- *   scanning: boolean
- * }) {
- *   // 完整实现略——见 git history 0.3.0 之前的 client.ts
- * }
+ * 质量声明徽章行：数字来自 research/ 语料评测（CI 每周回归验证）。
+ * 安全工具的可信度要自证——这行常驻在信任清单模式的结果上方。
  */
+const QUALITY = [
+  ['语料 446 包', 'npm top 包真实 install 脚本全链路评测'],
+  ['误拦截 0', '红线规则在健康包群上零误伤'],
+  ['误警告 7%', '修复前 75%，按真实语料聚类修掉'],
+  ['探针 9/9', '九种真实投毒手法全部拦截'],
+] as const
+
+function QualityBar(): ReturnType<typeof createElement> {
+  return createElement('div', { className: 'da-quality' },
+    QUALITY.map(([label, tip]) => createElement('span', { className: 'da-qualityItem', title: tip, key: label }, label)),
+  )
+}
+
+/** 走势 sparkline：result.history 的 high 计数，红柱=出现高危。纯 div 高度，无图表库。 */
+function Spark({ history }: { history?: { high: number }[] }): ReturnType<typeof createElement> | null {
+  const h = history ?? []
+  if (h.length < 2) return null
+  const max = Math.max(1, ...h.map((e) => e.high))
+  return createElement('div', { className: 'da-sparkWrap' },
+    createElement('div', { className: 'da-spark' },
+      h.map((e, i) => createElement('i', {
+        key: i,
+        className: e.high > 0 ? 'da-sparkHot' : 'da-sparkBar',
+        style: { height: `${Math.max(8, Math.round((e.high / max) * 100))}%` },
+        title: `${e.high} 高危`,
+      })),
+    ),
+    createElement('div', { className: 'da-cap' }, `近 ${h.length} 次审计 · 红柱＝出现高危 · 存于 .depsec-baseline.json`),
+  )
+}
+
+/**
+ * 已装插件四维矩阵视图：插件 × {供应链/密钥/SAST/提示注入} 网格 + 行展开证据 + egress 分级。
+ * dsh sandbox workspace-write 下 profile 目录可能不可达——失败时给出明确解释而非空转。
+ */
+function RosterMatrixView({ remote }: { remote: DepsecRemote }) {
+  const [profile, setProfile] = useState('')
+  const [result, setResult] = useState<PluginRosterResult | null>(null)
+  const [running, setRunning] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [expanded, setExpanded] = useState<string | null>(null)
+
+  const scan = async () => {
+    if (running) return
+    setRunning(true)
+    setError(null)
+    const carried = await remote.scanInstalledPlugins({ profile: profile.trim() || undefined })
+    if (carried.ok) { setResult(carried.value); setExpanded(null) } else setError(carried.error.message)
+    setRunning(false)
+  }
+
+  const vCell = (v: BlockVerdict) => createElement('span', { className: `da-mxCell da-mx${v}` }, v === 'pass' ? 'PASS' : v === 'warn' ? 'WARN' : 'BLOCK')
+  const rows = (result?.plugins ?? []).map((p: PluginRosterEntry) => {
+    const isOpen = expanded === p.name
+    return createElement('div', { key: p.name + p.version },
+      createElement('div', {
+        className: `da-mxRow${p.verdicts.promptInjection === 'block' || p.verdicts.supplyChain === 'block' ? ' da-mxRowBad' : ''}${isOpen ? ' da-mxRowOn' : ''}`,
+        onClick: () => setExpanded(isOpen ? null : p.name),
+      },
+        createElement('span', { className: 'da-mxName' }, p.name, createElement('span', { className: 'pver' }, ` ${p.version}`)),
+        vCell(p.verdicts.supplyChain), vCell(p.verdicts.secrets), vCell(p.verdicts.sast), vCell(p.verdicts.promptInjection),
+        createElement('span', { className: 'da-mxEg' }, p.egress?.length ? `${p.egress.length} host` : '—'),
+      ),
+      isOpen ? createElement('div', { className: 'da-mxExp' },
+        p.findings.length > 0
+          ? p.findings.slice(0, 12).map((f, i) => createElement('div', { key: i, className: 'da-mxFinding' },
+              createElement('span', { className: `da-sev da-sev${f.severity === 'high' ? 'High' : f.severity === 'medium' ? 'Medium' : 'Low'}` }, f.severity),
+              createElement('div', { className: 'da-cell' },
+                createElement('div', { className: 'da-name' }, `${f.kind} · ${f.name}`),
+                createElement('div', { className: 'da-detail' }, f.detail),
+              ),
+            ))
+          : createElement('div', { className: 'da-muted' }, '无告警。'),
+        p.egress !== undefined && p.egress.length > 0
+          ? createElement('div', { className: 'da-mxEgress' },
+              '外联：', p.egress.map((h) => createElement('span', { key: h, className: 'da-egChip' }, h)))
+          : null,
+      ) : null,
+    )
+  })
+
+  return createElement('div', { className: 'da-box' },
+    createElement('div', { className: 'da-boxTitle' }, '已装插件矩阵（四维：供应链 / 密钥 / SAST / 提示注入）'),
+    createElement('div', { className: 'da-actionBar' },
+      createElement('input', {
+        className: 'da-input',
+        placeholder: 'profile 根（留空=自动推断 ~/.dsh/profiles/web）',
+        value: profile,
+        onChange: (e: { target: { value: string } }) => setProfile(e.target.value),
+      }),
+      createElement('button', { className: 'da-btnSecondary', onClick: scan, disabled: running }, running ? '扫描中…' : '扫描 profile'),
+    ),
+    error !== null ? createElement('div', { className: 'da-box da-boxError' },
+      error,
+      createElement('div', { className: 'da-muted' }, 'dsh sandbox workspace-write 模式下插件可能无法读取 profile 目录——在放行模式运行 dsh，或在上方填入 profile 绝对路径重试。'),
+    ) : null,
+    result !== null
+      ? (result.ok
+        ? createElement('div', {},
+            createElement('div', { className: 'da-total' }, `共 ${result.total} 个 bundle；点行展开证据与外联清单。`),
+            createElement('div', { className: 'da-mxHead' },
+              createElement('span', null, '插件'), createElement('span', null, '供应链'), createElement('span', null, '密钥'),
+              createElement('span', null, 'SAST'), createElement('span', null, '提示注入'), createElement('span', null, '外联')),
+            rows.length > 0 ? rows : createElement('div', { className: 'da-muted' }, '未发现已装插件。'),
+          )
+        : createElement('div', { className: 'da-box da-boxError' }, result.error ?? '扫描未完成'))
+      : createElement('div', { className: 'da-muted' }, '填入 profile 根（或留空用默认推断）后点「扫描 profile」。'),
+  )
+}
 
 function Panel({ remote }: { remote: DepsecRemote }) {
   const [result, setResult] = useState<DepsecResult | null>(null)
   const [running, setRunning] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [path, setPath] = useState('')
-  const [mode, setMode] = useState<'vuln' | 'supply-chain' | 'secrets' | 'sast'>('vuln')
+  const [mode, setMode] = useState<'vuln' | 'supply-chain' | 'secrets' | 'sast' | 'roster'>('vuln')
   const [mon, setMon] = useState<{ verdict?: string; total?: number } | null>(null)
   const [exporting, setExporting] = useState(false)
   const [sarifMsg, setSarifMsg] = useState<string | null>(null)
@@ -348,9 +447,10 @@ function Panel({ remote }: { remote: DepsecRemote }) {
   const tab = (val: string, label: string) => createElement('button', { className: `da-tab${mode === val ? ' da-tabOn' : ''}`, onClick: () => setMode(val) }, label)
   const hints: Record<string, string> = {
     vuln: '官方漏洞审计（npm/pnpm/yarn/pip/cargo/go），查已知 CVE/GHSA。',
-    'supply-chain': 'install 脚本内容审查（PASS/WARN/BLOCK 证据分级）+ typosquatting 近名（动态宇宙）+ registry 联网信誉 + slopsquatting（404）检测；可一键写回放行清单。',
+    'supply-chain': 'install 脚本内容审查（PASS/WARN/BLOCK 证据分级）+ typosquatting 近名（动态宇宙）+ registry 联网信誉 + slopsquatting（404）检测 + 版本锁（升级换脚本即重审）；可一键写回放行清单。',
     secrets: '密钥/令牌泄露，含 git 历史 + 熵检测 + .depsecignore 白名单。',
     sast: '危险代码模式扫描（eval/命令注入/XSS/弱哈希等）。',
+    roster: '已装插件四维审计：供应链 / 密钥 / SAST / 提示注入（SKILL.md 内容恶意指令）+ 外联清单 + 装后哈希锁。',
   }
   const monTxt = mon === null ? '自动监控：开启中…' : `自动监控：开启 · 上次投毒检测 ${mon.verdict === 'critical' ? '🔴高危' : mon.verdict === 'warning' ? '🟡有告警' : '🟢安全'}（${mon.total ?? 0}）`
 
@@ -362,6 +462,7 @@ function Panel({ remote }: { remote: DepsecRemote }) {
       tab('supply-chain', '信任清单'),
       tab('secrets', '密钥'),
       tab('sast', '代码'),
+      tab('roster', '插件矩阵'),
     ),
   )
 
@@ -395,15 +496,19 @@ function Panel({ remote }: { remote: DepsecRemote }) {
   return createElement('div', { className: 'da-panel' },
     header,
     createElement('div', { className: 'da-monitor' }, monTxt),
-    actionBar,
-    explainer,
-    sarifMsg ? createElement('div', { className: 'da-muted' }, sarifMsg) : null,
-    error !== null ? createElement('div', { className: 'da-box da-boxError' }, error) : null,
-    result !== null
-      ? (result.scope === 'vuln'
-        ? createElement(VulnView, { result, remote, ignoreSet, onIgnore })
-        : createElement(FindingsView, { result, label: result.scope === 'supply-chain' ? '供应链/投毒扫描' : result.scope === 'secrets' ? '密钥扫描' : '代码扫描', remote, path, ignoreSet, onIgnore, onIgnorePath }))
-      : null,
+    mode === 'roster'
+      ? createElement(RosterMatrixView, { remote })
+      : createElement('div', {},
+          actionBar,
+          explainer,
+          sarifMsg ? createElement('div', { className: 'da-muted' }, sarifMsg) : null,
+          error !== null ? createElement('div', { className: 'da-box da-boxError' }, error) : null,
+          result !== null
+            ? (result.scope === 'vuln'
+              ? createElement(VulnView, { result, remote, ignoreSet, onIgnore })
+              : createElement(FindingsView, { result, label: result.scope === 'supply-chain' ? '供应链/投毒扫描' : result.scope === 'secrets' ? '密钥扫描' : '代码扫描', remote, path, ignoreSet, onIgnore, onIgnorePath }))
+            : null,
+        ),
   )
 }
 
@@ -414,8 +519,7 @@ const remote: DepsecRemote = {
   writeApprovals: (req) => rpc('write-approvals', { request: req ?? {} }),
   monitorStatus: () => rpc('monitor-status', {}),
   openFile: (req) => rpc('open-file', { request: req }),
-  // scanInstalledPlugins 暂未在 UI 暴露（dsh sandbox 限制）—— host 端 RPC 仍注册。
-  // scanInstalledPlugins: (req) => rpc('scan-installed-plugins', { request: req ?? {} }),
+  scanInstalledPlugins: (req) => rpc('scan-installed-plugins', { request: req ?? {} }),
 }
 
 export function apply(ctx: ClientContext): void {

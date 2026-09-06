@@ -80,6 +80,17 @@ export interface DepsecResult {
   note?: string
   stderrTail?: string
   stdoutTail?: string
+  /** supply-chain：最近若干次审计的高危计数走势（存于 .depsec-baseline.json 的 history）。 */
+  history?: AuditHistoryEntry[]
+}
+
+/** 单次审计的历史切片（走势图数据源，上限 30 条）。 */
+export interface AuditHistoryEntry {
+  at: string
+  high: number
+  medium: number
+  low: number
+  newCount: number
 }
 
 /** audit RPC 请求。 */
