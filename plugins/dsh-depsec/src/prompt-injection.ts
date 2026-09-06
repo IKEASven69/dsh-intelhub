@@ -68,21 +68,43 @@ const RULES: InjectionRule[] = [
   { id: 'decode-exec', category: 'decode', severity: 'high', directional: true, re: /(?:base64|hex|atob|Buffer\.from)[^\n]{0,40}(?:decode|解码)[^\n]{0,40}(?:then\s+)?(?:run|execute|eval|执行|运行)|(?:解码|decode)[^\n]{0,20}(?:后|then)[^\n]{0,10}(?:执行|运行|eval)/i },
 ]
 
-// ── 反混淆 pre-pass（借鉴 secure-audit，有界变体）──
+// ── 反混淆 pre-pass（借鉴 secure-audit / mcpguard，有界变体）──
 
-/** 同形字 → ASCII。 */
+/** 同形字 → ASCII：西里尔 + 希腊 omicron。 */
 const HOMOGLYPH_MAP: Record<string, string> = {
   'а': 'a', 'е': 'e', 'о': 'o', 'р': 'p', 'с': 'c', 'х': 'x', 'у': 'y', 'і': 'i', 'ο': 'o',
 }
-const NEEDS_NORMALIZE_RE = /[\u200b-\u200d\u2060\ufeff\uff01-\uff5eаеорсхуіο]/
+// 数学字母数字符号区（U+1D400–U+1D7D6）：粗体/斜体/手写体等字母肉眼与 ASCII 全同，
+// 是 mcpguard 已用、我们此前缺失的混淆通道（对标补齐）。
+function addMathBlock(start: number, asciiStart: number, count: number): void {
+  for (let i = 0; i < count; i++) HOMOGLYPH_MAP[String.fromCodePoint(start + i)] = String.fromCharCode(asciiStart + i)
+}
+// 每个字块：大写区 + 小写区（紧跟大写区后 26 个码点）
+const MATH_BLOCKS: Array<[number, number, number]> = [
+  [0x1d400, 65, 26], [0x1d41a, 97, 26], // 𝐀 bold
+  [0x1d434, 65, 26], [0x1d44e, 97, 26], // 𝐴 italic
+  [0x1d468, 65, 26], [0x1d482, 97, 26], // 𝑨 bold-italic
+  [0x1d49c, 65, 26], [0x1d4b6, 97, 26], // 𝒜 script
+  [0x1d538, 65, 26], [0x1d552, 97, 26], // 𝔸 double-struck
+  [0x1d56c, 65, 26], [0x1d586, 97, 26], // 𝕬 bold fraktur
+  [0x1d5a0, 65, 26], [0x1d5ba, 97, 26], // 𝖠 sans
+  [0x1d5d4, 65, 26], [0x1d5ee, 97, 26], // 𝗔 sans bold
+  [0x1d608, 65, 26], [0x1d622, 97, 26], // 𝘈 sans italic
+  [0x1d63c, 65, 26], [0x1d656, 97, 26], // 𝘼 sans bold-italic
+  [0x1d670, 48, 10], // 𝟎–𝟵 mono digits
+]
+for (const [start, ascii, count] of MATH_BLOCKS) addMathBlock(start, ascii, count)
+const NEEDS_NORMALIZE_RE_SRC = '[\\u200b-\\u200d\\u2060\\ufeff\\uff01-\\uff5e\\u0430\\u0435\\u043E\\u0440\\u0441\\u0445\\u0443\\u0456\\u03BF\\u{1D400}-\\u{1D7D6}]'
+// u 旗标必须：星面区（U+1D400+）的 \u{...} 语法依赖它，无 u 时 \u1D400 只吃 4 位十六进制
+const NEEDS_NORMALIZE_RE = new RegExp(NEEDS_NORMALIZE_RE_SRC, 'u')
 
-/** 零宽剥离 + 全角→半角 + 同形字归一。无需归一时原样返回（快路径）。 */
+/** 零宽剥离 + 全角→半角 + 同形字归一（查表，含数学字母区）。无需归一时原样返回（快路径）。 */
 export function normalizeText(text: string): string {
   if (!NEEDS_NORMALIZE_RE.test(text)) return text
   return text
     .replace(/[\u200b-\u200d\u2060\ufeff]/g, '')
     .replace(/[\uff01-\uff5e]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xfee0))
-    .replace(/[аеорсхуіο]/g, (ch) => HOMOGLYPH_MAP[ch] ?? ch)
+    .replace(/[\u0430\u0435\u043E\u0440\u0441\u0445\u0443\u0456\u03BF\u{1D400}-\u{1D7D6}]/gu, (ch) => HOMOGLYPH_MAP[ch] ?? ch)
 }
 
 /** 有界 base64 变体：token ≥16 字符且解码后 ≥80% 可打印才算（防 hash/订单号噪声），最多 3 个。 */
