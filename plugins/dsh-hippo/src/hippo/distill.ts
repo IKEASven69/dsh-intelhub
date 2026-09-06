@@ -82,8 +82,23 @@ const NOISE_PATTERNS: Array<{ re: RegExp; why: string }> = [
   { re: /^\d+[.)][\s\[]/, why: 'list-fragment' },
   // 环境注入样板（WorkBuddy/部分宿主把人设与规则注入 user 轮）
   { re: /^(you are (a|an)\b|note: prefer|as an? (expert|assistant)|i want you to act)/i, why: 'persona-boilerplate' },
+  // 宿主人设/行为规则泄漏（WorkBuddy 等把 agent 系统提示词注入 user 轮）
+  { re: /\bNEVER\b.*\b(exhaustive|stop|result|first)\b/i, why: 'persona-rule' },
+  { re: /\b(?:CRITICAL|PARALLEL|NO Scope|Literal Request)\b/, why: 'system-prompt-fragment' },
   // 系统提示词泄漏："Continue the conversation…" 被截进偏好
   { re: /continue the conversation from where it left off|without asking (the )?user/i, why: 'instruction-leak' },
+  // ── 以下大幅收紧（2026-09-04 用户要求"宁缺勿滥"）──
+  // 工具输出/报错信息（"操作失败:" / "Error:" / "Exit code:" 开头）
+  { re: /^(操作失败|Error[:\s]|Exit code|WARN|TRACE|Stack trace|at \w+)/i, why: 'tool-output' },
+  // 文件路径碎片（以 / 或 \ 开头或包含完整文件路径）
+  { re: /^(?:[A-Za-z]:)?[\\/][\w./\\-]{10,}/, why: 'path-fragment' },
+  // 代码片段（包含代码特征符号）
+  { re: /^(?:const |let |var |function |class |import |export |=>|return |if\s*\(|for\s*\()/, why: 'code-snippet' },
+  // Markdown 表格行 / 引用块 / 水平线
+  { re: /^\||^>|^---/, why: 'md-fragment' },
+  // 短文本无实质内容（<15 字符且不含技术名词）
+  // 纯标点/符号/空白
+  { re: /^[\s\p{P}\p{S}]+$/u, why: 'punctuation-only' },
 ];
 
 /** 候选是否为高置信噪音（过程自语/标题/疑问/清单碎片/提示词泄漏）。 */
