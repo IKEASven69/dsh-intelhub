@@ -26,6 +26,7 @@ import { adoptIdea, captureIdea, listIdeas, type IdeasFs } from './ideas.ts'
 import { ensureAgentsMd, makeCard, newTaskId, parseTaskDoc, setCardStatus, upsertCard, TASK_STATUSES, TASK_TYPES, type TaskCard, type TaskFs, type TaskStatus, type TaskType } from './tasks.ts'
 import { buildLessonsSection, parseResultDoc, parseWidgetJson } from './review.ts'
 import { buildQuickview } from './quickview.ts'
+import { QuickviewWorker } from './worker.ts'
 import { draftReply, normalizeMessage, setReply } from './messages.ts'
 import { ACCEPTANCE_BY_TYPE, appendPublishRow, buildPrefillText, createContent, listContent, PREFILL_TARGETS, setContentStatus, CONTENT_STATUSES, CONTENT_TYPES, type ContentFs, type ContentType, type ContentStatus } from './content.ts'
 import { execFile } from 'node:child_process'
@@ -619,27 +620,17 @@ export function apply(ctx: Context, config: Config): void {
       sendJson(res, 404, { ok: false, error: `读取失败：${e instanceof Error ? e.message : String(e)}` })
     }
   }
-  // ── 速览：TTL 缓存 + 延迟预计算（setImmediate 也会阻塞——改为 setTimeout 让服务器先完全启动）──
-  let qvCache: { data: unknown; at: number } | null = null
-  const QV_TTL = 3 * 60 * 1000
-  const buildQv = (): unknown => buildQuickview({ read: (p) => { try { return readFileSync(p, 'utf8') } catch { return null } } }, nodeWalk(kbRoot), kbRoot)
-  // 延迟 3 秒预计算（让 HTTP 监听/路由注册/首轮请求先完成；扫描期间会短暂阻塞 2-5s）
-  setTimeout(() => { try { qvCache = { data: buildQv(), at: Date.now() } } catch { /* 首次失败不阻断 */ } }, 3000)
+  // ── 速览：Worker Thread 构建（根治事件循环阻塞——28k 文件扫描不再卡主线程）──
+  const qvWorker = new QuickviewWorker(3 * 60 * 1000)
+  // 启动后 2 秒在 Worker 里预计算（主线程零阻塞）
+  setTimeout(() => { qvWorker.build(kbRoot).catch(() => { /* 首次失败不阻断 */ }) }, 2000)
   reg('exact', '/api/deck/kb/quickview', (_req, res) => {
     if (!guard(_req, res)) return
-    if (qvCache !== null && Date.now() - qvCache.at < QV_TTL) {
-      sendJson(res, 200, { ok: true, qv: qvCache.data })
-      return
-    }
-    // 缓存过期：先返回旧数据（若有），后台刷新
-    if (qvCache !== null) {
-      sendJson(res, 200, { ok: true, qv: qvCache.data })
-      setImmediate(() => { try { qvCache = { data: buildQv(), at: Date.now() } } catch { /* 刷新失败保旧 */ } })
-      return
-    }
-    // 首次且无缓存：返回空骨架（前端显示加载态），后台建
-    sendJson(res, 200, { ok: true, qv: { stats: { skills: 0, collections: 0, raw: 0, todayNew: 0, lessonsWarn: 0, watchChannels: 0 }, skills: [], hot: [], watch: [], raw: { count: 0, latest: [] }, lessonsWarnList: [] } })
-    setImmediate(() => { try { qvCache = { data: buildQv(), at: Date.now() } } catch { /* */ } })
+    void qvWorker.get(kbRoot).then((data) => {
+      sendJson(res, 200, { ok: true, qv: data })
+    }).catch(() => {
+      sendJson(res, 200, { ok: true, qv: { stats: { skills: 0, collections: 0, raw: 0, todayNew: 0, lessonsWarn: 0, watchChannels: 0 }, skills: [], hot: [], watch: [], raw: { count: 0, latest: [] }, lessonsWarnList: [] } })
+    })
   })
 
   reg('exact', '/api/deck/kb/index', fileRoute((r) => joinPath(r, 'INDEX.md')))
