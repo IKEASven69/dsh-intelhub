@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=1920, height=1080" />
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body { width:1920px; height:1080px; overflow:hidden; background:#0e0b1a; }
+body { font-family:'Inter','Microsoft YaHei',sans-serif; color:#f4f2ff; }
+.mono { font-family:'JetBrains Mono','Consolas',monospace; }
+
+.scene { position:absolute; inset:0; display:none; padding:60px 80px; }
+.scene.active { display:block; }
+
+.h1 { font-size:56px; font-weight:800; margin-bottom:16px; }
+.h2 { font-size:32px; font-weight:700; margin-bottom:12px; }
+.violet { color:#a78bfa; } .green { color:#34d399; } .orange { color:#fb923c; } .red { color:#f87171; }
+.mut { color:#8b84a3; } .dim { color:#5b5570; }
+
+.card { background:#181427; border:1px solid #2a2150; border-radius:14px; padding:24px 28px; }
+.pill { display:inline-block; padding:4px 14px; border-radius:999px; font-size:14px; font-weight:600; margin-right:6px; }
+.pill-ok { color:#34d399; background:rgba(52,211,153,.1); border:1px solid rgba(52,211,153,.3); }
+.pill-warn { color:#fbbf24; background:rgba(251,191,36,.1); border:1px solid rgba(251,191,36,.3); }
+
+.term { background:#0a0714; border:1px solid #261f3d; border-radius:12px; padding:20px 24px; font-size:16px; line-height:1.7; }
+.term .cmd { color:#a78bfa; } .term .out { color:#c3bdd6; } .term .ok { color:#34d399; } .term .err { color:#f87171; }
+
+.logo { display:inline-flex; align-items:center; gap:12px; }
+.logo-icon { width:52px; height:52px; border-radius:14px; background:linear-gradient(135deg,#7c3aed,#a78bfa); display:grid; place-items:center; font-size:26px; font-weight:800; color:#fff; }
+.logo-txt { font-size:28px; font-weight:800; }
+
+.stat { text-align:center; }
+.stat-n { font-size:48px; font-weight:800; font-variant-numeric:tabular-nums; }
+.stat-l { font-size:14px; color:#8b84a3; margin-top:4px; }
+.grid-3 { display:grid; grid-template-columns:repeat(3,1fr); gap:24px; }
+.grid-2 { display:grid; grid-template-columns:repeat(2,1fr); gap:24px; }
+
+.arrow-down { font-size:36px; color:#a78bfa; text-align:center; margin:12px 0; }
+</style>
+</head>
+<body data-composition-id="hippo-demo" data-duration="30" data-fps="30">
+
+<!-- ═══ SCENE 1: 开场 ═══ -->
+<div class="scene active" id="s1">
+  <div style="height:100%; display:flex; flexDirection:column; justifyContent:center; alignItems:center;">
+    <div class="logo" style="margin-bottom:40px;">
+      <div class="logo-icon">🦛</div>
+      <div class="logo-txt" style="font-size:42px;">hippo</div>
+    </div>
+    <div class="h1" style="fontSize:52px; textAlign:center; marginBottom:20px;">
+      你的 agent 已经学过这些。<br/>
+      <span class="violet">hippo 让它们不再忘记。</span>
+    </div>
+    <div class="mut" style="fontSize:20px; textAlign:center;">
+      Local-first experience engine for AI coding agents<br/>
+      Sessions in · Context out · Zero API keys · Zero telemetry
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SCENE 2: 安装+迁移 ═══ -->
+<div class="scene" id="s2">
+  <div class="h2"><span class="violet">01</span> · 安装并一键迁移</div>
+  <div class="term mono" style="marginTop:20px; marginBottom:20px;">
+    <div><span class="cmd">$</span> dsh plugin --profile web add dsh-hippo</div>
+    <div class="ok">✓ 插件已安装</div>
+    <div><span class="cmd">$</span> 打开 dsh 设置 → 记忆桥 → 环境自检</div>
+    <div class="ok">✓ 引擎（内置）· 向量存储 · 会话索引 · LLM 全绿</div>
+    <div><span class="cmd">$</span> 点「开始迁移」</div>
+    <div class="out">扫描 343 会话 → 新建 586 · 强化 177 · 待审 627</div>
+  </div>
+  <div class="grid-3" style="marginTop:24px;">
+    <div class="stat"><div class="stat-n violet">343</div><div class="stat-l">会话扫描</div></div>
+    <div class="stat"><div class="stat-n green">586</div><div class="stat-l">记忆入库</div></div>
+    <div class="stat"><div class="stat-n orange">0</div><div class="stat-l">API keys</div></div>
+  </div>
+</div>
+
+<!-- ═══ SCENE 3: 开局即认识你 ═══ -->
+<div class="scene" id="s3">
+  <div class="h2"><span class="violet">02</span> · 开局即认识你（≤100 token 常驻）</div>
+  <div class="card" style="marginTop:20px; padding:24px 32px;">
+    <div class="mono" style="fontSize:15px; lineHeight:1.8;">
+      <div class="dim">// agent 开局自动收到：</div>
+      <div><span class="violet">活跃任务</span> 3 条 · 项目 dsh-plugin · 分支 main</div>
+      <div style="marginTop:8px;">1. auth 重构 <span class="orange">in_progress</span> ← 昨天的</div>
+      <div>2. minimax Token Plan <span class="green">completed</span></div>
+      <div>3. WorkBuddy 适配器 pending</div>
+      <div style="marginTop:12px;"><span class="violet">高置信记忆：</span></div>
+      <div>· [决策] 认证统一走 auth 模块</div>
+      <div>· [教训] 构建必须先过 tsc</div>
+    </div>
+  </div>
+  <div style="marginTop:24px; fontSize:18px; color:#c3bdd6;">
+    你不需要说"接手"或"上下文"——<span class="green">agent 天然就知道该干什么。</span>
+  </div>
+</div>
+
+<!-- ═══ SCENE 4: 踩坑→自动记忆 ═══ -->
+<div class="scene" id="s4">
+  <div class="h2"><span class="violet">03</span> · 踩坑 → 自动沉淀（零操作）</div>
+  <div class="term mono" style="marginTop:20px;">
+    <div class="err">// 你在 zcode 里发现：</div>
+    <div class="out">grep -c 会把子串也算进去（15173 包含 5173）</div>
+    <div class="dim" style="marginTop:12px;">// 你继续干活—— hippo 后台自动：</div>
+    <div class="ok" style="marginTop:6px;">✓ 噪音闸门 → 过程自语拦截</div>
+    <div class="ok">✓ LLM 精炼 → "grep -c 的子串陷阱，用 -w 精确匹配"</div>
+    <div class="ok">✓ 入库 → type=lesson · project=zcode-sweep · agent=zcode</div>
+  </div>
+  <div style="marginTop:24px; display:flex; gap:24px;">
+    <div class="stat"><div class="stat-n orange">90天</div><div class="stat-l">衰减半衰期</div></div>
+    <div class="stat"><div class="stat-n green">9类</div><div class="stat-l">噪音闸门模式</div></div>
+    <div class="stat"><div class="stat-n violet">LLM</div><div class="stat-l">精炼判决（minimax）</div></div>
+  </div>
+</div>
+
+<!-- ═══ SCENE 5: 跨 agent 交接 ═══ -->
+<div class="scene" id="s5">
+  <div class="h2"><span class="violet">04</span> · 跨 agent 交接（⇪ 一键推送）</div>
+  <div class="grid-2" style="marginTop:20px;">
+    <div class="card">
+      <div class="dim" style="fontSize:12px; marginBottom:8px;">zcode（工作中）</div>
+      <div class="term mono">
+        <div class="out">fix: middleware 注册顺序问题</div>
+        <div class="out">fix: canvas 渲染清空时序</div>
+      </div>
+      <div style={{textAlign:'center', marginTop:12}}>
+        <span style={{fontSize:32, color:'#a78bfa'}}>⇪</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="dim" style="fontSize:12px; marginBottom:8px;">WorkBuddy（新会话开局）</div>
+      <div class="term mono">
+        <div class="ok">✓ 已接上 dsh-plugin 上下文</div>
+        <div style="marginTop:6px;">"当前卡点是 middleware 注册顺序，<br>上次试了调换路由顺序但 canvas 还有问题。"</div>
+      </div>
+    </div>
+  </div>
+  <div style="marginTop:24px; fontSize:18px; color:#c3bdd6;">
+    消费即弃 · ≤500 token · <span class="green">原文可 recall 反查</span>
+  </div>
+</div>
+
+<!-- ═══ SCENE 6: 结尾 ═══ -->
+<div class="scene" id="s6">
+  <div style="height:100%; display:flex; flexDirection:column; justifyContent:center; alignItems:center;">
+    <div class="logo" style="margin-bottom:36px;">
+      <div class="logo-icon">🦛</div>
+      <div class="logo-txt" style="fontSize:38px;">hippo</div>
+    </div>
+    <div class="h1" style="fontSize:36px; textAlign:center; marginBottom:28px;">
+      <span class="violet">上下文的所有权层。</span><br/>
+      agent 是租客：来了取、干活时还、走了不带走。
+    </div>
+    <div class="grid-3" style="width:800px;">
+      <div class="stat"><div class="stat-n green">601</div><div class="stat-l">条记忆</div></div>
+      <div class="stat"><div class="stat-n violet">19</div><div class="stat-l">MCP 工具</div></div>
+      <div class="stat"><div class="stat-n orange">0</div><div class="stat-l">数据丢失</div></div>
+    </div>
+    <div class="mut" style="marginTop:32px; fontSize:16px;">
+      <span class="mono">npm i -g hippo-context && hippo gui</span>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── HyperFrames 场
