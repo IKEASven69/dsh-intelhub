@@ -7,6 +7,8 @@
 import { readFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import { extname } from 'node:path'
+import { parseFrontmatter } from './frontmatter.ts'
+import type { FrontMeta } from './frontmatter.ts'
 
 /** 支持导入的扩展名(小写)。 */
 export const TEXT_EXTS = new Set(['.md', '.markdown', '.txt', '.log', '.csv', '.json', '.yaml', '.yml', '.xml', '.html', '.ts', '.tsx', '.js', '.mjs', '.cjs', '.py', '.go', '.rs', '.java', '.c', '.h', '.cpp', '.sh'])
@@ -41,15 +43,17 @@ export function htmlToText(html: string): string {
     .trim()
 }
 
-/** 抽取结果:null 表示不支持/失败,reason 供注册表 error 字段。 */
-export async function extractText(path: string): Promise<{ text: string | null; rawHash?: string; reason?: string }> {
+/** 抽取结果:null 表示不支持/失败,reason 供注册表 error 字段;meta 为 frontmatter 标量(仅文本族)。 */
+export async function extractText(path: string): Promise<{ text: string | null; rawHash?: string; meta?: FrontMeta; reason?: string }> {
   const ext = extname(path).toLowerCase()
   let rawHash: string | undefined
   try {
     rawHash = createHash('sha256').update(await readFile(path)).digest('hex').slice(0, 16)
     if (TEXT_EXTS.has(ext)) {
       const raw = await readFile(path, 'utf8')
-      return { text: raw.replace(/\u0000/g, '').trim() || null, rawHash, reason: '空文件' }
+      const { meta, body } = parseFrontmatter(raw)
+      const text = body.replace(/\u0000/g, '').trim() || null
+      return { text, rawHash, meta, reason: text === null ? '空文件' : undefined }
     }
     if (PDF_EXTS.has(ext)) {
       const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')

@@ -20,9 +20,10 @@ import { join, resolve, sep } from 'node:path'
 import { chunkText, embedTextOf } from './chunker.ts'
 import { E5Embedder } from './embedder.ts'
 import type { Embedder } from './embedder.ts'
-import { KbStore } from './store.ts'
-import type { RawHit } from './store.ts'
+import { buildFilter, KbStore, SCHEMA_VERSION } from './store.ts'
+import type { ChunkScalars, RawHit, SearchFilterSpec } from './store.ts'
 import { extractText, htmlToText, SUPPORTED_EXTS, MAX_FILE_BYTES } from './extract.ts'
+import type { FrontMeta } from './frontmatter.ts'
 import { WorkspaceManager } from './watch.ts'
 import { ScheduleManager } from './schedule.ts'
 import type { DemoResult, FileEntry, ImportResult, ListResult, RemoveResult, SearchHit, SearchResult, StatusResult } from './types.ts'
@@ -70,6 +71,8 @@ export class ZvecKbService extends TypertRemoteService {
   private readonly homeDir: string
   private recoveryNote: string | null = null
   private pendingRawHash: string | undefined = undefined
+  private pendingMeta: FrontMeta | undefined = undefined
+  private pendingSrc: string | undefined = undefined
   private readonly workspaceMgr: WorkspaceManager
   private readonly scheduleMgr: ScheduleManager
   private embedder: Embedder | null = null
@@ -129,17 +132,27 @@ export class ZvecKbService extends TypertRemoteService {
   private registerTools(): void {
     this.ctx.tools.register(defineTool({
       name: 'kb_search',
-      description: '在用户的本地知识库里检索(语义+关键词混合:按意思能找到换说法的段落,精确词/错误码也能命中)。用户问题涉及已导入文档时先用它,结果带 文件路径#块号 来源。',
+      description: '在用户的本地知识库里检索(语义+关键词混合:按意思能找到换说法的段落,精确词/错误码也能命中)。用户问题涉及已导入文档时先用它,结果带 文件路径#块号 来源。可选过滤:作者/阶段(精选 selected/raw)/标签/最低点赞。',
       parameters: {
         query: { type: 'string', description: '检索词:自然语言问题或关键词均可' },
         topk: { type: 'number', description: '返回条数,默认 5' },
+        author: { type: 'string', description: '可选:只搜某作者的采集(如 宝玉xp)' },
+        stage: { type: 'string', description: '可选:精选层 selected / 全集层 raw / reviewed' },
+        tag: { type: 'string', description: '可选:按标签过滤(如 AI/观点)' },
+        likesMin: { type: 'number', description: '可选:最低点赞数' },
       },
       output: { schema: { type: 'json' }, render: (_a: unknown, v: { text: string }) => [{ type: 'text', text: v.text }] },
-      execute: async (a: { query?: unknown; topk?: unknown }): Promise<{ text: string }> => {
+      execute: async (a: { query?: unknown; topk?: unknown; author?: unknown; stage?: unknown; tag?: unknown; likesMin?: unknown }): Promise<{ text: string }> => {
         const q = String(a.query ?? '').trim()
         if (!q) return { text: 'query 不能为空。' }
         const topk = Math.min(Math.max(Number(a.topk) || 5, 1), 20)
-        const r = await this.search(q, topk)
+        const filter: SearchFilterSpec = {
+          author: a.author === undefined ? undefined : String(a.author),
+          stage: a.stage === undefined ? undefined : String(a.stage),
+          tag: a.tag === undefined ? undefined : String(a.tag),
+          likesMin: a.likesMin === undefined ? undefined : Number(a.likesMin),
+        }
+        const r = await this.search(q, topk, filter)
         if (!r.ok) return { text: `检索失败:${r.error ?? '未知'}` }
         if (r.hits.length === 0) return { text: `知识库中没有匹配"${q}"的内容${r.note ? `(${r.note})` : ''}。` }
         const lines = r.hits.map((h, i) => `[${i + 1}] ${h.score.toFixed(3)} · ${h.ref}\n${h.text.length > SNIPPET ? h.text.slice(0, SNIPPET) + '…' : h.text}`)
@@ -280,7 +293,7 @@ export class ZvecKbService extends TypertRemoteService {
     }
     if (this.store === null) {
       await mkdir(this.homeDir, { recursive: true })
-      let s = new KbStore(join(this.homeDir, 'store'), this.embedder.dim)
+      let s = new KbStore(join(this.homeDir, `store-v${SCHEMA_VERSION}`), this.embedder.dim)
       s.open()
       if (!s.ok) {
         // 双实例/崩溃残留会占写锁:降级到独立恢复目录,而不是让知识库整个不可用
@@ -373,9 +386,10 @@ export class ZvecKbService extends TypertRemoteService {
       this.registry.set(regKey('fs', c.path), { ...prevEntry, path: resolve(c.path), bytes: c.bytes, status: 'indexing' as const, chunks: prev?.chunks ?? 0 })
       queued++
       this.enqueueSource(regKey('fs', c.path), resolve(c.path), c.bytes, async () => {
-        const { text, reason, rawHash } = await extractText(c.path)
+        const { text, reason, rawHash, meta } = await extractText(c.path)
         if (text === null) throw new Error(reason ?? '无法抽取文本')
         this.pendingRawHash = rawHash
+        this.pendingMeta = meta
         return text
       })
     }
@@ -403,6 +417,9 @@ export class ZvecKbService extends TypertRemoteService {
         const html = await this.fetchText(url)
         const text = htmlToText(html)
         if (text.length < 40) throw new Error('页面无可抽取正文')
+        this.pendingRawHash = undefined
+        this.pendingMeta = undefined
+        this.pendingSrc = 'url'
         return text
       })
     }
@@ -419,6 +436,9 @@ export class ZvecKbService extends TypertRemoteService {
     const key = regKey('note', t)
     const prevN = this.registry.get(key)
     this.registry.set(key, { ...(prevN ?? entryOf(`note:${t}`)), bytes: Buffer.byteLength(text, 'utf8'), status: 'indexing' as const, chunks: prevN?.chunks ?? 0 })
+    this.pendingRawHash = undefined
+    this.pendingMeta = undefined
+    this.pendingSrc = 'note'
     this.enqueueSource(key, `note:${t}`, Buffer.byteLength(text, 'utf8'), async () => text)
     this.saveRegistry()
     this.refreshPrompt()
@@ -438,7 +458,8 @@ export class ZvecKbService extends TypertRemoteService {
     this.queueTail = this.queueTail.then(async () => {
       try {
         const text = await produce()
-        await this.indexContent(key, display, text, bytes, this.pendingRawHash)
+        const scalars = this.metaToScalars(this.pendingMeta, this.pendingSrc)
+        await this.indexContent(key, display, text, bytes, this.pendingRawHash, scalars)
       } catch (err: unknown) {
         const cur = this.registry.get(key)
         this.registry.set(key, { ...(cur ?? entryOf(display)), bytes, status: 'failed', error: err instanceof Error ? err.message.slice(0, 200) : String(err).slice(0, 200) })
@@ -450,7 +471,20 @@ export class ZvecKbService extends TypertRemoteService {
     })
   }
 
-  private async indexContent(key: string, display: string, text: string, bytes: number, rawHash?: string): Promise<void> {
+  /** frontmatter 标量 → zvec 行标量;URL/笔记来源补 src 标识。 */
+  private metaToScalars(meta: FrontMeta | undefined, srcOverride?: string): ChunkScalars {
+    return {
+      author: meta?.author,
+      stage: meta?.stage,
+      tag: meta?.tag,
+      src: srcOverride ?? meta?.src,
+      date: meta?.date,
+      type: meta?.type,
+      likes: meta?.likes,
+    }
+  }
+
+  private async indexContent(key: string, display: string, text: string, bytes: number, rawHash?: string, scalars?: ChunkScalars): Promise<void> {
     const rt = await this.ensureRuntime()
     if ('error' in rt) throw new Error(rt.error)
     const buf = Buffer.from(text, 'utf8')
@@ -459,8 +493,9 @@ export class ZvecKbService extends TypertRemoteService {
     if (chunks.length === 0) throw new Error('没有可索引的内容')
 
     const prev = this.registry.get(key)
-    // 内容完全未变(抽取文本同哈希):不重插,避免 zvec 重复 id 文档
-    if (prev !== undefined && prev.id !== '' && prev.id === id && prev.status === 'done') {
+    // 内容与标量均未变:不重插,避免 zvec 重复 id 文档(likes 等标量更新也走重索引)
+    const metaSig = JSON.stringify(scalars ?? {})
+    if (prev !== undefined && prev.id !== '' && prev.id === id && prev.status === 'done' && prev.metaSig === metaSig) {
       this.registry.set(key, { ...prev, bytes, status: 'done', rawHash })
       this.saveRegistry()
       return
@@ -471,15 +506,15 @@ export class ZvecKbService extends TypertRemoteService {
     if (rt.embedder.ready !== null) await rt.embedder.ready
     // 嵌入用去语法文本(余弦不被 markdown 符号污染);FTS/展示仍用原文
     const vectors = await rt.embedder.embed(chunks.map((c) => embedTextOf(c)))
-    rt.store.insert(id, chunks, vectors)
-    this.registry.set(key, { id, path: display, bytes, chunks: chunks.length, status: 'done', importedAt: Date.now(), rawHash })
+    rt.store.insert(id, chunks, vectors, scalars)
+    this.registry.set(key, { id, path: display, bytes, chunks: chunks.length, status: 'done', importedAt: Date.now(), rawHash, metaSig, meta: scalars })
     this.saveRegistry()
     this.refreshPrompt()
   }
 
   // ── 检索 ────────────────────────────────────────────────
 
-  async search(query: string, topk: number): Promise<SearchResult> {
+  async search(query: string, topk: number, filter?: SearchFilterSpec): Promise<SearchResult> {
     const rt = await this.ensureRuntime()
     if ('error' in rt) return { ok: false, mode: 'none', hits: [], error: rt.error }
     let queryVec: number[] | null = null
@@ -496,7 +531,7 @@ export class ZvecKbService extends TypertRemoteService {
         note = '语义模型加载中,本次为关键词检索'
       }
     }
-    const raw: RawHit[] = rt.store.search(queryVec, query, topk)
+    const raw: RawHit[] = rt.store.search(queryVec, query, topk, filter ? buildFilter(filter) : undefined)
     const byId = new Map([...this.registry.values()].map((f) => [f.id, f]))
     const hits: SearchHit[] = raw.map((r) => ({
       ref: `${byId.get(r.file)?.path ?? r.file}#${r.chunk}`,
@@ -600,8 +635,13 @@ export class ZvecKbService extends TypertRemoteService {
   }
 
   @Remote('search')
-  async rpcSearch(p: { query: string; topk: number }): Promise<SearchResult> {
-    return await this.search(p.query, p.topk)
+  async rpcSearch(p: { query: string; topk: number; author?: string; stage?: string; tag?: string; likesMin?: number }): Promise<SearchResult> {
+    return await this.search(p.query, p.topk, {
+      author: p.author,
+      stage: p.stage,
+      tag: p.tag,
+      likesMin: p.likesMin,
+    })
   }
 
   @Remote('url-import')
@@ -747,6 +787,8 @@ export class ZvecKbService extends TypertRemoteService {
 /** FileEntry 运行时含 bytes(注册表字段);类型合并放这里避免污染公共类型。 */
 export interface FileEntryInternal extends FileEntry {
   bytes: number
+  metaSig?: string
+  meta?: ChunkScalars
 }
 
 function entryOf(path: string): FileEntryInternal {

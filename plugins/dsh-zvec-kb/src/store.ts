@@ -9,6 +9,40 @@ import { ZVecCreateAndOpen, ZVecOpen, ZVecCollectionSchema, ZVecDataType, ZVecIn
 import type { ZVecCollection } from '@zvec/zvec'
 import type { SearchHit } from './types.ts'
 
+/** 索引 schema 版本:字段集变更时 +1(目录名带版本,旧目录自动弃用)。 */
+export const SCHEMA_VERSION = 2
+
+/** 文件级标量(来自 frontmatter 或来源类型),写入每个块。 */
+export interface ChunkScalars {
+  author?: string
+  stage?: string
+  tag?: string
+  src?: string
+  date?: string
+  type?: string
+  likes?: number
+}
+
+export interface SearchFilterSpec {
+  author?: string
+  stage?: string
+  tag?: string
+  src?: string
+  likesMin?: number
+}
+
+/** zvec 过滤表达式(单等号 + AND 大写,SQL 风格;&& 不被 lexer 接受);值内引号剥除。 */
+export function buildFilter(f: SearchFilterSpec): string | undefined {
+  const parts: string[] = []
+  const q = (v: string): string => v.replace(/["\\]/g, '')
+  if (f.author) parts.push(`author = "${q(f.author)}"`)
+  if (f.stage) parts.push(`stage = "${q(f.stage)}"`)
+  if (f.tag) parts.push(`tag = "${q(f.tag)}"`)
+  if (f.src) parts.push(`src = "${q(f.src)}"`)
+  if (f.likesMin !== undefined && Number.isFinite(f.likesMin)) parts.push(`likes >= ${Math.floor(f.likesMin)}`)
+  return parts.length === 0 ? undefined : parts.join(' AND ')
+}
+
 /** 原始行:store 视角(fileId + 块号),还没有路径。 */
 export interface RawHit {
   file: string
@@ -43,6 +77,14 @@ export class KbStore {
         },
         { name: 'file', dataType: ZVecDataType.STRING },
         { name: 'chunk', dataType: ZVecDataType.INT64 },
+        // frontmatter 标量(schema v2):过滤与展示用;空值用默认占位,永不匹配正向过滤
+        { name: 'author', dataType: ZVecDataType.STRING },
+        { name: 'stage', dataType: ZVecDataType.STRING },
+        { name: 'tag', dataType: ZVecDataType.STRING },
+        { name: 'src', dataType: ZVecDataType.STRING },
+        { name: 'date', dataType: ZVecDataType.STRING },
+        { name: 'type', dataType: ZVecDataType.STRING },
+        { name: 'likes', dataType: ZVecDataType.INT64 },
       ],
     })
     try {
@@ -65,13 +107,25 @@ export class KbStore {
     return this.col !== null
   }
 
-  insert(fileId: string, texts: string[], vectors: number[][]): void {
+  insert(fileId: string, texts: string[], vectors: number[][], scalars?: ChunkScalars): void {
     if (this.col === null) throw new Error(this.openError ?? 'store 未打开')
+    const sc = scalars ?? {}
     const docs = texts.map((text, i) => ({
       // zvec 文档 id 不允许 ':',用 '#' 分隔
       id: `${fileId}#${i}`,
       vectors: { emb: vectors[i] },
-      fields: { text, file: fileId, chunk: i },
+      fields: {
+        text,
+        file: fileId,
+        chunk: i,
+        author: sc.author ?? '',
+        stage: sc.stage ?? '',
+        tag: sc.tag ?? '',
+        src: sc.src ?? '',
+        date: sc.date ?? '',
+        type: sc.type ?? '',
+        likes: sc.likes ?? 0,
+      },
     })) as never[]
     // zvec 单批写入上限 1024 条,超限整体报错(Too many docs)
     for (let i = 0; i < docs.length; i += 1024) this.col.insertSync(docs.slice(i, i + 1024) as never)
@@ -88,7 +142,11 @@ export class KbStore {
    * 不用 zvec weighted 融合——余弦(0.7~0.9)与 BM25 原始分(1~15)尺度悬殊,
    * 直接加权会让 FTS 的弱词法匹配压过向量排序(真模型 E2E 实证);RRF 只看排名,天然免疫尺度差。
    */
-  search(queryVec: number[] | null, query: string, topk: number): RawHit[] {
+  /** 手动 RRF 混合检索:向量腿 + FTS 腿各自取 topk*2,按排名融合(0.75/0.25)。
+   *  不用 zvec weighted 融合——余弦(0.7~0.9)与 BM25 原始分(1~15)尺度悬殊,
+   *  直接加权会让 FTS 的弱词法匹配压过向量排序(真模型 E2E 实证);RRF 只看排名,天然免疫尺度差。
+   *  filter:标量预过滤(author/stage/tag/src/likes),两腿同滤。 */
+  search(queryVec: number[] | null, query: string, topk: number, filter?: string): RawHit[] {
     if (this.col === null) return []
     const mapRow = (r: { score: number; fields: { text?: string; file?: string; chunk?: number } }): RawHit => ({
       file: String(r.fields.file ?? ''),
@@ -97,12 +155,14 @@ export class KbStore {
       text: String(r.fields.text ?? ''),
     })
     const fetch = Math.max(topk * 2, 10)
+    // zvec 拒绝显式 filter:undefined 键——仅在有过滤时携带
+    const filterOpts = filter !== undefined && filter !== '' ? { filter } : {}
     const vecRows = queryVec === null
       ? []
-      : (this.col.querySync({ fieldName: 'emb', vector: queryVec, topk: fetch } as never) as unknown[] as { score: number; fields: { text?: string; file?: string; chunk?: number } }[]).map(mapRow)
+      : (this.col.querySync({ fieldName: 'emb', vector: queryVec, topk: fetch, ...filterOpts } as never) as unknown[] as { score: number; fields: { text?: string; file?: string; chunk?: number } }[]).map(mapRow)
     let ftsRows: RawHit[] = []
     try {
-      ftsRows = (this.col.querySync({ fieldName: 'text', fts: { queryString: query }, topk: fetch } as never) as unknown[] as { score: number; fields: { text?: string; file?: string; chunk?: number } }[]).map(mapRow)
+      ftsRows = (this.col.querySync({ fieldName: 'text', fts: { queryString: query }, topk: fetch, ...filterOpts } as never) as unknown[] as { score: number; fields: { text?: string; file?: string; chunk?: number } }[]).map(mapRow)
     } catch {
       /* FTS 语法异常不阻断向量腿 */
     }
