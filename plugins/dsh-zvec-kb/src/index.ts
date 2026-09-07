@@ -282,6 +282,54 @@ export class ZvecKbService extends TypertRemoteService {
         return r.ok ? { text: action === 'enable' ? '已启用。' : '已停用。' } : { text: `失败:${r.error ?? '未知'}` }
       },
     }))
+
+    this.ctx.tools.register(defineTool({
+      name: 'kb_today',
+      description: '今天采了什么:今日新增来源、高价值帖(按点赞排序)、待分诊队列存量。复盘工作流的入口。',
+      parameters: {},
+      output: { schema: { type: 'json' }, render: (_a: unknown, v: { text: string }) => [{ type: 'text', text: v.text }] },
+      execute: async (): Promise<{ text: string }> => {
+        await this.loadRegistry()
+        const now = new Date()
+        const ymd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+        const files = [...this.registry.values()]
+        const todayNew = files.filter((f) => f.meta?.date === ymd || new Date(f.importedAt).toDateString() === now.toDateString())
+        const top = [...todayNew].filter((f) => (f.meta?.likes ?? 0) > 0).sort((x, y) => (y.meta?.likes ?? 0) - (x.meta?.likes ?? 0)).slice(0, 8)
+        const rawPending = files.filter((f) => f.meta?.stage === 'raw').length
+        const lines = [
+          `今日新增 ${todayNew.length} 篇 · 待分诊(raw)存量 ${rawPending}`,
+          ...(top.length > 0 ? ['高价值 TOP:'].concat(top.map((f) => `◆ ${f.meta?.author ?? f.path.split(/[\\/]/).pop()} · 赞 ${f.meta?.likes} · ${f.path.split(/[\\/]/).pop()}`)) : []),
+        ]
+        return { text: lines.join('\n') }
+      },
+    }))
+
+    this.ctx.tools.register(defineTool({
+      name: 'kb_evidence',
+      description: '给一条判断找证据:按判断文本语义检索知识库,按来源文件归组,返回支持的 原文#块号 清单。判断台账复盘用。',
+      parameters: {
+        text: { type: 'string', description: '判断内容(一句话)' },
+        topk: { type: 'number', description: '候选证据条数上限,默认 8' },
+      },
+      output: { schema: { type: 'json' }, render: (_a: unknown, v: { text: string }) => [{ type: 'text', text: v.text }] },
+      execute: async (a: { text?: unknown; topk?: unknown }): Promise<{ text: string }> => {
+        const t = String(a.text ?? '').trim()
+        if (!t) return { text: 'text 不能为空。' }
+        const topk = Math.min(Math.max(Number(a.topk) || 8, 1), 20)
+        const r = await this.search(t, topk)
+        if (!r.ok) return { text: `检索失败:${r.error ?? '未知'}` }
+        if (r.hits.length === 0) return { text: '知识库中没有找到相关证据。' }
+        const seen = new Set<string>()
+        const ev: string[] = []
+        for (const h of r.hits) {
+          const file = h.ref.replace(/#\d+$/, '')
+          if (seen.has(file)) continue
+          seen.add(file)
+          ev.push(`▸ ${h.ref} · ${h.text.length > 60 ? h.text.slice(0, 60) + '…' : h.text}`)
+        }
+        return { text: `证据 ${ev.length} 件(按相关度):\n${ev.join('\n')}\n—— 全部带 原文#块号,可回源核对。` }
+      },
+    }))
   }
 
   // ── 运行时(向量器 + 存储,惰性) ──────────────────────────

@@ -161,10 +161,14 @@ export class KbStore {
       ? []
       : (this.col.querySync({ fieldName: 'emb', vector: queryVec, topk: fetch, ...filterOpts } as never) as unknown[] as { score: number; fields: { text?: string; file?: string; chunk?: number } }[]).map(mapRow)
     let ftsRows: RawHit[] = []
-    try {
-      ftsRows = (this.col.querySync({ fieldName: 'text', fts: { queryString: query }, topk: fetch, ...filterOpts } as never) as unknown[] as { score: number; fields: { text?: string; file?: string; chunk?: number } }[]).map(mapRow)
-    } catch {
-      /* FTS 语法异常不阻断向量腿 */
+    // FTS 查询语法字符(:'"()等)会让 lexer 炸掉——只留字母/数字/CJK/空白
+    const ftsQuery = query.replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim()
+    if (ftsQuery !== '') {
+      try {
+        ftsRows = (this.col.querySync({ fieldName: 'text', fts: { queryString: ftsQuery }, topk: fetch, ...filterOpts } as never) as unknown[] as { score: number; fields: { text?: string; file?: string; chunk?: number } }[]).map(mapRow)
+      } catch {
+        /* FTS 语法异常不阻断向量腿 */
+      }
     }
 
     const W_VEC = 0.75
