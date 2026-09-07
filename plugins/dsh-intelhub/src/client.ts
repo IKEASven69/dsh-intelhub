@@ -1,8 +1,8 @@
 /**
- * dsh-zvec-kb 浏览器半:设置页「本地知识库」。
+ * dsh-intelhub 浏览器半:设置页「本地知识库」。
  * 视觉对齐 OpenCLIApp 冷灰深色 + 蓝强调(#4A9EFF)——与 dsh-opencli 面板同一设计语言。
  * 职责:导入(文件/文件夹)→ 索引进度 → 语义+关键词混合检索预览 → 文件管理。
- * @module dsh-zvec-kb/client
+ * @module dsh-intelhub/client
  */
 
 import { createElement, useEffect, useState } from 'react'
@@ -15,13 +15,13 @@ export const inject = ['slots']
 
 async function rpc<T>(method: string, args: Record<string, unknown> = {}): Promise<{ ok: boolean; value?: T; error?: { message: string } }> {
   try {
-    const res = await fetch(`/api/zvecKb/${method}`, {
+    const res = await fetch(`/api/intelhub/${method}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         type: 'client-request',
         rpcId: (globalThis.crypto?.randomUUID?.() ?? String(Date.now() + Math.random())),
-        method: `zvecKb/${method}`,
+        method: `intelhub/${method}`,
         // host 方法都是单参数 p 的 SRC 签名:args 必须按形参名包一层
         payload: { args: Object.keys(args).length > 0 ? { p: args } : args },
       }),

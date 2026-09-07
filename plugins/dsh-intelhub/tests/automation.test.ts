@@ -32,7 +32,7 @@ describe('workspace 监听', { timeout: 30000 }, () => {
 
   beforeAll(async () => {
     home = await mkdtemp(join(tmpdir(), 'zvecwatch-'))
-    process.env.DSH_ZVECKB_HOME = home
+    process.env.DSH_INTELHUB_HOME = home
     docs = join(home, 'docs')
     await mkdir(docs, { recursive: true })
     const ctx = new Context()
@@ -41,13 +41,13 @@ describe('workspace 监听', { timeout: 30000 }, () => {
     await ctx.plugin(class extends ZvecKbService {
       createEmbedder(): Embedder { return new FakeEmbedder(8) }
     })
-    svc = ctx.zvecKb
+    svc = ctx.intelhub
     // 监听由注册动作启动;防抖默认 4s
   })
 
   afterAll(async () => {
     await rm(home, { recursive: true, force: true }).catch(() => {})
-    delete process.env.DSH_ZVECKB_HOME
+    delete process.env.DSH_INTELHUB_HOME
   })
 
   it('注册 workspace 即触发首扫,新文件自动入库', async () => {

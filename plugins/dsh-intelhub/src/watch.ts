@@ -2,7 +2,7 @@
  * workspace 常驻目录监听:注册目录后自动增量索引。
  * 双保险:fs.watch 递归事件(实时)+ 定时全量扫描(兜底,防漏事件/离线期间的变化)。
  * 触发即 importPath(内容哈希增量,天然幂等,重复触发零成本)。
- * @module dsh-zvec-kb
+ * @module dsh-intelhub
  */
 
 import { watch } from 'node:fs'

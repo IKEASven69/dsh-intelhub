@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { existsSync } from 'node:fs'
 
 const home = await mkdtemp(join(tmpdir(), 'zveckb-perf-'))
-process.env.DSH_ZVECKB_HOME = home
+process.env.DSH_INTELHUB_HOME = home
 const spikeCache = 'D:/CodingProjects/dsh-plugin/spikes/zvec-kb/node_modules/@huggingface/transformers/.cache'
 if (existsSync(spikeCache)) {
   await mkdir(join(home, 'hf-cache'), { recursive: true })
@@ -30,7 +30,7 @@ class StubTools extends Service { constructor(c) { super(c, 'tools') } register(
 class StubPrompt extends Service { constructor(c) { super(c, 'systemPrompt') } section() {} }
 const ctx = new Context()
 await ctx.plugin(StubTools); await ctx.plugin(StubPrompt); await ctx.plugin(ZvecKbService)
-const svc = ctx.zvecKb
+const svc = ctx.intelhub
 
 // ── 补4:多途径同时进(文件夹 + URL + note 三途径交错)──
 console.log('\n== 多途径混合导入 ==')

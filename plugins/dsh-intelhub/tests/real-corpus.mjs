@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { existsSync } from 'node:fs'
 
 const home = await mkdtemp(join(tmpdir(), 'zveckb-real-'))
-process.env.DSH_ZVECKB_HOME = home
+process.env.DSH_INTELHUB_HOME = home
 const spikeCache = 'D:/CodingProjects/dsh-plugin/spikes/zvec-kb/node_modules/@huggingface/transformers/.cache'
 if (existsSync(spikeCache)) {
   await mkdir(join(home, 'hf-cache'), { recursive: true })
@@ -42,7 +42,7 @@ class StubTools extends Service { constructor(c) { super(c, 'tools') } register(
 class StubPrompt extends Service { constructor(c) { super(c, 'systemPrompt') } section() {} }
 const ctx = new Context()
 await ctx.plugin(StubTools); await ctx.plugin(StubPrompt); await ctx.plugin(ZvecKbService)
-const svc = ctx.zvecKb
+const svc = ctx.intelhub
 
 const imp = await svc.importPath(docs)
 console.log(`导入: queued=${imp.queued} failedScan=${JSON.stringify(imp.failedScan)}`)

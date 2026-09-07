@@ -7,12 +7,12 @@ import { existsSync } from 'node:fs'
 
 const CORPUS = 'D:/CodingProjects/knowledge-base/collections'
 const home = await mkdtemp(join(tmpdir(), 'intelhub-stress-'))
-process.env.DSH_ZVECKB_HOME = home
+process.env.DSH_INTELHUB_HOME = home
 
 // 复用已缓存模型,避免重复下载
 const caches = [
   'D:/CodingProjects/dsh-plugin/spikes/zvec-kb/node_modules/@huggingface/transformers/.cache',
-  'C:/Users/20369/.dsh/dsh-zvec-kb/hf-cache',
+  'C:/Users/20369/.dsh/dsh-intelhub/hf-cache',
 ]
 for (const c of caches) {
   if (existsSync(c)) {
@@ -29,7 +29,7 @@ class StubTools extends Service { constructor(c) { super(c, 'tools') } register(
 class StubPrompt extends Service { constructor(c) { super(c, 'systemPrompt') } section() {} }
 const ctx = new Context()
 await ctx.plugin(StubTools); await ctx.plugin(StubPrompt); await ctx.plugin(ZvecKbService)
-const svc = ctx.zvecKb
+const svc = ctx.intelhub
 
 const t0 = performance.now()
 const imp = await svc.importPath(CORPUS)

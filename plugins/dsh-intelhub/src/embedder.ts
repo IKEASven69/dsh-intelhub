@@ -1,7 +1,7 @@
 /**
  * 向量化层:本地 e5-small(transformers.js,q8)惰性加载;测试用确定性假向量注入。
  * 与存储层解耦——换模型/换 API 只是换 Embedder 实现。
- * @module dsh-zvec-kb
+ * @module dsh-intelhub
  */
 
 import { createHash } from 'node:crypto'

@@ -1,11 +1,11 @@
 /**
- * dsh-zvec-kb host 半:zvec 原生本地知识库。
+ * dsh-intelhub host 半:zvec 原生本地知识库。
  * - kb_import:文件/整个文件夹导入(后台队列:抽取→分块→本地向量化→入库,逐文件可见)
  * - kb_search:语义+关键词加权混合检索(zvec weighted 融合),结果带 文件路径#块 来源
  * - kb_list / kb_delete:注册表管理与按文件删除
  * - TypertRemoteService RPC:status / list / import / remove / search(面板用)
  * 零守护进程(zvec 进程内)、零 API key(e5-small 本地推理)、文档不出本机。
- * @module dsh-zvec-kb
+ * @module dsh-intelhub
  */
 
 import { Context, Service } from '@deepseek-ai/cordis'
@@ -30,7 +30,7 @@ import type { DemoResult, ExportResult, FileEntry, ImportResult, ListResult, Rem
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
-    zvecKb: ZvecKbService
+    intelhub: ZvecKbService
     /** 本地结构化声明:宿主 systemPrompt 服务的最小使用面(增强包解析不可靠时不拖垮类型检查) */
     systemPrompt: { section(cfg: { name: string; order: number; text: () => string }): void }
   }
@@ -63,7 +63,7 @@ const DEMO_NOTE_TEXT = `# 员工手册(演示样例)
 
 新入职员工由直属主管在管理后台提交账号申请,经部门负责人审批后,由系统管理员完成角色绑定,全程无需线下单据。
 
-(这是 dsh-zvec-kb 的演示文档,可在文件列表中删除)`
+(这是 dsh-intelhub 的演示文档,可在文件列表中删除)`
 
 export class ZvecKbService extends TypertRemoteService {
   static inject = ['tools', 'systemPrompt']
@@ -81,11 +81,11 @@ export class ZvecKbService extends TypertRemoteService {
   private registryLoaded = false
   private queueTail: Promise<void> = Promise.resolve()
   private queuedFiles = 0
-  private promptText = '本地知识库(dsh-zvec-kb):还没有已导入的文档。用户给路径时可调 kb_import 导入(支持整个文件夹)。'
+  private promptText = '本地知识库(dsh-intelhub):还没有已导入的文档。用户给路径时可调 kb_import 导入(支持整个文件夹)。'
 
   constructor(ctx: Context) {
-    super(ctx, 'zvecKb')
-    this.homeDir = process.env.DSH_ZVECKB_HOME ?? join(homedir(), '.dsh', 'dsh-zvec-kb')
+    super(ctx, 'intelhub')
+    this.homeDir = process.env.DSH_INTELHUB_HOME ?? join(homedir(), '.dsh', 'dsh-intelhub')
     this.workspaceMgr = new WorkspaceManager(this.homeDir, async (p) => {
       const r = await this.importPath(p)
       if (r.queued > 0) this.refreshPrompt()
@@ -109,7 +109,7 @@ export class ZvecKbService extends TypertRemoteService {
     await this.loadRegistry()
     this.registerTools()
     this.ctx.systemPrompt.section({
-      name: 'zvec-kb',
+      name: 'intelhub',
       order: 160,
       text: () => this.promptText,
     })
@@ -122,11 +122,11 @@ export class ZvecKbService extends TypertRemoteService {
   private refreshPrompt(): void {
     const done = [...this.registry.values()].filter((f) => f.status === 'done')
     if (done.length === 0) {
-      this.promptText = '本地知识库(dsh-zvec-kb):还没有已导入的文档。导入方式:kb_import(文件/文件夹,Obsidian 库直接指库目录)、kb_import_url(网页存档)、kb_note(直接写文本——对话长文、调研结论、opencli 等工具抓到的社交内容都存这里)。'
+      this.promptText = '本地知识库(dsh-intelhub):还没有已导入的文档。导入方式:kb_import(文件/文件夹,Obsidian 库直接指库目录)、kb_import_url(网页存档)、kb_note(直接写文本——对话长文、调研结论、opencli 等工具抓到的社交内容都存这里)。'
       return
     }
     const sample = done.slice(-5).map((f) => f.path).join('、')
-    this.promptText = `本地知识库(dsh-zvec-kb):已导入 ${done.length} 个来源(如 ${sample})。用户问题涉及这些内容时,先用 kb_search 检索(语义+关键词混合,能按意思找到换了说法的段落),结果带 来源#块号,引用时注明。检索不到再问用户或看原文件。新增:kb_import(文件夹)/kb_import_url(网页)/kb_note(文本);移除用 kb_delete。`
+    this.promptText = `本地知识库(dsh-intelhub):已导入 ${done.length} 个来源(如 ${sample})。用户问题涉及这些内容时,先用 kb_search 检索(语义+关键词混合,能按意思找到换了说法的段落),结果带 来源#块号,引用时注明。检索不到再问用户或看原文件。新增:kb_import(文件夹)/kb_import_url(网页)/kb_note(文本);移除用 kb_delete。`
   }
 
   private registerTools(): void {
@@ -517,7 +517,7 @@ export class ZvecKbService extends TypertRemoteService {
 
   /** 测试注入点:URL 抓取(真实实现用全局 fetch)。 */
   protected async fetchText(url: string): Promise<string> {
-    const res = await fetch(url, { headers: { 'user-agent': 'Mozilla/5.0 (compatible; dsh-zvec-kb/0.1)' }, signal: AbortSignal.timeout(20000) })
+    const res = await fetch(url, { headers: { 'user-agent': 'Mozilla/5.0 (compatible; dsh-intelhub/0.1)' }, signal: AbortSignal.timeout(20000) })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     return await res.text()
   }

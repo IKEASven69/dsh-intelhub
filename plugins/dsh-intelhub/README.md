@@ -1,4 +1,4 @@
-# dsh-zvec-kb
+# dsh-intelhub
 
 **第一个 zvec 原生知识库插件** —— 把你的文档变成 agent 的外挂大脑:拖入文件或整个文件夹,agent 获得**语义 + 关键词混合检索**能力,结果自带来源。
 
@@ -8,7 +8,7 @@
 
 dsh 里已有的知识库插件只会**关键词检索**(SQLite FTS5)。但真实场景里,你记得文档写过什么,却想不起原话:
 
-| 你问 agent | 文档里实际写的 | 关键词检索 | dsh-zvec-kb |
+| 你问 agent | 文档里实际写的 | 关键词检索 | dsh-intelhub |
 |---|---|---|---|
 | "怎么配置超时时间" | "若对端 30 秒内无响应,会话将被中断" | ✗ 零词汇重叠,查无此物 | ✓ 语义命中 |
 | "买了东西想把钱要回来" | "七日内可联系客服发起退货,款项原路退回" | ✗ | ✓ 命中 |
@@ -40,14 +40,14 @@ dsh 里已有的知识库插件只会**关键词检索**(SQLite FTS5)。但真�
 ## 安装
 
 ```sh
-dsh plugin add dsh-zvec-kb
+dsh plugin add dsh-intelhub
 ```
 
-首次导入时自动下载本地模型(约 30MB)到 `~/.dsh/dsh-zvec-kb/`,之后全程离线。
+首次导入时自动下载本地模型(约 30MB)到 `~/.dsh/dsh-intelhub/`,之后全程离线。
 
 ## 与同类插件的差别
 
-| | dsh-zvec-kb | dsh-knowledge-base / dsh-knowledge | knowlp-rag | hindsight / ReMe |
+| | dsh-intelhub | dsh-knowledge-base / dsh-knowledge | knowlp-rag | hindsight / ReMe |
 |---|---|---|---|---|
 | 检索方式 | **语义 + 关键词混合** | 仅关键词(FTS5) | 含向量 | 语义(记忆向) |
 | 额外进程/服务 | **无**(zvec 进程内) | 无 | Python + 30s 引导 | 需守护进程/HTTP 服务 |

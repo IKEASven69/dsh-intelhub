@@ -1,7 +1,7 @@
 /**
  * 文件抽取:文本族直接读;PDF 用 pdfjs-dist(进程内,无系统依赖);docx 用 mammoth。
  * 单文件失败不阻断整批导入(返回 null + 原因由调用方记录)。
- * @module dsh-zvec-kb
+ * @module dsh-intelhub
  */
 
 import { readFile } from 'node:fs/promises'

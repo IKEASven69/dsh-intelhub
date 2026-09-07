@@ -1,8 +1,8 @@
-# dsh-zvec-kb bundle patch:把 zvec 原生知识库插件插入 profile 合成。
+# dsh-intelhub bundle patch:把 zvec 原生知识库插件插入 profile 合成。
 # host 半是 TypertRemoteService(面板 RPC:status/list/import/remove/search)
 # 并注册 kb_import / kb_search / kb_list / kb_delete 四个模型工具。
 # 客户端半由 package.json 的 dsh.client 声明 + exports["./client"] 提供。
 
 - insert:
-    - id: zvec-kb
-      name: 'dsh-zvec-kb'
+    - id: intelhub
+      name: 'dsh-intelhub'

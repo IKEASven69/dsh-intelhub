@@ -2,7 +2,7 @@
  * 调度注册表:AI 经 kb_schedule 工具(或面板)写入的持久化定时任务。
  * 设计:策略在 agent(skill 层,看发博节奏等数据决定 cadence),执行在引擎(可靠定时器)。
  * v1 动作:scan(全 workspace 增量索引);动作枚举随 v0.2 扩展(briefing/export)。
- * @module dsh-zvec-kb
+ * @module dsh-intelhub
  */
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises'

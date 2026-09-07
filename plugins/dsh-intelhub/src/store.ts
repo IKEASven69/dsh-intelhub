@@ -2,7 +2,7 @@
  * zvec 存储层:一个 collection(kbchunks),emb 向量字段 + text(jieba FTS)+ file/chunk 标量字段。
  * 进程内、WAL 持久化;写单进程独占(本服务即唯一写者)。
  * 结果只含 fileId+chunkIdx,来源路径由服务层查注册表还原。
- * @module dsh-zvec-kb
+ * @module dsh-intelhub
  */
 
 import { ZVecCreateAndOpen, ZVecOpen, ZVecCollectionSchema, ZVecDataType, ZVecIndexType, ZVecGetDefaultJiebaDictDir } from '@zvec/zvec'

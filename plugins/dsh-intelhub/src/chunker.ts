@@ -2,7 +2,7 @@
  * 文本分块:先按 markdown 标题切 section(标题是强语义边界,不被合并跨过),
  * section 内按空行切段落并合并到 maxLen;超长段落硬切;过短碎屑并入相邻块或丢弃。
  * spike 实证:整篇文档做单向量会被"万金油"长文淹没,分块是语义检索的硬前提。
- * @module dsh-zvec-kb
+ * @module dsh-intelhub
  */
 
 export const DEFAULT_MAX_CHUNK = 400

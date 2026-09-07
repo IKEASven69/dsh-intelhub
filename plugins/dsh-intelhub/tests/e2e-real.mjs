@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { existsSync } from 'node:fs'
 
 const home = await mkdtemp(join(tmpdir(), 'zveckb-e2e-'))
-process.env.DSH_ZVECKB_HOME = home
+process.env.DSH_INTELHUB_HOME = home
 
 // 复用 spike 已下载的模型缓存,避免重复下载
 const spikeCache = 'D:/CodingProjects/dsh-plugin/spikes/zvec-kb/node_modules/@huggingface/transformers/.cache'
@@ -46,7 +46,7 @@ const ctx = new Context()
 await ctx.plugin(StubTools)
 await ctx.plugin(StubPrompt)
 await ctx.plugin(ZvecKbService)
-const svc = ctx.zvecKb
+const svc = ctx.intelhub
 
 const t0 = performance.now()
 const imp = await svc.importPath(docs)

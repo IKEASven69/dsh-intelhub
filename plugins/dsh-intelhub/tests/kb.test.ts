@@ -43,7 +43,7 @@ let docsDir: string
 
 beforeAll(async () => {
   home = await mkdtemp(join(tmpdir(), 'zveckb-'))
-  process.env.DSH_ZVECKB_HOME = home
+  process.env.DSH_INTELHUB_HOME = home
   docsDir = join(home, 'docs')
   await mkdir(join(docsDir, 'node_modules'), { recursive: true })
   await mkdir(join(docsDir, 'sub'), { recursive: true })
@@ -57,7 +57,7 @@ beforeAll(async () => {
   await ctx.plugin(StubTools)
   await ctx.plugin(StubSystemPrompt)
   await ctx.plugin(TestKbService)
-  svc = ctx.zvecKb as TestKbService
+  svc = ctx.intelhub as TestKbService
 })
 
 afterAll(async () => {
@@ -65,10 +65,10 @@ afterAll(async () => {
   await rm(home, { recursive: true, force: true }).catch(() => {
     /* Windows 下 zvec LOCK 可能未即时释放,残留临时目录交给系统清理 */
   })
-  delete process.env.DSH_ZVECKB_HOME
+  delete process.env.DSH_INTELHUB_HOME
 })
 
-describe('dsh-zvec-kb 集成', { timeout: 30000 }, () => {
+describe('dsh-intelhub 集成', { timeout: 30000 }, () => {
   it('文件夹导入:支持格式入队,跳过目录与不支持扩展名', async () => {
     const r = await svc.importPath(docsDir)
     expect(r.ok).toBe(true)
@@ -136,7 +136,7 @@ describe('dsh-zvec-kb 集成', { timeout: 30000 }, () => {
     await ctx2.plugin(StubTools)
     await ctx2.plugin(StubSystemPrompt)
     await ctx2.plugin(TestKbService)
-    const svc2 = ctx2.zvecKb as TestKbService
+    const svc2 = ctx2.intelhub as TestKbService
     const l = await svc2.listFiles()
     expect(l.files.length).toBe(3)
     const r = await svc2.search('权限制度', 5)
@@ -212,12 +212,12 @@ describe('dsh-zvec-kb 集成', { timeout: 30000 }, () => {
     // 新开干净实例跑 demo
     svc.shutdown()
     const home2 = await mkdtemp(join(tmpdir(), 'zveckb-demo-'))
-    process.env.DSH_ZVECKB_HOME = home2
+    process.env.DSH_INTELHUB_HOME = home2
     const ctx3 = new Context()
     await ctx3.plugin(StubTools)
     await ctx3.plugin(StubSystemPrompt)
     await ctx3.plugin(TestKbService)
-    const svc3 = ctx3.zvecKb as TestKbService
+    const svc3 = ctx3.intelhub as TestKbService
     const d = await svc3.rpcDemo()
     expect(d.ok).toBe(true)
     expect(d.query).toBe('怎么配置超时时间')
@@ -225,6 +225,6 @@ describe('dsh-zvec-kb 集成', { timeout: 30000 }, () => {
     expect(d.hybrid.length).toBeGreaterThan(0)
     expect(d.hybrid.some((h) => h.ref.includes('示例·员工手册'))).toBe(true)
     svc3.shutdown()
-    process.env.DSH_ZVECKB_HOME = home
+    process.env.DSH_INTELHUB_HOME = home
   })
 })

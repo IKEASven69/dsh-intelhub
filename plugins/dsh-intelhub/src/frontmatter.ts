@@ -2,7 +2,7 @@
  * frontmatter 解析:只取知识库采集文件用到的标量子集,不做完整 YAML。
  * 真实格式(知识库 collections):
  *   author/source/stage/type/date(ISO)/tags(顿号或逗号分隔)/likes(数字)
- * @module dsh-zvec-kb
+ * @module dsh-intelhub
  */
 
 export interface FrontMeta {
