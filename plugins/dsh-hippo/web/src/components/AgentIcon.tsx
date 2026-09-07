@@ -46,13 +46,24 @@ export function AgentIcon({ agent, size = 14 }: { agent: string; size?: number }
   const meta = AGENT_META[agentIdOf(agent)];
   if (meta?.icon) {
     return (
-      <img
-        src={meta.icon}
-        alt={meta.label}
-        width={size}
-        height={size}
-        style={{ width: size, height: size, borderRadius: 3, objectFit: 'contain', verticalAlign: '-2px' }}
-      />
+      <span
+        aria-hidden
+        style={{
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          width: size + 6, height: size + 6, borderRadius: '50%',
+          background: 'rgba(255,255,255,0.92)',
+          boxShadow: '0 0 0 1px rgba(0,0,0,0.08)',
+          flexShrink: 0,
+        }}
+      >
+        <img
+          src={meta.icon}
+          alt={meta.label}
+          width={size}
+          height={size}
+          style={{ width: size, height: size, borderRadius: 2, objectFit: 'contain', display: 'block' }}
+        />
+      </span>
     );
   }
   if (meta?.letter) {

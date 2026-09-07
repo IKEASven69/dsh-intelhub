@@ -35,6 +35,9 @@ import { listRecords, countRecords, exportRecords } from './transfer.js';
 import { compileTarget, groupMemories, renderAgentsMd, renderIndexMd, renderCursorRules, defaultOutPath, TARGETS, type CompileTarget } from './compile.js';
 import type { MemoryRecord, RecallHit } from './memory.js';
 import { diagnose } from './doctor.js';
+import { loadLlmSettings, saveLlmSettings, maskKey, completeWithSettings, PRESETS } from './llm-config.js';
+import { setDistillRefiner } from './auto-distill-run.js';
+import { llmRefine } from './refine.js';
 import { buildPayload } from './dashboard.js';
 import { listSources, loadSource, sourceTimes } from './sources.js';
 import { extractCandidates, distill as runDistill, MAX_CANDIDATES, type Candidate } from './distill.js';
@@ -116,6 +119,19 @@ export function buildHttpApp(opts: HttpServerOptions & { autoTimer?: boolean } =
 
   // G2 读写分离：引擎按请求短持（engine-holder 引用计数），空闲即释放 zvec
   // 单写锁——`hippo gui` 常开不再锁死 dsh 插件；嵌入模型在模块级缓存不重载。
+
+  // LLM 蒸馏判决注入：GUI 进程内的所有蒸馏路径（手动/自动循环）的候选
+  // 都先过 llmRefine（模型来自设置页/llm.json），不可用时 refine 内部
+  // 自动降级纯规则，绝不阻塞。
+  void (async () => {
+    try {
+      const { loadLlmSettings: ls } = await import('./llm-config.js');
+      const s = ls();
+      if (s.apiKey || s.provider === 'ollama') {
+        setDistillRefiner((cands) => llmRefine(cands, completeWithSettings));
+      }
+    } catch { /* 未配置 = 纯规则,不告警 */ }
+  })();
   type EngineHandler = (req: express.Request, res: express.Response, held: HeldEngine) => void | Promise<void>;
   const ae = (fn: EngineHandler) => (req: express.Request, res: express.Response): void => {
     void withEngine(async (held) => fn(req, res, held))
@@ -888,6 +904,34 @@ export function buildHttpApp(opts: HttpServerOptions & { autoTimer?: boolean } =
     merged.intervalMin = Math.min(1440, Math.max(5, Number(merged.intervalMin) || 15));
     saveAutoSettings(merged);
     res.json({ settings: merged });
+  });
+
+  // ── LLM 模型设置（模型设置页后端）──────────────────────
+  app.get('/api/llm-settings', (_req, res) => {
+    const s = loadLlmSettings();
+    res.json({ ...s, apiKey: maskKey(s.apiKey), hasKey: s.apiKey !== '', presets: PRESETS });
+  });
+  app.post('/api/llm-settings', (req, res) => {
+    const b = req.body ?? {};
+    const cur = loadLlmSettings();
+    const merged = {
+      provider: ['minimax', 'ollama', 'custom'].includes(b.provider) ? b.provider : cur.provider,
+      baseUrl: String(b.baseUrl ?? cur.baseUrl).trim() || cur.baseUrl,
+      model: String(b.model ?? cur.model).trim() || cur.model,
+      // 空字符串 = 保持原 key（前端掩码回显时不丢）;显式 null = 清除
+      apiKey: b.apiKey === null ? '' : (typeof b.apiKey === 'string' && b.apiKey.trim() !== '' && !b.apiKey.startsWith('****') ? b.apiKey.trim() : cur.apiKey),
+    };
+    saveLlmSettings(merged);
+    res.json({ ...merged, apiKey: maskKey(merged.apiKey), hasKey: merged.apiKey !== '' });
+  });
+  app.post('/api/llm-settings/test', async (_req, res) => {
+    try {
+      const t0 = Date.now();
+      const text = await completeWithSettings('reply with exactly: OK', 'ping', { timeoutMs: 30_000 });
+      res.json({ ok: true, ms: Date.now() - t0, sample: text.slice(0, 60) });
+    } catch (err) {
+      res.status(502).json({ ok: false, error: (err as Error).message });
+    }
   });
 
   // 睡眠整合（P0-3）：dry-run 出报告，apply 才动手（合并近重复/清孤儿源/过期搁置）

@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import './i18n'; // side-effect: initializes i18next before any component renders
 import './styles.css';
-import { Database, Search, Network, CalendarClock, Zap, FlaskConical, FileOutput, Stethoscope, Sun, Moon, MessagesSquare, Users, CircleHelp, Home } from 'lucide-react';
+import { Database, Search, Network, CalendarClock, Zap, FlaskConical, FileOutput, Stethoscope, Sun, Moon, MessagesSquare, Users, CircleHelp, Home, Settings2 as SettingsIcon } from 'lucide-react';
 import { DetailProvider } from './components/DetailDrawer';
 import GradientText from './components/anim/GradientText';
 import { HippoLogo } from './components/HippoLogo';
@@ -21,6 +21,7 @@ import PatternsPage from './pages/Patterns';
 import DistillPage from './pages/Distill';
 import CompilePage from './pages/Compile';
 import DoctorPage from './pages/Doctor';
+import SettingsPage from './pages/Settings';
 
 function ThemeToggle({ compact = false }: { compact?: boolean }) {
   const { t } = useTranslation();
@@ -173,6 +174,7 @@ function Shell() {
         <NavLink to="/life" className={linkClass}><Home /> {t('nav.life')}</NavLink>
         <div className="nav-group">{t('nav.gSystem')}</div>
         <NavLink to="/doctor" className={linkClass}><Stethoscope /> {t('nav.doctor')}</NavLink>
+        <NavLink to="/settings" className={linkClass}><SettingsIcon /> {t('nav.settings')}</NavLink>
         <div className="spacer" />
         <div className="meta">{t('common.localFirst')}</div>
       </aside>
@@ -197,6 +199,7 @@ function Shell() {
           <Route path="/distill" element={<DistillPage />} />
           <Route path="/compile" element={<CompilePage />} />
           <Route path="/doctor" element={<DoctorPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
         </Routes>
       </main>
     </div>

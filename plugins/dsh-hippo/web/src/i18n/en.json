@@ -8,6 +8,7 @@
     "timeline": "Timeline",
     "compile": "Compile",
     "doctor": "Doctor",
+    "settings": "Settings",
     "sessions": "Sessions",
     "team": "Team",
     "gData": "Data",
@@ -193,7 +194,8 @@
     "previewHint": "preview is read-only — click \"write files\" to generate the files on disk.",
     "strategyAlways": "always-on",
     "strategyProject": "project",
-    "strategyOnDemand": "on-demand"
+    "strategyOnDemand": "on-demand",
+    "emptyWhat": "files agents auto-load at session start (takes effect on write; recompiles automatically after memory changes)"
   },
   "sessions": {
     "searchPh": "Search sessions (CJK ok)…",
@@ -236,5 +238,24 @@
     "saySomething": "Say something… (residents reply in K1)",
     "send": "Send",
     "pickCh": "Pick a channel to start"
+  },
+  "settings": {
+    "title": "Model Settings",
+    "subtitle": "The LLM used for distill judgment and resident replies. Local-first — the key lives in ~/.hippo/llm.json, never leaves this machine. Distill candidates are judged by this model before entering the store (falls back to pure rules when unavailable).",
+    "provider": "Preset",
+    "pMinimax": "MiniMax (cloud API)",
+    "pOllama": "Ollama (local)",
+    "pCustom": "Custom (OpenAI-compatible)",
+    "baseUrl": "API Base URL",
+    "model": "Model ID",
+    "key": "API Key",
+    "keyMasked": "saved (leave blank to keep)",
+    "keyNone": "not configured",
+    "test": "Test connection",
+    "testing": "testing…",
+    "testOk": "✓ connected ({{ms}}ms): {{sample}}",
+    "testFail": "✗ {{error}}",
+    "save": "Save",
+    "saved": "✓ saved"
   }
 }

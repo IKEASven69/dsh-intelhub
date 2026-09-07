@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AgentIcon, agentLabel } from '../components/AgentIcon';
 import FolderPicker from '../components/FolderPicker';
@@ -7,6 +7,15 @@ import GradientText from '../components/anim/GradientText';
 import FadeIn from '../components/anim/FadeIn';
 
 type TargetOpt = 'agents-md' | 'claude-md' | 'cursor' | 'copilot' | 'json' | 'all';
+
+/** 每个目标的产出位置说明（空态与预览头共用）。 */
+const DEST: Partial<Record<TargetOpt, string>> = {
+  'agents-md': 'AGENTS.md — Codex / opencode 等自动加载',
+  'claude-md': 'CLAUDE.md — Claude Code 自动加载',
+  'cursor': '.cursor/rules/hippo-*.mdc — Cursor 自动加载',
+  'copilot': '.github/copilot-instructions.md — Copilot 自动注入',
+  'json': 'hippo-context.json — 程序化消费(MCP/脚本)',
+};
 
 export default function CompilePage() {
   const { t } = useTranslation();
@@ -29,6 +38,9 @@ export default function CompilePage() {
     setLoading(false);
   };
 
+  // 进页即出预览——用户不用猜"先点什么"
+  useEffect(() => { void runPreview(); /* eslint-disable-line react-hooks/exhaustive-deps */ }, []);
+
   const writeFiles = async () => {
     setLoading(true); setError(''); setWritten(null);
     try {
@@ -42,8 +54,8 @@ export default function CompilePage() {
     { val: 'agents-md', label: t('compile.targetAgentsMd') },
     { val: 'claude-md', label: t('compile.targetClaudeMd') },
     { val: 'cursor', label: t('compile.targetCursor') },
-        { val: 'copilot', label: 'Copilot' },
-        { val: 'json', label: 'JSON' },
+    { val: 'copilot', label: 'Copilot' },
+    { val: 'json', label: 'JSON' },
     { val: 'all', label: t('compile.targetAll') },
   ];
 
@@ -53,7 +65,7 @@ export default function CompilePage() {
       <p className="sub">{t('compile.subtitle')}</p>
 
       {/* 目标 + 项目 + 输出路径 */}
-      <div className="toolbar">
+      <div className="toolbar" style={{ marginTop: 16 }}>
         <span className="label">{t('compile.target')}</span>
         <select value={target} onChange={e => setTarget(e.target.value as TargetOpt)} style={{ width: 200 }}>
           {targetOpts.map(o => <option key={o.val} value={o.val}>{o.label}</option>)}
@@ -71,8 +83,8 @@ export default function CompilePage() {
         </button>
       </div>
 
-      {/* agent / 项目 chips（统一设计模式——从记忆库按来源 agent 筛选再编译） */}
-      <div className="chips" style={{ gap: 5, marginTop: 10 }}>
+      {/* agent / 项目 chips */}
+      <div className="chips" style={{ gap: 5, marginTop: 14, marginBottom: 8 }}>
         <span className="fgroup">AGENT</span>
         <button className={`fchip${project === '' ? ' on' : ''}`} onClick={() => setProject('')}>全部</button>
         {['claude-code', 'codex', 'opencode', 'zcode', 'pi'].map(a => (
@@ -82,39 +94,54 @@ export default function CompilePage() {
         ))}
       </div>
 
-      {error && <div className="error-banner">{error}</div>}
+      {error && <div className="error-banner" style={{ marginTop: 12 }}>{error}</div>}
 
       {memoryCount !== null && (
-        <div className="muted" style={{ fontSize: 12, margin: '8px 0' }}>
+        <div className="muted" style={{ fontSize: 12, margin: '12px 0 4px' }}>
           {t('compile.memoryCount', { count: memoryCount })}
+        </div>
+      )}
+
+      {/* 空态：说明编译产物是什么、落到哪 */}
+      {!preview && !loading && !error && (
+        <div className="card" style={{ marginTop: 16, padding: '18px 20px' }}>
+          <div className="text" style={{ fontWeight: 600, marginBottom: 8 }}>{t('compile.title')} → {t('compile.emptyWhat')}</div>
+          <div className="muted" style={{ fontSize: 12.5, lineHeight: 2 }}>
+            {Object.entries(DEST).map(([k, v]) => (
+              <div key={k}><code style={{ fontSize: 11.5 }}>{k}</code> — {v}</div>
+            ))}
+          </div>
         </div>
       )}
 
       {preview && (
         <>
-          <div className="toolbar" style={{ marginTop: 8 }}>
+          <div className="toolbar" style={{ marginTop: 18, marginBottom: 4 }}>
             <span className="label">{t('compile.preview')}</span>
             <span style={{ flex: 1 }} />
             <button className="primary" onClick={writeFiles} disabled={loading}>{t('compile.writeFiles')}</button>
           </div>
-          <div className="muted" style={{ fontSize: 11, marginBottom: 8 }}>{t('compile.previewHint')}</div>
-          {Object.entries(preview).map(([filename, content]) => (
-            <div key={filename} style={{ marginBottom: 16 }}>
-              <div style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12, color: 'var(--primary)', marginBottom: 4 }}>
-                {filename}
+          <div className="muted" style={{ fontSize: 11.5, marginBottom: 12 }}>{t('compile.previewHint')}</div>
+          <div style={{ display: 'grid', gap: 22 }}>
+            {Object.entries(preview).map(([filename, content]) => (
+              <div key={filename}>
+                <div style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12.5, color: 'var(--primary)', marginBottom: 6, fontWeight: 600 }}>
+                  {filename}
+                </div>
+                <pre style={{
+                  background: 'var(--surface-1)', border: '1px solid var(--border)',
+                  borderRadius: 10, padding: '14px 16px', fontSize: 12.5, lineHeight: 1.7,
+                  maxHeight: 420, overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                  margin: 0, boxShadow: 'var(--shadow-sm)',
+                }}>{content}</pre>
               </div>
-              <pre style={{
-                background: 'var(--surface-1)', border: '1px solid var(--border)',
-                borderRadius: 8, padding: 12, fontSize: 12, lineHeight: 1.5,
-                maxHeight: 400, overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-              }}>{content}</pre>
-            </div>
-          ))}
+            ))}
+          </div>
         </>
       )}
 
       {written && (
-        <div className="card" style={{ borderColor: 'var(--s3)', marginTop: 14 }}>
+        <div className="card" style={{ borderColor: 'var(--s3)', marginTop: 18 }}>
           <div className="text">{t('compile.written', { count: written.length })}</div>
           <div className="steps" style={{ marginTop: 6 }}>{written.map(f => '• ' + f).join('\n')}</div>
         </div>

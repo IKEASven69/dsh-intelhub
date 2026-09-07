@@ -8,6 +8,7 @@
     "timeline": "时间线",
     "compile": "编译",
     "doctor": "诊断",
+    "settings": "设置",
     "sessions": "会话",
     "team": "团队记忆",
     "gData": "数据",
@@ -193,7 +194,8 @@
     "previewHint": "预览只读 —— 点\"写入文件\"生成磁盘文件。",
     "strategyAlways": "常驻",
     "strategyProject": "按项目",
-    "strategyOnDemand": "按需"
+    "strategyOnDemand": "按需",
+    "emptyWhat": "agent 开局自动加载的文件(写盘后生效,改动记忆后重编译即同步)"
   },
   "sessions": {
     "searchPh": "全文搜索会话（含中文）…",
@@ -236,5 +238,24 @@
     "saySomething": "说点什么……（K1 起居民会回复）",
     "send": "发送",
     "pickCh": "选择一个频道开始"
+  },
+  "settings": {
+    "title": "模型设置",
+    "subtitle": "蒸馏判决和居民回复用的 LLM。本地优先——密钥存在 ~/.hippo/llm.json,不出本机。蒸馏候选会先经此模型判决再入库(不可用时自动退回纯规则)。",
+    "provider": "预设",
+    "pMinimax": "MiniMax(云 API)",
+    "pOllama": "Ollama(本地)",
+    "pCustom": "自定义(OpenAI 兼容)",
+    "baseUrl": "API 地址",
+    "model": "模型 ID",
+    "key": "API Key",
+    "keyMasked": "已保存(留空保持不变)",
+    "keyNone": "未配置",
+    "test": "测试连接",
+    "testing": "测试中…",
+    "testOk": "✓ 连通({{ms}}ms):{{sample}}",
+    "testFail": "✗ {{error}}",
+    "save": "保存",
+    "saved": "✓ 已保存"
   }
 }

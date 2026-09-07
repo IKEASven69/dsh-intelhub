@@ -381,6 +381,11 @@ export const api = {
 
   doctor: () => getJSON<Diagnostics>('/api/doctor'),
 
+  llmSettings: () => getJSON<{ provider: string; baseUrl: string; model: string; apiKey: string; hasKey: boolean; presets: Record<string, { baseUrl: string; model: string }> }>('/api/llm-settings'),
+  saveLlmSettings: (s: { provider: string; baseUrl: string; model: string; apiKey?: string | null }) =>
+    postJSON<{ provider: string; baseUrl: string; model: string; apiKey: string; hasKey: boolean }>('/api/llm-settings', s),
+  testLlmSettings: () => postJSON<{ ok: boolean; ms?: number; sample?: string; error?: string }>('/api/llm-settings/test', {}),
+
   doctorRebuild: () => postJSON<{ salvaged: number; created: number; reinforced: number; skipped: number }>('/api/doctor/rebuild', {}),
 };
 
