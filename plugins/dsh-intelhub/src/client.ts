@@ -392,7 +392,7 @@ export function apply(ctx: ClientContext): void {
     register: (options: { name: string; id: string; order: number; label: string }, component: () => unknown) => () => void
   }
   slots.inject('settings.section', () => slots.register(
-    { name: 'settings.section', id: 'zvec-kb', order: 42, label: '本地知识库' },
+    { name: 'settings.section', id: 'zvec-kb', order: 42, label: '情报站' },
     () => createElement(Panel),
   ))
 }

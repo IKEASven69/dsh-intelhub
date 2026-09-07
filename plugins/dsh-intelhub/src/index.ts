@@ -808,7 +808,7 @@ export class ZvecKbService extends TypertRemoteService {
   /** 面板:定时任务管理(AI 侧走 kb_schedule 工具,同一注册表)。 */
   @Remote('schedule-list')
   async rpcScheduleList(): Promise<{ ok: boolean; schedules: unknown[] }> {
-    return { ok: true, schedules: this.scheduleMgr.list() }
+    return { ok: true, schedules: JSON.parse(JSON.stringify(this.scheduleMgr.list())) }
   }
 
   @Remote('schedule-set')
