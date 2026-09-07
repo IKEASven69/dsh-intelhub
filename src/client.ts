@@ -92,6 +92,13 @@ function Panel(): ReturnType<typeof createElement> {
   const [demo, setDemo] = useState<DemoResult | null>(null)
   const [busyDemo, setBusyDemo] = useState(false)
   const [dragOn, setDragOn] = useState(false)
+  const [workspaces, setWorkspaces] = useState<{ path: string; label: string }[]>([])
+  const [wsPath, setWsPath] = useState('')
+  const [schedules, setSchedules] = useState<{ name: string; kind: string; everyMin?: number; at?: string; enabled?: boolean }[]>([])
+  const [schedName, setSchedName] = useState('')
+  const [schedEvery, setSchedEvery] = useState('30')
+  const [authorF, setAuthorF] = useState('')
+  const [stageF, setStageF] = useState('')
 
   const TEXTLIKE = /\.(md|markdown|txt|log|csv|json|ya?ml|xml|html?|ts|tsx|js|mjs|cjs|py|go|rs|java|c|h|cpp|sh)$/i
 
@@ -132,6 +139,10 @@ function Panel(): ReturnType<typeof createElement> {
     if (s.ok && s.value !== undefined) setStatus(s.value)
     const l = await rpc<ListResult>('list')
     if (l.ok && l.value !== undefined) setList(l.value)
+    const w = await rpc<{ ok: boolean; workspaces: { path: string; label: string }[] }>('workspace-list')
+    if (w.ok && w.value !== undefined) setWorkspaces(w.value.workspaces)
+    const sc = await rpc<{ ok: boolean; schedules: { name: string; kind: string; everyMin?: number; at?: string; enabled?: boolean }[] }>('schedule-list')
+    if (sc.ok && sc.value !== undefined) setSchedules(sc.value.schedules)
   }
 
   useEffect(() => {
@@ -163,10 +174,44 @@ function Panel(): ReturnType<typeof createElement> {
     if (query.trim() === '') return
     setBusySearch(true)
     setErr(null)
-    const r = await rpc<SearchResult>('search', { query, topk: 5 })
+    const args: Record<string, unknown> = { query, topk: 5 }
+    if (authorF.trim() !== '') args.author = authorF.trim()
+    if (stageF.trim() !== '') args.stage = stageF.trim()
+    const r = await rpc<SearchResult>('search', args)
     if (r.ok && r.value !== undefined) setResults(r.value)
     else setErr(r.error?.message ?? '检索失败')
     setBusySearch(false)
+  }
+
+  const doWsAdd = async (): Promise<void> => {
+    if (wsPath.trim() === '') return
+    const r = await rpc<{ ok: boolean; error?: string }>('workspace-add', { path: wsPath })
+    if (r.ok && r.value !== undefined && r.value.ok) setWsPath('')
+    else setErr(r.value?.error ?? r.error?.message ?? '注册失败')
+    await refresh()
+  }
+
+  const doWsRemove = async (p: string): Promise<void> => {
+    await rpc('workspace-remove', { path: p })
+    await refresh()
+  }
+
+  const doSchedAdd = async (): Promise<void> => {
+    if (schedName.trim() === '') return
+    const r = await rpc<{ ok: boolean; error?: string }>('schedule-set', { name: schedName, kind: 'interval', everyMin: Number(schedEvery) || 30 })
+    if (!(r.ok && r.value !== undefined && r.value.ok)) setErr(r.value?.error ?? r.error?.message ?? '设置失败')
+    setSchedName('')
+    await refresh()
+  }
+
+  const doSchedToggle = async (name: string, enabled: boolean): Promise<void> => {
+    await rpc('schedule-toggle', { name, enabled })
+    await refresh()
+  }
+
+  const doSchedRemove = async (name: string): Promise<void> => {
+    await rpc('schedule-remove', { name })
+    await refresh()
   }
 
   const [removing, setRemoving] = useState('')
@@ -199,10 +244,10 @@ function Panel(): ReturnType<typeof createElement> {
     createElement('style', null, CSS),
     // ── 页头 ──
     createElement('div', { className: 'zkb-head' },
-      createElement('span', { className: 'zkb-icon' }, 'KB'),
+      createElement('span', { className: 'zkb-icon' }, 'IH'),
       createElement('div', { style: { minWidth: 0 } },
-        createElement('div', { className: 'zkb-title' }, '本地知识库'),
-        createElement('div', { className: 'zkb-desc' }, 'zvec 原生·语义+关键词混合检索·零守护进程·零 API key·文档不出本机。把文档(或整个文件夹)交给 agent 检索。'),
+        createElement('div', { className: 'zkb-title' }, '情报站 IntelHub'),
+        createElement('div', { className: 'zkb-desc' }, '刷到的信息自动沉淀为可检索的知识:采集/文件夹/网页/笔记 → 语义+关键词混合检索带出处 → Obsidian 反哺。零守护进程·零 API key·文档不出本机。'),
       ),
     ),
     err !== null ? createElement('div', { className: 'zkb-err' }, err) : null,
@@ -275,11 +320,49 @@ function Panel(): ReturnType<typeof createElement> {
         createElement('input', { className: 'zkb-input', placeholder: '试试语义检索:换个说法也能找到(如"怎么配置超时时间")', value: query, onChange: (e: { target: { value: string } }) => setQuery(e.target.value), onKeyDown: (e: { key: string }) => { if (e.key === 'Enter') void doSearch() } }),
         createElement('button', { className: 'zkb-btn', disabled: busySearch || query.trim() === '', onClick: () => { void doSearch() } }, busySearch ? '检索中…' : '检索'),
       ),
+      createElement('div', { className: 'zkb-srow' },
+        createElement('input', { className: 'zkb-input', placeholder: '作者过滤(如 宝玉xp,可空)', value: authorF, onChange: (e: { target: { value: string } }) => setAuthorF(e.target.value) }),
+        createElement('input', { className: 'zkb-input', placeholder: '阶段过滤(selected/raw,可空)', value: stageF, onChange: (e: { target: { value: string } }) => setStageF(e.target.value) }),
+      ),
       results !== null && results.hits.length > 0
         ? createElement('div', { className: 'zkb-srow', style: { display: 'block' } }, ...hitLines)
         : results !== null
           ? createElement('div', { className: 'zkb-srow' }, createElement('span', { className: 'zkb-hint' }, `没有匹配${results.note !== undefined && results.note !== '' ? `(${results.note})` : ''}`))
           : null,
+    ),
+    // ── workspace 常驻目录卡 ──
+    createElement('div', { className: 'zkb-card' },
+      createElement('div', { className: 'zkb-srow' },
+        createElement('span', { className: 'zkb-sk' }, '常驻目录'),
+        createElement('span', { className: 'zkb-hint' }, '注册后自动跟随:采集脚本落盘 → 增量索引 → 即刻可问'),
+      ),
+      ...workspaces.map((w) => createElement('div', { className: 'zkb-frow', key: w.path },
+        createElement('span', { className: 'zkb-dot zkb-ok' }),
+        createElement('span', { className: 'zkb-fpath', title: w.path }, w.label + ' · ' + w.path),
+        createElement('button', { className: 'zkb-btn', style: { padding: '4px 10px', fontSize: '11px' }, onClick: () => { void doWsRemove(w.path) } }, '移除'),
+      )),
+      createElement('div', { className: 'zkb-srow' },
+        createElement('input', { className: 'zkb-input', placeholder: '新增常驻目录(绝对路径,如 D:/knowledge-base/collections)', value: wsPath, onChange: (e: { target: { value: string } }) => setWsPath(e.target.value), onKeyDown: (e: { key: string }) => { if (e.key === 'Enter') void doWsAdd() } }),
+        createElement('button', { className: 'zkb-btn zkb-btn-pri', disabled: wsPath.trim() === '', onClick: () => { void doWsAdd() } }, '注册'),
+      ),
+    ),
+    // ── 定时任务卡 ──
+    createElement('div', { className: 'zkb-card' },
+      createElement('div', { className: 'zkb-srow' },
+        createElement('span', { className: 'zkb-sk' }, '定时任务'),
+        createElement('span', { className: 'zkb-hint' }, '重启不丢;agent 可经 kb_schedule 设置(如按发博节奏定时扫描)'),
+      ),
+      ...schedules.map((sc) => createElement('div', { className: 'zkb-frow', key: sc.name },
+        createElement('span', { className: `zkb-dot ${sc.enabled === true ? 'zkb-ok' : 'zkb-mid'}` }),
+        createElement('span', { className: 'zkb-fpath' }, sc.name + ' · ' + (sc.kind === 'daily' ? `每天 ${sc.at ?? ''}` : `每 ${sc.everyMin ?? '?'} 分钟`) + ' · scan'),
+        createElement('button', { className: 'zkb-btn', style: { padding: '4px 10px', fontSize: '11px' }, onClick: () => { void doSchedToggle(sc.name, !(sc.enabled === true)) } }, sc.enabled === true ? '停用' : '启用'),
+        createElement('button', { className: 'zkb-btn', style: { padding: '4px 10px', fontSize: '11px' }, onClick: () => { void doSchedRemove(sc.name) } }, '删除'),
+      )),
+      createElement('div', { className: 'zkb-srow' },
+        createElement('input', { className: 'zkb-input', placeholder: '任务名(如 晨间扫描)', value: schedName, onChange: (e: { target: { value: string } }) => setSchedName(e.target.value) }),
+        createElement('input', { className: 'zkb-input', placeholder: '间隔分钟', value: schedEvery, onChange: (e: { target: { value: string } }) => setSchedEvery(e.target.value), style: { maxWidth: '110px' } }),
+        createElement('button', { className: 'zkb-btn zkb-btn-pri', disabled: schedName.trim() === '', onClick: () => { void doSchedAdd() } }, '添加'),
+      ),
     ),
     // ── 文件列表卡 ──
     createElement('div', { className: 'zkb-card' },
