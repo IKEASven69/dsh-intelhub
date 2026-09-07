@@ -156,11 +156,12 @@ export function buildHttpApp(opts: HttpServerOptions & { autoTimer?: boolean } =
   }));
 
   app.get('/api/memories', ae((req, res, held) => {
-    const { project, type, agent, limit, offset } = req.query;
+    const { project, type, agent, q, limit, offset } = req.query;
     const filters = {
       project: project ? String(project) : undefined,
       type: type ? String(type) : undefined,
       agent: agent ? String(agent) : undefined,
+      q: q ? String(q) : undefined,
     };
     const rows = listRecords(held.engine.store as never, {
       ...filters,
