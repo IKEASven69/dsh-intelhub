@@ -77,4 +77,12 @@ export interface DemoResult {
   error?: string | null
 }
 
+/** kb_export 反哺导出结果。 */
+export interface ExportResult {
+  ok: boolean
+  count?: number
+  path?: string
+  error?: string
+}
+
 export type { FileEntry as KbFileEntry }

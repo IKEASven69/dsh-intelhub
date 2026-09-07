@@ -26,7 +26,7 @@ import { extractText, htmlToText, SUPPORTED_EXTS, MAX_FILE_BYTES } from './extra
 import type { FrontMeta } from './frontmatter.ts'
 import { WorkspaceManager } from './watch.ts'
 import { ScheduleManager } from './schedule.ts'
-import type { DemoResult, FileEntry, ImportResult, ListResult, RemoveResult, SearchHit, SearchResult, StatusResult } from './types.ts'
+import type { DemoResult, ExportResult, FileEntry, ImportResult, ListResult, RemoveResult, SearchHit, SearchResult, StatusResult } from './types.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -305,6 +305,28 @@ export class ZvecKbService extends TypertRemoteService {
     }))
 
     this.ctx.tools.register(defineTool({
+      name: 'kb_export',
+      description: '把检索到的知识导出为 Markdown 文件写入指定目录(如 Obsidian 库),带导出 frontmatter 与全部来源引用。只写用户指定的目录,绝不动原始采集文件。',
+      parameters: {
+        query: { type: 'string', description: '检索词:导出命中的内容' },
+        dir: { type: 'string', description: '目标目录(用户指定的 Obsidian 库目录等,支持 ~)' },
+        title: { type: 'string', description: '可选:导出文件名主体' },
+        limit: { type: 'number', description: '导出条数上限,默认 5' },
+      },
+      output: { schema: { type: 'json' }, render: (_a: unknown, v: { text: string }) => [{ type: 'text', text: v.text }] },
+      execute: async (a: { query?: unknown; dir?: unknown; title?: unknown; limit?: unknown }): Promise<{ text: string }> => {
+        const q = String(a.query ?? '').trim()
+        const dir = String(a.dir ?? '').trim()
+        if (!q) return { text: 'query 不能为空。' }
+        if (!dir) return { text: 'dir 不能为空——只写用户明确指定的目录。' }
+        const limit = Math.min(Math.max(Number(a.limit) || 5, 1), 20)
+        const r = await this.exportTo(q, dir, a.title === undefined ? undefined : String(a.title), limit)
+        if (!r.ok) return { text: `导出失败:${r.error ?? '未知'}` }
+        return { text: `已导出 ${r.count} 条到 ${r.path}(普通 Markdown,Obsidian 直接可索引)。` }
+      },
+    }))
+
+    this.ctx.tools.register(defineTool({
       name: 'kb_evidence',
       description: '给一条判断找证据:按判断文本语义检索知识库,按来源文件归组,返回支持的 原文#块号 清单。判断台账复盘用。',
       parameters: {
@@ -530,6 +552,40 @@ export class ZvecKbService extends TypertRemoteService {
       type: meta?.type,
       likes: meta?.likes,
     }
+  }
+
+  /** 反哺导出:检索结果组装为普通 Markdown(带导出 frontmatter 与来源),落盘到用户指定目录。 */
+  private async exportTo(query: string, dir: string, title: string | undefined, limit: number): Promise<ExportResult> {
+    const target = resolve(dir.trim().replace(/^~(?=$|[/\\])/, homedir()))
+    const r = await this.search(query, limit)
+    if (!r.ok) return { ok: false, error: r.error ?? '检索失败' }
+    if (r.hits.length === 0) return { ok: false, error: `没有命中内容:${query}` }
+    const now = new Date()
+    const stamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`
+    const safeTitle = (title ?? query).replace(/[\\/:*?"<>|]/g, '').trim().slice(0, 40) || '导出'
+    const file = join(target, `intelhub-${stamp}-${safeTitle}.md`)
+    const md = [
+      '---',
+      `exported: ${now.toISOString()}`,
+      `source: IntelHub 知识库检索 "${query.replace(/"/g, '')}"`,
+      `count: ${r.hits.length}`,
+      `query: ${query.replace(/"/g, '')}`,
+      '---',
+      '',
+      `# ${title ?? query}`,
+      '',
+      ...r.hits.map((h, i) => `## [${i + 1}] ${h.ref}\n\n${h.text}\n`),
+      '---',
+      '_由 dsh-intelhub(kb_export)导出 · 原文可按 文件#块号 回源_',
+      '',
+    ].join('\n')
+    try {
+      await mkdir(target, { recursive: true })
+      await writeFile(file, md, 'utf8')
+    } catch (err: unknown) {
+      return { ok: false, error: err instanceof Error ? err.message.slice(0, 160) : '写入失败' }
+    }
+    return { ok: true, count: r.hits.length, path: file }
   }
 
   private async indexContent(key: string, display: string, text: string, bytes: number, rawHash?: string, scalars?: ChunkScalars): Promise<void> {
