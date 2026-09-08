@@ -37,19 +37,6 @@ dsh-intelhub 是**活水**:信息自动流进来(采集脚本落盘即入库),�
 | 数据形态 | 带元数据的活信息 | 静态文件 | 会衰减的记忆 |
 | 出口 | **反哺 Obsidian 等工作流** | 孤岛 | — |
 
-
-## 数据源(开箱即用的渠道配方)
-
-采集管道(rotate/脚本)与任意 opencli 适配器产出的内容,落盘即被增量索引。agent 侧开箱配方:
-X/Twitter · B站 · 掘金 · 36kr · HackerNews · arxiv · GitHub trending · 公众号 · 知乎 · 少数派 —— 抓到即 `kb_note`/`kb_import_url` 入库,统一进同一个可检索知识库。详见 SKILL.md「数据源配方」。
-
-## 路线图
-
-- **2026-09**:awesome 收录;agent 全流程回归;X/B站采集配方实战化;面板分诊视图
-- **2026-10**:v0.2 管道扩展点——webhook 推送原子(每日简报/监控提醒)、判断实体模型(证据自动挂链)、`provide('kb')` 平台化(其他插件直接注入引擎)
-- **2026-10**:跨机索引随仓走(.kb-index 进仓库,git pull 零重建)
-- **2026-11+**:语雀/Notion 导出适配器;社区工作流生态(单文件 SKILL.md 分发);10 万块级分区与性能;按装机反馈迭代
-
 ## 安装
 
 ```sh
@@ -72,6 +59,8 @@ dsh plugin add dsh-intelhub
 - workspace 常驻目录:fs.watch 实时 + 5 分钟兜底轮询,双保险增量
 - frontmatter 标量(author/source/stage/tags/likes)进索引,可组合过滤
 - 引擎(skill 组合工作流)与数据(md 真相源)三层解耦,可持续演进
+
+- **安装提示(pnpm 用户)**:若 `dsh plugin add` 报 ERR_PNPM_IGNORED_BUILDS,在 profile 的 pnpm-workspace.yaml 追加 `ignoredBuiltDependencies: [@zvec/zvec, onnxruntime-node, protobufjs, sharp]`;弱网环境可再加 `supportedArchitectures: os/cpu/libc = current` 跳过跨平台包下载
 
 ## 已知限制
 
