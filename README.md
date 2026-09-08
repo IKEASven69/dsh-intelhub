@@ -60,6 +60,8 @@ dsh plugin add dsh-intelhub
 - frontmatter 标量(author/source/stage/tags/likes)进索引,可组合过滤
 - 引擎(skill 组合工作流)与数据(md 真相源)三层解耦,可持续演进
 
+- **安装提示(pnpm 用户)**:若 `dsh plugin add` 报 ERR_PNPM_IGNORED_BUILDS,在 profile 的 pnpm-workspace.yaml 追加 `ignoredBuiltDependencies: [@zvec/zvec, onnxruntime-node, protobufjs, sharp]`;弱网环境可再加 `supportedArchitectures: os/cpu/libc = current` 跳过跨平台包下载
+
 ## 已知限制
 
 - 索引目录版本升级(schema 变更)会触发一次重建,旧目录自动弃用
