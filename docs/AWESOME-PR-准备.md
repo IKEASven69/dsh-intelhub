@@ -15,7 +15,7 @@
 url: https://github.com/IKEASven69/dsh-intelhub
 name: IKEASven69/dsh-intelhub
 category: memory
-tarball: https://github.com/IKEASven69/dsh-intelhub/releases/download/v0.1.0/dsh-intelhub-0.1.0.tgz
+tarball: https://github.com/IKEASven69/dsh-intelhub/releases/download/v0.1.1/dsh-intelhub-0.1.0.tgz
 description:
   en: 'Personal intel station: what you scroll past becomes searchable knowledge — social feeds/folders/URLs/notes auto-indexed (zvec in-process, e5-small local embeddings), hybrid semantic+keyword search with source citations, Obsidian refeed, persistent schedules. No daemon, no API key, nothing leaves your machine.'
   zh: '个人情报站:刷到的信息自动沉淀为可检索知识库——社媒采集/文件夹/网页/笔记自动增量索引(zvec 进程内+本地 e5 向量化),语义+关键词混合检索带出处,Obsidian 反哺与持久化定时任务。零守护进程、零 API key、文档不出本机。'
