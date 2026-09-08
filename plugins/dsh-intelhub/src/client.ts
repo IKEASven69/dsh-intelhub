@@ -11,7 +11,7 @@ import type { DemoResult, FileEntry, ImportResult, ListResult, RemoveResult, Sea
 // 仅类型面:拉入 settings.section 槽位声明
 import type {} from '@deepseek-ai/dsh-client-ui-settings'
 
-export const inject = ['slots']
+export const inject = ['betterSidebar', 'slots']
 
 async function rpc<T>(method: string, args: Record<string, unknown> = {}): Promise<{ ok: boolean; value?: T; error?: { message: string } }> {
   try {
@@ -398,7 +398,7 @@ export function apply(ctx: ClientContext): void {
 
   // ── dsh-better-sidebar 侧边栏 tab(可选生态集成)──────────
   // 装了 better-sidebar 才注册"情报站"侧边栏页(检索+来源+今日概览随手可及);
-  // 未装则静默跳过,设置页配置卡不受影响。轮询等待服务就绪(避免 inject 时序依赖)。
+  // 服务就绪由 inject 声明保证;未装则静默跳过,设置页配置卡不受影响。
   type BetterSidebarApi = {
     registerTab(d: {
       id: string
@@ -408,16 +408,10 @@ export function apply(ctx: ClientContext): void {
       component: (props: Record<string, unknown>) => unknown
     }): () => void
   }
-  const ctxAny = ctx as unknown as { betterSidebar?: BetterSidebarApi }
-  let tries = 0
-  const tryRegister = (): void => {
-    const bs = ctxAny.betterSidebar
-    if (bs === undefined) {
-      if (tries++ < 150) window.setTimeout(tryRegister, 100)
-      return
-    }
+  const bsApi = (ctx as unknown as { betterSidebar?: BetterSidebarApi }).betterSidebar
+  if (bsApi !== undefined) {
     try {
-      bs.registerTab({
+      bsApi.registerTab({
         id: 'dsh-intelhub:kb',
         title: () => '情报站',
         icon: createElement('span', { style: { fontWeight: '800', fontSize: '13px' } }, 'IH'),
@@ -428,7 +422,6 @@ export function apply(ctx: ClientContext): void {
       /* better-sidebar 版本不兼容时静默放弃,不影响设置页 */
     }
   }
-  tryRegister()
 }
 
 /** 侧边栏精简版:检索 + 来源结果(完整管理在设置页)。 */
