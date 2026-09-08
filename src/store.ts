@@ -107,6 +107,14 @@ export class KbStore {
     return this.col !== null
   }
 
+  /** 分诊:热更新某来源全部块的 stage 标量(zvec updateSync,不重嵌入)。 */
+  updateStageFields(fileId: string, chunks: number, stage: string): void {
+    if (this.col === null) throw new Error(this.openError ?? 'store 未打开')
+    for (let i = 0; i < chunks; i++) {
+      this.col.updateSync({ id: `${fileId}#${i}`, fields: { stage } } as never)
+    }
+  }
+
   insert(fileId: string, texts: string[], vectors: number[][], scalars?: ChunkScalars): void {
     if (this.col === null) throw new Error(this.openError ?? 'store 未打开')
     const sc = scalars ?? {}

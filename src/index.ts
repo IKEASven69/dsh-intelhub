@@ -26,13 +26,11 @@ import { extractText, htmlToText, SUPPORTED_EXTS, MAX_FILE_BYTES } from './extra
 import type { FrontMeta } from './frontmatter.ts'
 import { WorkspaceManager } from './watch.ts'
 import { ScheduleManager } from './schedule.ts'
-import type { DemoResult, ExportResult, FileEntry, ImportResult, ListResult, RemoveResult, SearchHit, SearchResult, StatusResult } from './types.ts'
+import type { DashboardResult, DemoResult, ExportResult, FileEntry, ImportResult, IngestEvent, ListResult, RemoveResult, SearchHit, SearchResult, StatusResult, TodayResult, TodayTop } from './types.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
     intelhub: ZvecKbService
-    /** 本地结构化声明:宿主 systemPrompt 服务的最小使用面(增强包解析不可靠时不拖垮类型检查) */
-    systemPrompt: { section(cfg: { name: string; order: number; text: () => string }): void }
   }
 }
 
@@ -73,6 +71,7 @@ export class ZvecKbService extends TypertRemoteService {
   private pendingRawHash: string | undefined = undefined
   private pendingMeta: FrontMeta | undefined = undefined
   private pendingSrc: string | undefined = undefined
+  private ingestEvents: IngestEvent[] = []
   private readonly workspaceMgr: WorkspaceManager
   private readonly scheduleMgr: ScheduleManager
   private embedder: Embedder | null = null
@@ -295,12 +294,63 @@ export class ZvecKbService extends TypertRemoteService {
         const files = [...this.registry.values()]
         const todayNew = files.filter((f) => f.meta?.date === ymd || new Date(f.importedAt).toDateString() === now.toDateString())
         const top = [...todayNew].filter((f) => (f.meta?.likes ?? 0) > 0).sort((x, y) => (y.meta?.likes ?? 0) - (x.meta?.likes ?? 0)).slice(0, 8)
-        const rawPending = files.filter((f) => f.meta?.stage === 'raw').length
+        const rawPending = files.filter((f) => (f.meta?.stage === 'raw' && !f.stageOverride) || f.stageOverride === 'raw').length
         const lines = [
           `今日新增 ${todayNew.length} 篇 · 待分诊(raw)存量 ${rawPending}`,
           ...(top.length > 0 ? ['高价值 TOP:'].concat(top.map((f) => `◆ ${f.meta?.author ?? f.path.split(/[\\/]/).pop()} · 赞 ${f.meta?.likes} · ${f.path.split(/[\\/]/).pop()}`)) : []),
         ]
         return { text: lines.join('\n') }
+      },
+    }))
+
+    this.ctx.tools.register(defineTool({
+      name: 'kb_memory',
+      description: '沉淀一条记忆(decision/fact/preference/lesson),带类型与来源 agent 标量。供蒸馏管线或对话直接写入;检索时 kb_search 加 src=memory 过滤。',
+      parameters: {
+        text: { type: 'string', description: '记忆内容(一句话能复述)' },
+        type: { type: 'string', enum: ['decision', 'fact', 'preference', 'lesson'], description: '记忆类型' },
+        agent: { type: 'string', description: '可选:来源 agent/管线标识' },
+      },
+      output: { schema: { type: 'json' }, render: (_a: unknown, v: { text: string }) => [{ type: 'text', text: v.text }] },
+      execute: async (a: { text?: unknown; type?: unknown; agent?: unknown }): Promise<{ text: string }> => {
+        const t = String(a.text ?? '').trim()
+        const type = ['decision', 'fact', 'preference', 'lesson'].includes(String(a.type)) ? String(a.type) : 'fact'
+        const agent = String(a.agent ?? 'agent').trim().slice(0, 40) || 'agent'
+        if (t.length < 8) return { text: '记忆内容太短(≥8 字符)。' }
+        const now = new Date()
+        const ymd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+        this.pendingRawHash = undefined
+        this.pendingMeta = { type, author: agent, date: ymd, src: 'memory' }
+        this.pendingSrc = 'memory'
+        const stamp = `${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`
+        const r = await this.importNote(`memory:${type}:${ymd}:${stamp}`, `[${type}] ${t}`)
+        return r.ok ? { text: `已沉淀记忆(${type}),src=memory。` } : { text: `写入失败:${r.error ?? '未知'}` }
+      },
+    }))
+
+    this.ctx.tools.register(defineTool({
+      name: 'kb_triage',
+      description: '分诊 stage:raw 的采集件:list 列队列(按赞排序);promote <路径> 精选(stage→selected);skip <路径> 跳过(stage→reviewed)。标量热更新,不重嵌入。',
+      parameters: {
+        action: { type: 'string', enum: ['list', 'promote', 'skip'], description: '操作' },
+        path: { type: 'string', description: 'promote/skip 的目标路径(或唯一后缀)' },
+      },
+      output: { schema: { type: 'json' }, render: (_a: unknown, v: { text: string }) => [{ type: 'text', text: v.text }] },
+      execute: async (a: { action?: unknown; path?: unknown }): Promise<{ text: string }> => {
+        const action = String(a.action ?? 'list')
+        await this.loadRegistry()
+        const raw = [...this.registry.values()].filter((f) => f.meta?.stage === 'raw').sort((x, y) => (y.meta?.likes ?? 0) - (x.meta?.likes ?? 0))
+        if (action === 'list') {
+          if (raw.length === 0) return { text: '待分诊队列为空。' }
+          return { text: `待分诊 ${raw.length} 篇(按赞降序):\n${raw.slice(0, 10).map((f, i) => `${i + 1}. ♥${f.meta?.likes ?? 0} ${f.path.split(/[\\/]/).pop()}`).join('\n')}${raw.length > 10 ? `\n…共 ${raw.length} 篇` : ''}` }
+        }
+        const target = String(a.path ?? '')
+        if (!target) return { text: 'path 不能为空。' }
+        const entry = raw.find((f) => f.path.endsWith(target) || f.path === target)
+        if (entry === undefined) return { text: `在 raw 队列中找不到:${target}` }
+        const stage = action === 'promote' ? 'selected' : 'reviewed'
+        const r = await this.setStage(entry.path, stage)
+        return r.ok ? { text: `已${action === 'promote' ? '精选' : '跳过'}:${entry.path.split(/[\\/]/).pop()} → stage=${stage}` } : { text: `失败:${r.error ?? '未知'}` }
       },
     }))
 
@@ -526,16 +576,22 @@ export class ZvecKbService extends TypertRemoteService {
   private enqueueSource(key: string, display: string, bytes: number, produce: () => Promise<string>): void {
     this.queuedFiles++
     this.queueTail = this.queueTail.then(async () => {
+      const t0 = performance.now()
+      const src = this.pendingSrc ?? 'file'
       try {
         const text = await produce()
         const scalars = this.metaToScalars(this.pendingMeta, this.pendingSrc)
         await this.indexContent(key, display, text, bytes, this.pendingRawHash, scalars)
+        this.ingestEvents.unshift({ at: Date.now(), src, display, chunks: this.registry.get(key)?.chunks ?? 0, status: 'done', error: '', ms: Math.round(performance.now() - t0) })
       } catch (err: unknown) {
         const cur = this.registry.get(key)
-        this.registry.set(key, { ...(cur ?? entryOf(display)), bytes, status: 'failed', error: err instanceof Error ? err.message.slice(0, 200) : String(err).slice(0, 200) })
+        const msg = err instanceof Error ? err.message.slice(0, 200) : String(err).slice(0, 200)
+        this.registry.set(key, { ...(cur ?? entryOf(display)), bytes, status: 'failed', error: msg })
+        this.ingestEvents.unshift({ at: Date.now(), src, display, chunks: 0, status: 'failed', error: msg, ms: Math.round(performance.now() - t0) })
         this.saveRegistry()
         this.refreshPrompt()
       } finally {
+        if (this.ingestEvents.length > 50) this.ingestEvents.length = 50
         this.queuedFiles--
       }
     })
@@ -586,6 +642,32 @@ export class ZvecKbService extends TypertRemoteService {
       return { ok: false, error: err instanceof Error ? err.message.slice(0, 160) : '写入失败' }
     }
     return { ok: true, count: r.hits.length, path: file }
+  }
+
+  /** 分诊:热更新某来源全部块的 stage 标量(zvec updateSync,不重嵌入)。 */
+  async setStage(path: string, stage: string): Promise<{ ok: boolean; error?: string }> {
+    await this.loadRegistry()
+    const key = normKey(path)
+    let entry = this.registry.get(key)
+    if (entry === undefined) {
+      const lower = path.toLowerCase()
+      const matches = [...this.registry.values()].filter((f) => f.path.toLowerCase().endsWith(lower) || f.path.toLowerCase() === lower)
+      if (matches.length === 1) entry = matches[0]
+      else if (matches.length > 1) return { ok: false, error: `路径不唯一(${matches.length} 个匹配)` }
+    }
+    if (entry === undefined) return { ok: false, error: `未找到:${path}` }
+    if (entry.status !== 'done') return { ok: false, error: `该来源未完成索引(${entry.status})` }
+    const rt = await this.ensureRuntime()
+    if ('error' in rt) return { ok: false, error: rt.error }
+    try {
+      rt.store.updateStageFields(entry.id, entry.chunks, stage)
+    } catch (err: unknown) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+    entry.stageOverride = stage
+    this.saveRegistry()
+    this.refreshPrompt()
+    return { ok: true }
   }
 
   private async indexContent(key: string, display: string, text: string, bytes: number, rawHash?: string, scalars?: ChunkScalars): Promise<void> {
@@ -807,21 +889,20 @@ export class ZvecKbService extends TypertRemoteService {
 
   /** 面板/侧边栏:今日采集概览(kb_today 工具的同源数据面)。 */
   @Remote('today')
-  async rpcToday(): Promise<{ ok: boolean; text: string }> {
+  async rpcToday(): Promise<TodayResult> {
     await this.loadRegistry()
     const now = new Date()
-    const ymd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    const date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
     const files = [...this.registry.values()]
-    const todayNew = files.filter((f) => f.meta?.date === ymd || new Date(f.importedAt).toDateString() === now.toDateString())
-    const top = [...todayNew].filter((f) => (f.meta?.likes ?? 0) > 0).sort((x, y) => (y.meta?.likes ?? 0) - (x.meta?.likes ?? 0)).slice(0, 8)
+    const todayNew = files.filter((f) => f.meta?.date === date || new Date(f.importedAt).toDateString() === now.toDateString())
+    const top: TodayTop[] = [...todayNew].filter((f) => (f.meta?.likes ?? 0) > 0).sort((x, y) => (y.meta?.likes ?? 0) - (x.meta?.likes ?? 0)).slice(0, 8).map((f) => ({ author: f.meta?.author ?? f.path.split(/[/\\]/).pop() ?? f.path, likes: f.meta?.likes ?? 0, file: f.path }))
     const rawPending = files.filter((f) => f.meta?.stage === 'raw').length
     const lines = [
       `今日新增 ${todayNew.length} 篇 · 待分诊(raw)存量 ${rawPending}`,
-      ...(top.length > 0 ? ['高价值 TOP:'].concat(top.map((f) => `◆ ${f.meta?.author ?? f.path.split(/[\/]/).pop()} · 赞 ${f.meta?.likes} · ${f.path.split(/[\/]/).pop()}`)) : []),
+      ...(top.length > 0 ? ['高价值 TOP:'].concat(top.map((t) => `◆ ${t.author} · 赞 ${t.likes} · ${t.file.split(/[\\/]/).pop()}`)) : []),
     ]
-    return { ok: true, text: lines.join('\n') }
+    return { ok: true, date, newFiles: todayNew.length, rawPending, top, text: lines.join('\n') }
   }
-
   /** 面板:定时任务管理(AI 侧走 kb_schedule 工具,同一注册表)。 */
   @Remote('schedule-list')
   async rpcScheduleList(): Promise<{ ok: boolean; schedules: unknown[] }> {

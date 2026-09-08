@@ -12,6 +12,8 @@ export interface FileEntry {
   importedAt: number
   /** 原始文件字节哈希(前16位)——增量跳过校验用,与抽取文本哈希(id)分立 */
   rawHash?: string
+  /** 分诊热更新后的阶段(selected/reviewed),与 frontmatter 同步 */
+  stageOverride?: string
 }
 
 /** 面板/工具共用的检索结果条目。 */
@@ -84,5 +86,26 @@ export interface ExportResult {
   path?: string
   error?: string
 }
+
+
+/** 采集/索引事件(面板采集动态卡)。 */
+export interface DashboardDay { date: string; files: number; chunks: number }
+export interface DashboardKV { k: string; chunks: number }
+export interface DashboardStage { k: string; count: number }
+export interface DashboardAuthor { author: string; likes: number; files: number }
+export interface DashboardResult {
+  ok: boolean
+  totals: { files: number; chunks: number; indexing: number; todayFiles: number; rawPending: number }
+  daily: DashboardDay[]
+  bySrc: DashboardKV[]
+  byStage: DashboardStage[]
+  topAuthors: DashboardAuthor[]
+}
+
+export interface IngestEvent { at: number; src: string; display: string; chunks: number; status: 'done' | 'failed'; error: string; ms: number }
+/** kb_today 结构化结果(面板用;text 供工具文案)。 */
+export interface TodayTop { author: string; likes: number; file: string }
+export interface TodayResult { ok: boolean; date: string; newFiles: number; rawPending: number; top: TodayTop[]; text: string }
+export interface TriageResult { ok: boolean; stage: string; error: string }
 
 export type { FileEntry as KbFileEntry }
