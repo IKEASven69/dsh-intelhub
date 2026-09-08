@@ -395,4 +395,76 @@ export function apply(ctx: ClientContext): void {
     { name: 'settings.section', id: 'zvec-kb', order: 42, label: '情报站' },
     () => createElement(Panel),
   ))
+
+  // ── dsh-better-sidebar 侧边栏 tab(可选生态集成)──────────
+  // 装了 better-sidebar 才注册"情报站"侧边栏页(检索+来源+今日概览随手可及);
+  // 未装则静默跳过,设置页配置卡不受影响。轮询等待服务就绪(避免 inject 时序依赖)。
+  type BetterSidebarApi = {
+    registerTab(d: {
+      id: string
+      title: () => string
+      icon: unknown
+      order: number
+      component: (props: Record<string, unknown>) => unknown
+    }): () => void
+  }
+  const ctxAny = ctx as unknown as { betterSidebar?: BetterSidebarApi }
+  let tries = 0
+  const tryRegister = (): void => {
+    const bs = ctxAny.betterSidebar
+    if (bs === undefined) {
+      if (tries++ < 150) window.setTimeout(tryRegister, 100)
+      return
+    }
+    try {
+      bs.registerTab({
+        id: 'dsh-intelhub:kb',
+        title: () => '情报站',
+        icon: createElement('span', { style: { fontWeight: '800', fontSize: '13px' } }, 'IH'),
+        order: 50,
+        component: () => createElement(SidebarKB),
+      })
+    } catch {
+      /* better-sidebar 版本不兼容时静默放弃,不影响设置页 */
+    }
+  }
+  tryRegister()
+}
+
+/** 侧边栏精简版:检索 + 来源结果(完整管理在设置页)。 */
+function SidebarKB(): ReturnType<typeof createElement> {
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<SearchResult | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [today, setToday] = useState<string | null>(null)
+
+  const doSearch = async (): Promise<void> => {
+    if (query.trim() === '') return
+    setBusy(true)
+    const r = await rpc<SearchResult>('search', { query, topk: 5 })
+    if (r.ok && r.value !== undefined) setResults(r.value)
+    setBusy(false)
+  }
+
+  const loadToday = async (): Promise<void> => {
+    const r = await rpc<{ text: string }>('today', {})
+    if (r.ok && r.value !== undefined) setToday(r.value.text)
+  }
+
+  useEffect(() => { void loadToday() }, [])
+
+  const hits = (results?.hits ?? []).map((h, i) => createElement('div', { key: i, style: { padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' } },
+    createElement('div', { style: { fontSize: '12px', color: '#4A9EFF', wordBreak: 'break-all' } }, h.ref),
+    createElement('div', { style: { fontSize: '12px', color: '#C9C9CE', marginTop: '4px', lineHeight: 1.5 } }, h.text.length > 140 ? h.text.slice(0, 140) + '…' : h.text),
+  ))
+
+  return createElement('div', { style: { padding: '12px', display: 'flex', flexDirection: 'column', gap: '10px', height: '100%', boxSizing: 'border-box', overflow: 'auto' } },
+    createElement('div', { style: { fontWeight: 700, fontSize: '15px' } }, '情报站'),
+    createElement('div', { style: { display: 'flex', gap: '8px' } },
+      createElement('input', { placeholder: '语义检索(带出处)', value: query, onChange: (e: { target: { value: string } }) => setQuery(e.target.value), onKeyDown: (e: { key: string }) => { if (e.key === 'Enter') void doSearch() }, style: { flex: 1, background: '#1C1C1F', border: '1px solid rgba(255,255,255,0.09)', color: '#ECEAE4', borderRadius: '8px', padding: '7px 10px', fontSize: '13px', outline: 'none' } }),
+      createElement('button', { onClick: () => { void doSearch() }, disabled: busy || query.trim() === '', style: { background: '#4A9EFF', color: '#fff', border: 'none', borderRadius: '8px', padding: '0 14px', cursor: 'pointer' } }, busy ? '…' : '检索'),
+    ),
+    createElement('div', { style: { fontSize: '12px', color: '#9A9EA8', whiteSpace: 'pre-wrap', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', padding: '10px' } }, today ?? '今日概览加载中…'),
+    ...(hits.length > 0 ? [createElement('div', null, ...hits)] : [createElement('div', { style: { fontSize: '12px', color: '#9A9EA8' } }, results === null ? '输入检索词开始。' : '没有匹配。')]),
+  )
 }

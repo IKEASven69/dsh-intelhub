@@ -805,6 +805,23 @@ export class ZvecKbService extends TypertRemoteService {
     return { ok: true, workspaces: this.workspaceMgr.list() }
   }
 
+  /** 面板/侧边栏:今日采集概览(kb_today 工具的同源数据面)。 */
+  @Remote('today')
+  async rpcToday(): Promise<{ ok: boolean; text: string }> {
+    await this.loadRegistry()
+    const now = new Date()
+    const ymd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    const files = [...this.registry.values()]
+    const todayNew = files.filter((f) => f.meta?.date === ymd || new Date(f.importedAt).toDateString() === now.toDateString())
+    const top = [...todayNew].filter((f) => (f.meta?.likes ?? 0) > 0).sort((x, y) => (y.meta?.likes ?? 0) - (x.meta?.likes ?? 0)).slice(0, 8)
+    const rawPending = files.filter((f) => f.meta?.stage === 'raw').length
+    const lines = [
+      `今日新增 ${todayNew.length} 篇 · 待分诊(raw)存量 ${rawPending}`,
+      ...(top.length > 0 ? ['高价值 TOP:'].concat(top.map((f) => `◆ ${f.meta?.author ?? f.path.split(/[\/]/).pop()} · 赞 ${f.meta?.likes} · ${f.path.split(/[\/]/).pop()}`)) : []),
+    ]
+    return { ok: true, text: lines.join('\n') }
+  }
+
   /** 面板:定时任务管理(AI 侧走 kb_schedule 工具,同一注册表)。 */
   @Remote('schedule-list')
   async rpcScheduleList(): Promise<{ ok: boolean; schedules: unknown[] }> {
