@@ -25,6 +25,26 @@
 | `kb_schedule` | 定时任务:set/list/remove/enable/disable(如每天 09:00 扫描采集目录)。重启不丢 |
 | `kb_list` / `kb_delete` | 清单 / 移除(只删索引,不动原文件) |
 
+
+## 数据源配方(opencli 适配器 × 知识库)
+
+采集执行在用户的采集管道(rotate/脚本);agent 侧的职责是**按需抓取 + 落库**。可用渠道(opencli 适配器现成):
+
+| 渠道 | 抓法 | 落库 |
+|---|---|---|
+| X / Twitter | `opencli twitter <cmd>` | `kb_note("X-{账号}-{日期}", 正文)` |
+| B站 | `opencli bilibili <cmd>`(UP主动态/视频简介) | `kb_note("B站-{UP主}-{标题}", …)` |
+| 掘金 / 36kr / HN | 对应适配器文章页 | `kb_import_url` 或 `kb_note` |
+| arxiv / GitHub trending | arxiv / github-trending 适配器 | `kb_import_url`(论文/仓库页) |
+| 公众号 / 知乎 / 少数派 | wechat-channels / zhihu / sspai 适配器 | 同上 |
+
+落盘约定:`{渠道}-{作者}-{日期}` 标题 + 正文原样;frontmatter 规范见用户知识库的 collections/README。
+
+## 分诊辅助(语义增强)
+
+规则分诊(triage.ts 的 明确 promote / 明确 skip)之外,agent 可用语义排序补盲区:
+`kb_search <候选主题> stage:raw likesMin:500` —— 把高互动且与已沉淀判断相关的 raw 帖排到人工队列最前。
+
 ## 工作流拓展
 
 引擎只提供上述原子;新工作流 = 一份 SKILL.md 把原子串成流程 + 选触发器(手动/定时/落盘事件)。示例:每日简报、判断自动验证、选题雷达——都不需要改引擎。

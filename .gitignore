@@ -1,3 +1,4 @@
 node_modules/
 .build-tools/tmp-src/
 .build-tools/tmp-client.cjs
+.build-tools/tmp-*
