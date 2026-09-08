@@ -1,7 +1,7 @@
 {
   "name": "dsh-intelhub",
   "description": "第一个 zvec 原生情报站:刷到的信息自动沉淀(采集/文件夹/网页/笔记),agent 语义+关键词混合检索带出处,零守护进程、零 API key、文档不出本机;支持 Obsidian 反哺与定时自动化",
-  "version": "0.1.1",
+  "version": "0.1.0",
   "publishConfig": {
     "access": "public"
   },
